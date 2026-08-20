@@ -73,20 +73,69 @@ kaggle datasets download mariaherrerot/aptos2019 -f train_1.csv -p data/raw/apto
    They were created this session, so the auditor ran as a general-purpose agent with the
    brief inlined. Next session they should be selectable by name.
 
+## FIRST ACTION NEXT SESSION
+
+**Confirm the 9 subagents in `.claude/agents/` dispatch by name.** They were created
+mid-session and Claude Code only loads agent definitions at startup — last session the
+`leakage-auditor` dispatch failed with "Agent type not found" and had to run as a
+general-purpose agent with the brief inlined. The user restarted specifically to fix this.
+Verify before relying on delegation, and report it to the user.
+
 ## Exact next command
 
-Phase 2 preprocessing. Nothing runs locally — no CUDA device, and the images are on Kaggle.
+Phase 2 preprocessing. **Phase 2 is approved.** Nothing heavy runs locally — no CUDA
+device, and the images are on Kaggle.
 
-The next artefact to write is `src/data/preprocess.py` (circle-crop → Ben Graham →
-224×224 → individual JPEGs), then `notebooks/02_preprocess.ipynb` to run it on Kaggle.
+The QA sample is **already selected and committed**: `docs/phase2_qa_sample.csv`
+(20 images, seed 42, all TRAIN split, 17.1 MB to download). Regenerate with
+`python -m src.data.qa_sample` if needed.
 
-**Before caching all 35,126 images, produce the contact sheet of ~20 before/after pairs
-spanning all five grades and get user approval** (Phase 2 acceptance criterion).
+Next artefacts to write:
+1. `src/data/preprocess.py` — circle-crop (non-black bbox on blurred grayscale threshold)
+   → Ben Graham → 224×224 → individual JPEGs.
+2. `scan_quality()` — pixel statistics (mean brightness, saturation, disc centroid offset)
+   to find genuinely dark / over-exposed / off-centre images. **File size alone cannot
+   identify those**; the current poor-quality picks are size-based proxies and should be
+   confirmed or improved by this scan.
+3. The contact sheet renderer.
 
-Also required in Phase 2:
-- Report the cache size **before** uploading (user requirement F3).
-- Persist the cache as a **private Kaggle Dataset** under account `rah098`; log in
-  `DECISIONS.md`.
+**Contact sheet requirements are in `PROGRESS.md` under Phase 2 — read them.** Summary:
+side-by-side at equal display size, patient ID + grade labelled on each pair, ≥6 of ~20
+from grades 1–2 (current sample has 9), 2–3 deliberately bad inputs (current sample has 3).
+
+### HARD GATE
+
+**Do not cache all 35,126 images until the user signs off on the contact sheet.**
+
+### Cache persistence — confirmed with the user
+
+`/kaggle/working/processed/` during the run → then published as a **private Kaggle Dataset**
+under account `rah098` so it survives the session wipe → re-mounted read-only at
+`/kaggle/input/fyp-dr-eyepacs-224` for training (already wired as
+`paths.processed_dataset_mount` in `configs/kaggle.yaml`).
+
+**Report the measured cache size before uploading.** Projection below is an estimate only —
+measure the real per-image mean on the 20 QA images first, then project.
+
+## Expected cache size — **[ESTIMATE]**, not measured
+
+No image has been preprocessed yet, so this is a projection and **must be labelled
+`[ESTIMATE]` wherever it appears** (R4) until replaced by a measurement.
+
+A 224×224 RGB JPEG at quality 95 typically lands at 15–30 KB.
+
+| | Images | @15 KB | @22 KB (central) | @30 KB |
+|---|---:|---:|---:|---:|
+| EyePACS | 35,126 | 0.50 GB | **0.74 GB** | 1.00 GB |
+| APTOS | 3,662 | 0.05 GB | **0.08 GB** | 0.10 GB |
+| **Total** | 38,788 | 0.55 GB | **~0.82 GB** | 1.11 GB |
+
+Source is 35.34 GB, so the cache should be roughly a **40× reduction**. Comfortably inside
+`/kaggle/working`'s cap (`warn_working_dir_gb: 15` in `configs/kaggle.yaml`) and inside
+Kaggle Dataset limits.
+
+**Replace this with a measured number before uploading**, projected from the actual mean
+output size over the 20 QA images.
 
 ## Open questions for the user
 

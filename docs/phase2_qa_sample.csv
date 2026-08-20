@@ -1,0 +1,28 @@
+# Phase 2 visual-QA sample — fixed list for the before/after contact sheet
+# seed: 42   generator: src/data/qa_sample.py
+# all images drawn from the TRAIN split
+# 20 images: grade 0: 4, grade 1: 4, grade 2: 5, grade 3: 4, grade 4: 3
+# grades 1+2: 9 (user requirement: >= 6)
+# poor-quality: 3
+# NOTE: readers must use pandas.read_csv(..., comment='#')
+image_path,image,patient_id,eye,label,kb,split,category,reason
+data/data/15942_right.jpeg,15942_right,15942,right,0,15.9,train,poor_quality,"15.9 KB, grade 0"
+data/data/3829_left.jpeg,3829_left,3829,left,2,8.1,train,poor_quality,"smallest file in the dataset at 8.1 KB, grade 2"
+data/data/39106_left.jpeg,39106_left,39106,left,3,16.6,train,poor_quality,"16.6 KB, grade 3 — a rare-class image that may be degraded"
+data/data/13613_left.jpeg,13613_left,13613,left,0,1503.6,train,clean,representative grade 0
+data/data/36254_left.jpeg,36254_left,36254,left,0,1420.5,train,clean,representative grade 0
+data/data/40864_right.jpeg,40864_right,40864,right,0,394.9,train,clean,representative grade 0
+data/data/13345_right.jpeg,13345_right,13345,right,1,1322.7,train,clean,representative grade 1
+data/data/1776_left.jpeg,1776_left,1776,left,1,349.3,train,clean,representative grade 1
+data/data/38714_left.jpeg,38714_left,38714,left,1,469.3,train,clean,representative grade 1
+data/data/5009_right.jpeg,5009_right,5009,right,1,723.2,train,clean,representative grade 1
+data/data/3895_left.jpeg,3895_left,3895,left,2,791.3,train,clean,representative grade 2
+data/data/39575_right.jpeg,39575_right,39575,right,2,1115.1,train,clean,representative grade 2
+data/data/40533_left.jpeg,40533_left,40533,left,2,1479.1,train,clean,representative grade 2
+data/data/41514_right.jpeg,41514_right,41514,right,2,1485.7,train,clean,representative grade 2
+data/data/23566_right.jpeg,23566_right,23566,right,3,1213.0,train,clean,representative grade 3
+data/data/27768_right.jpeg,27768_right,27768,right,3,796.7,train,clean,representative grade 3
+data/data/30226_right.jpeg,30226_right,30226,right,3,927.7,train,clean,representative grade 3
+data/data/25407_right.jpeg,25407_right,25407,right,4,1284.0,train,clean,representative grade 4
+data/data/34901_right.jpeg,34901_right,34901,right,4,1002.9,train,clean,representative grade 4
+data/data/39505_left.jpeg,39505_left,39505,left,4,1148.5,train,clean,representative grade 4

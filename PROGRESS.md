@@ -1,9 +1,11 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** Phase 2 — preprocessing. Write `src/data/preprocess.py` (circle-crop →
-> Ben Graham → 224×224 → individual JPEGs) and produce the visual QA contact sheet of ~20
-> before/after pairs spanning all five grades. **Runs on Kaggle, not locally.**
-> **Wait for user approval of the contact sheet before caching all 35,126 images.**
+> **NEXT ACTION:** Phase 2 — write `src/data/preprocess.py`, then render the contact sheet
+> from the already-selected `docs/phase2_qa_sample.csv` (20 images, 17.1 MB).
+> **HARD GATE: do not cache all 35,126 images until the user signs off on the sheet.**
+>
+> **First action of the session:** confirm the 9 subagents in `.claude/agents/` now
+> dispatch by name (they were created mid-session last time and needed a restart).
 
 **Current phase:** Phase 1 — Data foundation
 **Last updated:** 2026-08-20
@@ -59,16 +61,50 @@ Phase 7 · 224×224 headline (DECISION-005) · no Intel XPU/IPEX (DECISION-003)
 
 ---
 
-## Phase 2 — Preprocessing `[ ]`
+## Phase 2 — Preprocessing `[~]`
 
 **Acceptance:** user approves the visual QA contact sheet.
+**HARD GATE: do not cache all 35,126 images until the user signs off on the sheet.**
 
-- [ ] Circle-crop retinal disc (non-black bbox on blurred grayscale threshold)
-- [ ] Ben Graham enhancement; CLAHE-on-green kept as an ablation arm
-- [ ] Resize 224×224, cache as individual JPEGs (R5)
-- [ ] Report cache size **before** uploading
+- [x] QA sample selected — `docs/phase2_qa_sample.csv` (20 images, seed 42, train split only)
+- [ ] `src/data/preprocess.py` — circle-crop (non-black bbox on blurred grayscale
+      threshold) → Ben Graham → 224×224 → individual JPEGs (R5)
+- [ ] `scan_quality()` — pixel-stat pass (mean brightness, saturation, disc centroid
+      offset) to find genuinely dark / over-exposed / off-centre images. File size alone
+      cannot identify those.
+- [ ] Render the contact sheet from `docs/phase2_qa_sample.csv`
+- [ ] **← USER SIGN-OFF GATE**
+- [ ] Cache all 35,126 EyePACS + 3,662 APTOS images
+- [ ] **Measure and report actual cache size before uploading**
 - [ ] Persist as private Kaggle Dataset under `rah098`; log in DECISIONS.md
-- [ ] Contact sheet: ~20 before/after pairs spanning all five grades
+- [ ] CLAHE-on-green variant kept as an ablation arm
+
+### Contact sheet requirements (user, 2026-08-20)
+
+1. **Original and processed side by side at the same display size**, with **patient ID and
+   grade labelled on each pair**.
+2. **Weighted toward grades 1 and 2 — at least 6 of ~20.** That is where circle-crop and
+   Ben Graham either preserve microaneurysms and small haemorrhages or destroy them;
+   grade 0/4 examples cannot answer the question. *Current sample has 9.*
+3. **2–3 deliberately bad inputs** — the 8 KB minimum file, very dark, over-exposed, or
+   off-centre. The web app will receive exactly these. *Current sample has 3 selected by
+   file size; the pixel-stat scan should confirm or improve them.*
+
+### Selected QA sample
+
+20 images, all TRAIN split, 17.1 MB total to download.
+Grades: 0→4, 1→4, 2→5, 3→4, 4→3. Poor-quality picks:
+
+| image | grade | size | why |
+|---|---|---|---|
+| `3829_left` | 2 | **8.1 KB** | smallest file in the entire dataset |
+| `39106_left` | 3 | 16.6 KB | rare-class image that may be degraded |
+| `15942_right` | 0 | 15.9 KB | very small file |
+
+Only **21 of 35,126** files fall under 50 KB, against a median of ~1,100 KB — these are
+almost certainly blank, very dark, or failed captures. Four of the 21 are in `test` and two
+in `val`; if preprocessing cannot rescue them, that is worth a note in the write-up, but
+**they are not to be dropped** without a DECISIONS.md entry.
 
 ---
 
