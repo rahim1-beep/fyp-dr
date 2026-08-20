@@ -1,8 +1,8 @@
 # Session Handoff
 
 **Session:** 2026-08-20 (session 1)
-**Phase:** 1 — Data foundation
-**Status:** Paused at the user sign-off gate before split generation.
+**Phase:** 1 — Data foundation — **COMPLETE**
+**Next phase:** 2 — Preprocessing
 
 ---
 
@@ -10,77 +10,102 @@
 
 **Phase 0 — Orientation.** Read `BOOTSTRAP.md` and `docs/proposal.pdf`. Audited the
 environment. Produced the plan, assumptions, failure-mode defences, and questions F1–F6.
-**User approved**, answers recorded in `docs/DECISIONS.md` as DECISION-001…005.
+**User approved**; answers recorded as DECISION-001…005.
 
-**Phase 1 — Data foundation (partial).**
-- Repo skeleton per `BOOTSTRAP.md` §7; `.gitignore`; `CLAUDE.md`; `PROGRESS.md`.
-- `.venv` built on Python 3.12.10 (`py -3.12`). System default 3.14 untouched.
-- `requirements.txt` pinned for cp312, **dry-run resolved successfully** on Windows.
-- 9 subagents in `.claude/agents/`, 4 slash commands in `.claude/commands/`.
-- Config system: `configs/{base,local,kaggle,arm_a..arm_e}.yaml`.
-- **Labels CSV located and the full reconciliation report produced — all assertions PASS.**
+**Phase 1 — Data foundation. Complete.**
+- Repo skeleton, `.gitignore`, `CLAUDE.md`, `PROGRESS.md`, 9 subagents, 4 slash commands.
+- `.venv` on Python 3.12.10. `requirements.txt` pinned for cp312, dry-run resolved.
+- Configs: `base`, `local`, `kaggle`, `arm_a`…`arm_f`.
+- Labels CSV located, schema discovered, full reconciliation — **zero mismatches**.
+- APTOS distribution measured from labels CSVs only (DECISION-007).
+- **Patient-level 70/15/15 split generated, seed 42.**
+- `tests/test_no_leakage.py` — **38 tests green.**
+- Reviewed by `leakage-auditor` — **PASS** (verdict + actions in DECISION-008).
+- `src/data/manifest.py` — the only supported reader for split CSVs.
 
-## Key finding: reconciliation ran locally without downloading EyePACS
+## Auditor findings that changed the code
 
-`kaggle datasets files` returns every filename and size without transferring image bytes.
-Enumerating all 176 pages (35,127 entries) gave a complete remote manifest, so the full
-CSV↔disk reconciliation ran on a laptop that will never hold the 35.3 GB dataset. Only the
-465 KB labels CSV was downloaded.
+The audit passed but surfaced four things worth fixing, all done before commit:
 
-The listing is cached at `data/raw/eyepacs/remote_listing.csv` (2.1 MB). It is **gitignored**
-(`data/raw/` rule), so a fresh clone will not have it. Regenerate with:
+1. **`assign_splits` had no minimum-per-split guard** — a stratum with n < 4 patients
+   silently produced an empty val *and* test (all-zero confusion-matrix column). Now
+   raises. Verified to fire.
+2. **The venv was off-spec** — splits were first generated under `numpy 2.5.2`/`pandas
+   3.0.5` against pins of `2.2.6`/`2.3.3`. Venv corrected, splits regenerated; assignments
+   byte-identical, only the header changed. **If you rebuild the venv, install from
+   `requirements.txt`, not ad hoc.**
+3. **Split headers now record `python/numpy/pandas` versions** — numpy's Generator stream
+   is not stable across versions (NEP 19).
+4. **The test suite checked totals against a hardcoded integer**, so a complete-but-wrong
+   manifest would have passed. Now reconciles against `trainLabels.csv` and rules out
+   min-grade stratification rather than merely asserting max-grade.
+
+## Key technique: reconciliation without downloading
+
+`kaggle datasets files` returns filenames and sizes without transferring image bytes.
+Paging the full listing gives a complete remote manifest, so CSV↔disk reconciliation runs
+on a laptop that will never hold the 35.3 GB dataset. Only the 465 KB labels CSV was
+downloaded. Same trick used for APTOS.
+
+Regenerate the listings (gitignored under `data/raw/`):
 
 ```
 .venv\Scripts\python -m src.data.list_remote --slug dreamer07/eyepacs --out data/raw/eyepacs/remote_listing.csv
-```
-
-Takes a few minutes (176 pages). The conclusions drawn from it are committed in
-`docs/data_report_eyepacs.json`, so it is only needed to re-verify.
-
-Likewise `data/raw/eyepacs/trainLabels.csv` is gitignored; refetch with:
-
-```
+.venv\Scripts\python -m src.data.list_remote --slug mariaherrerot/aptos2019 --out data/raw/aptos/remote_listing.csv
 kaggle datasets download dreamer07/eyepacs -f "trainLabels.csv/trainLabels.csv" -p data/raw/eyepacs --unzip
+kaggle datasets download mariaherrerot/aptos2019 -f train_1.csv -p data/raw/aptos --unzip   # also valid.csv, test.csv
 ```
 
 ## Gotchas discovered (do not rediscover these)
 
-1. **The labels CSV path is `trainLabels.csv/trainLabels.csv`** — a *directory* named
-   `trainLabels.csv` containing a file of the same name. Undocumented; usability 0.18.
-2. **CSV `image` values carry no extension** (`10_left`) while disk files do
-   (`10_left.jpeg`). Join on the stem, not the filename.
-3. **Two opencv distributions are unavoidable.** `albumentations` needs
-   `opencv-python-headless`, `grad-cam` needs `opencv-python`. Unpinned, pip resolves them
-   to different major versions. Both are pinned to 4.12.0.88.
-4. **pandas is pinned to 2.3.3, not 3.x.** pandas 3.0 changed copy-on-write and string
-   dtype defaults; Kaggle is on 2.x.
+1. **EyePACS labels live at `trainLabels.csv/trainLabels.csv`** — a *directory* named
+   `trainLabels.csv` containing a file of the same name.
+2. **EyePACS CSV `image` values carry no extension** (`10_left`) while disk files do
+   (`10_left.jpeg`). Joining on the raw filename matches **zero rows**.
+3. **APTOS images are `.png`**, double-nested: `train_images/train_images/{id}.png`.
+4. **Split CSVs carry a `#` provenance header** — every reader must pass
+   `pandas.read_csv(..., comment='#')` or the header parses as data.
+5. **Two opencv distributions are unavoidable.** `albumentations` needs
+   `opencv-python-headless`, `grad-cam` needs `opencv-python`; unpinned, pip resolves them
+   to different major versions. Both pinned to 4.12.0.88.
+6. **pandas pinned to 2.3.3, not 3.x** — 3.0 changed copy-on-write and string dtypes.
+7. **Custom subagents in `.claude/agents/` are not available until Claude Code restarts.**
+   They were created this session, so the auditor ran as a general-purpose agent with the
+   brief inlined. Next session they should be selectable by name.
 
 ## Exact next command
 
-Awaiting user sign-off on the data report. **On sign-off**, the next step is the
-patient-level split:
+Phase 2 preprocessing. Nothing runs locally — no CUDA device, and the images are on Kaggle.
 
-```
-.venv\Scripts\python -m src.data.split --config configs/local.yaml --seed 42
-```
+The next artefact to write is `src/data/preprocess.py` (circle-crop → Ben Graham →
+224×224 → individual JPEGs), then `notebooks/02_preprocess.ipynb` to run it on Kaggle.
 
-(`src/data/split.py` is **not yet written** — writing it is the next action.)
+**Before caching all 35,126 images, produce the contact sheet of ~20 before/after pairs
+spanning all five grades and get user approval** (Phase 2 acceptance criterion).
 
-Then `tests/test_no_leakage.py`, then `leakage-auditor` review before the splits are
-committed.
+Also required in Phase 2:
+- Report the cache size **before** uploading (user requirement F3).
+- Persist the cache as a **private Kaggle Dataset** under account `rah098`; log in
+  `DECISIONS.md`.
 
 ## Open questions for the user
 
-1. **Data report sign-off** — required before splits are generated (user's constraint 2).
-2. **GitHub** — private repo + collaborator access for Ameena Ahmed and Muhammad Ali
-   Abdullah. **Do not push without asking.** No remote is configured yet.
-3. **Supervisor** — written confirmation of DECISION-001 before Phase 7.
+1. **GitHub** — private repo + collaborator access for Ameena Ahmed and Muhammad Ali
+   Abdullah. **Do not push without asking.** No remote is configured yet. *(User has since
+   said they are distributing as an archive, so this may be moot — confirm.)*
+2. **Supervisor** — written confirmation of DECISION-001 (Streamlit → FastAPI + Next.js)
+   before Phase 7.
+3. **Arm F vs Phase 6** — if Arm F wins, APTOS cannot be the external validation set for
+   it. The trade-off is logged (DECISION-007); the choice is the user's to make when the
+   numbers exist.
 
 ## Known-broken / not yet built
 
-- `src/data/{split,preprocess,dataset,sampler}.py` — not written.
-- `tests/` — empty. `test_no_leakage.py` does not exist yet.
-- No Kaggle notebook has been run; **GPU quota is fully unconsumed.**
+- `src/data/{preprocess,dataset,sampler}.py` — not written.
+- `src/models/`, `src/train/`, `src/eval/`, `src/xai/`, `src/inference/` — empty.
+- No Kaggle notebook has been run; **GPU quota fully unconsumed.**
 - `docs/EXPERIMENTS.md` does not exist (no runs).
-- Torch pins are unverified against the Kaggle image — the first Kaggle notebook must
-  print its versions and the pins updated to match (see the note in `requirements.txt`).
+- Torch pins unverified against the Kaggle image — the first Kaggle notebook must print its
+  versions and the pins updated to match (note in `requirements.txt`).
+- Git identity is repo-local `syedrahim079 <syedrahim079@gmail.com>`; user confirmed single
+  authorship is intended.

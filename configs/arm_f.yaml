@@ -1,0 +1,43 @@
+# Arm F — EyePACS + APTOS pooled for training (DECISION-007).
+#
+# Origin: supervisor feedback that APTOS might relieve class imbalance. Settled
+# empirically rather than by argument.
+#
+# Measured reality: APTOS is imbalanced in the SAME direction as EyePACS (49.29% grade 0).
+# Pooling moves grade 4 from 2.04% -> 2.61% of the training pool — barely — but does add
+# +41% more grade-4 and +22% more grade-3 images in absolute terms. Whether that extra
+# volume beats the added domain shift is what this arm measures.
+#
+# CONSTRAINT — all-or-nothing. If APTOS is pooled, ALL of it is pooled. Never import only
+# grades 3-4: that would make dataset origin correlate with severity and let the model use
+# camera domain artefacts as a severity cue. See DECISION-007.
+#
+# CONSEQUENCE — under this arm APTOS is training data, so it CANNOT also be the Phase 6
+# external validation set. Phase 6 is unchanged for arms A-E.
+
+imbalance:
+  arm: F
+  # Sampler choice is inherited from whichever of A-E wins on validation QWK; default to
+  # the balanced sampler so the pooled data and the sampler are not confounded.
+  sampler: weighted_random
+  loss: cross_entropy
+  class_weights: false
+
+model:
+  head: softmax
+  num_outputs: 5
+
+data:
+  pool_datasets: [eyepacs, aptos]
+
+split:
+  # Test is EyePACS ONLY, so Arm F stays directly comparable to arms A-E on an
+  # identical test set.
+  train_csvs: [data/splits/train.csv, data/splits/aptos_train.csv]
+  val_csvs:   [data/splits/val.csv,   data/splits/aptos_val.csv]
+  test_csvs:  [data/splits/test.csv]
+
+eval:
+  # Record per-dataset breakdowns as well as the pooled numbers — if Arm F wins, the
+  # write-up must show the gain is not just an APTOS-domain effect.
+  report_by_dataset: true

@@ -26,7 +26,7 @@ through a web-based diagnostic interface.
 | ID | Rule |
 |---|---|
 | **R1** | **Patient-level splitting, always.** A patient appears in exactly one of train/val/test. Split the *patient list*, never the image list, never before grouping. |
-| **R2** | **Balance the training split only, and only after splitting.** Val/test keep their natural imbalanced distribution. Report balanced accuracy alongside accuracy. |
+| **R2** | **Balance the training split only, and only after splitting.** Val/test keep their natural imbalanced distribution. Report balanced accuracy alongside accuracy. **See §2.1 — the mechanism is fixed and must not drift.** |
 | **R3** | **The test set is touched once.** All selection, tuning, and early stopping use validation only. |
 | **R4** | **No invented numbers.** Every metric in any document or message traces to `runs/<run_id>/metrics.json` from a real execution. Estimates are labelled `[ESTIMATE]`. |
 | **R5** | **No monolithic array caches.** Manifest CSV → `Dataset` → `DataLoader`. Cache preprocessed images as individual JPEGs, never one big `.npy`. |
@@ -35,6 +35,38 @@ through a web-based diagnostic interface.
 
 **Detection rule:** if a confusion matrix has an all-zero column, or accuracy sits near the
 majority-class rate, **stop and diagnose** before training anything else.
+
+## 2.1 Balancing — the mechanism is fixed. Do not let this drift.
+
+**Balancing is train-only, applied via `WeightedRandomSampler` at batch-draw time.**
+
+| | |
+|---|---|
+| **How** | `torch.utils.data.WeightedRandomSampler` over the training split, weights = inverse class frequency computed from the **train split only** |
+| **When** | At batch-draw time, per epoch. Nothing is materialised. |
+| **Where** | The training split. Only ever the training split. |
+
+**Explicitly forbidden — all of these are wrong for this project:**
+- ❌ **No physical oversampling.** No duplicated rows in any manifest or split CSV.
+- ❌ **No undersampling.** No discarded majority-class rows.
+- ❌ **No files duplicated or deleted** on disk, ever, for balancing purposes.
+- ❌ **No rebalancing of val or test.** Ever, by any mechanism.
+
+**Validation and test keep the natural distribution permanently.** That is what real
+screening looks like, and it is the only distribution on which a reported metric means
+anything.
+
+Why this mechanism: sampler-based balancing is reversible, leaves the split CSVs as an
+honest record of the data, and cannot possibly duplicate an image across the train/val
+boundary. Physical oversampling before splitting is the single most common way DR projects
+leak — see BOOTSTRAP §1.
+
+**Arms A–E decide which method wins, compared on validation QWK** (R3). The comparison is
+itself a thesis chapter; do not pre-judge it by hardcoding one arm's behaviour into the
+pipeline.
+
+`tests/test_no_leakage.py::test_splits_are_not_balanced` and
+`::test_no_duplicate_image_paths_within_a_split` enforce this at the artefact level.
 
 ## 3. Environment — Kaggle-first is absolute
 
@@ -63,12 +95,20 @@ Images at `data/data/{patientID}_{left|right}.jpeg`. Derive `patient_id` and `ey
 splitting the filename on the first `_`. ~35,126 images, ~17,563 patients, labels 0–4,
 ~73.5% class 0.
 
-**APTOS 2019** (`mariaherrerot/aptos2019`) — external validation only.
-`id_code` values are anonymised hashes with **no patient linkage**. Therefore each image
-is its own patient (`patient_id = f"aptos_{id_code}"`), and APTOS is used as a held-out
-external test set. **Ignore the author-provided train/val/test split in that
-redistribution** — pool everything. Document the limitation; it is a good thesis
-paragraph, not a weakness to hide.
+**APTOS 2019** (`mariaherrerot/aptos2019`) — 3,662 images, external validation **for arms
+A–E**, training pool for **arm F**. Distribution 49.29/10.10/27.28/5.27/8.06 — imbalanced in
+the *same direction* as EyePACS. `id_code` values are anonymised hashes with **no patient
+linkage**, so each image is its own patient (`patient_id = f"aptos_{id_code}"`). **Ignore
+the author-provided train/val/test split** — pool everything (DECISION-004). Images are
+`.png`, double-nested at `{split}_images/{split}_images/{id}.png`.
+
+Under arm F, APTOS is training data and therefore **cannot also be that arm's external
+validation set** (DECISION-007). Phase 6 is unchanged for arms A–E. If APTOS is pooled,
+**all of it is pooled** — never only grades 3–4, which would make dataset origin correlate
+with severity.
+
+**Split CSVs carry a `#` provenance header. Every reader must use
+`pandas.read_csv(..., comment='#')`.**
 
 **Labels always come from the official CSV, joined on filename.** Never from
 `os.listdir()`. Assert exactly 5 distinct labels and one-hot width 5.
@@ -83,7 +123,11 @@ paragraph, not a weakness to hide.
 - **Models:** ResNet18 (baseline), EfficientNet-B0 (primary), DenseNet121 (optional third).
 - **Image size:** **224×224 for all headline results** (per proposal). 384 is an optional
   ablation only if GPU quota survives Phase 4.
-- **Primary metric: Quadratic Weighted Kappa.**
+- **Primary metric: Quadratic Weighted Kappa.** For **grades 3 and 4**, always report
+  bootstrap 95% CIs, never bare point estimates — the test split holds only 133 grade-3 and
+  98 grade-4 images (DECISION-006).
+- **Ablation arms:** A–E (imbalance handling) + **F** (EyePACS + APTOS pooled training,
+  evaluated on the EyePACS test set so it stays comparable).
 - **Backend:** FastAPI + Uvicorn over a plain, testable `src/inference/predictor.py`.
 - **Frontend:** Next.js (TypeScript) + Tailwind. **Not Streamlit** — see DECISION-001.
 

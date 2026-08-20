@@ -1,8 +1,9 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** Phase 1 step 2 — locate the EyePACS labels CSV, report its real schema
-> (columns, dtypes, row count, distinct label values), and produce the data reconciliation
-> report. **Wait for user sign-off before generating split CSVs.**
+> **NEXT ACTION:** Phase 2 — preprocessing. Write `src/data/preprocess.py` (circle-crop →
+> Ben Graham → 224×224 → individual JPEGs) and produce the visual QA contact sheet of ~20
+> before/after pairs spanning all five grades. **Runs on Kaggle, not locally.**
+> **Wait for user approval of the contact sheet before caching all 35,126 images.**
 
 **Current phase:** Phase 1 — Data foundation
 **Last updated:** 2026-08-20
@@ -36,15 +37,23 @@ Phase 7 · 224×224 headline (DECISION-005) · no Intel XPU/IPEX (DECISION-003)
 - [~] `.claude/agents/` (9) and `.claude/commands/` (4)
 - [ ] `requirements.txt` pinned for cp312 (Windows CPU + Linux CUDA)
 - [ ] Config system: `configs/{base,local,kaggle}.yaml`
-- [ ] **Locate labels CSV; report real column names, dtypes, row count, distinct labels**
-      — *user constraint: report before writing anything that depends on the schema*
-- [ ] **Data reconciliation report** — per-class distribution, patient counts, images per
-      patient, CSV↔disk mismatches in **both** directions
-- [ ] **← USER SIGN-OFF GATE — do not generate splits before this**
-- [ ] Patient-level 70/15/15 split, stratified on each patient's max grade
-- [ ] Emit + commit `data/splits/{train,val,test}.csv`
-- [ ] `tests/test_no_leakage.py` written and green
-- [ ] APTOS manifest (pooled, `patient_id = aptos_{id_code}`)
+- [x] `requirements.txt` pinned for cp312 (Windows CPU + Linux CUDA)
+- [x] Config system: `configs/{base,local,kaggle}.yaml` + `arm_a..arm_f.yaml`
+- [x] **Locate labels CSV; report real column names, dtypes, row count, distinct labels**
+      — found at `trainLabels.csv/trainLabels.csv`; schema `image,level`
+- [x] **Data reconciliation report** — zero mismatches in either direction
+- [x] **USER SIGN-OFF RECEIVED 2026-08-20**
+- [x] Patient-level 70/15/15 split, stratified on each patient's max grade, seed 42
+- [x] Emit `data/splits/{train,val,test}.csv` + `aptos_{train,val,test}.csv`
+- [x] `tests/test_no_leakage.py` — **38 tests, all green**
+- [x] APTOS manifest (pooled, `patient_id = aptos_{id_code}`)
+- [x] APTOS real class distribution measured (DECISION-007)
+- [x] `leakage-auditor` independent review — **PASS** (DECISION-008)
+- [x] Auditor's 4 actionable observations fixed (small-strata guard, venv alignment,
+      version provenance, test blind spots)
+- [x] Commit split CSVs
+
+**Phase 1 acceptance met:** leakage tests green, distributions documented, audit passed.
 
 **Blockers:** none.
 
@@ -77,9 +86,14 @@ Phase 7 · 224×224 headline (DECISION-005) · no Intel XPU/IPEX (DECISION-003)
 
 - [ ] EfficientNet-B0 × arms A–E
 - [ ] ResNet18 × arms A–E
+- [ ] **Arm F** — EyePACS + APTOS pooled training, evaluated on the EyePACS test set
+      (DECISION-007). Settles the supervisor's imbalance suggestion empirically.
 - [ ] DenseNet121 (optional, only if time allows)
 - [ ] Comparison table with bootstrap CIs → `docs/EXPERIMENTS.md`
 - [ ] 384×384 ablation (only if quota survives)
+
+**Reporting constraint:** grades 3 and 4 are reported with bootstrap 95% CIs, never bare
+point estimates (DECISION-006 — only 133 grade-3 and 98 grade-4 test images).
 
 ---
 
@@ -94,6 +108,10 @@ Phase 7 · 224×224 headline (DECISION-005) · no Intel XPU/IPEX (DECISION-003)
 ## Phase 6 — External validation `[ ]`
 
 - [ ] Best model → all of APTOS, cold. Report the domain-shift drop honestly.
+
+**Applies to arms A–E only.** Under Arm F, APTOS is training data and cannot also be the
+external validation set (DECISION-007). If Arm F becomes the headline model, the write-up
+must state that it trades a generalisation claim for in-domain performance.
 
 ---
 

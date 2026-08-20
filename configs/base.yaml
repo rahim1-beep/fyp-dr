@@ -30,6 +30,10 @@ split:
   train: 0.70
   val: 0.15
   test: 0.15
+  # THE SPLIT SEED. This value is the provenance of data/splits/*.csv and is written into
+  # the header comment of each of those files. Changing it invalidates every committed
+  # split and every result derived from them. Do not change it without a DECISIONS.md
+  # entry and a full re-run.
   seed: 42
 
 preprocess:

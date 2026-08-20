@@ -25,6 +25,27 @@ If asked for a number that does not exist yet, say it does not exist yet.
 - Inference time per image (CPU and GPU), model size on disk, parameter count.
 - Per-arm comparison table auto-generated into `docs/EXPERIMENTS.md`.
 
+## Rare classes: intervals, never bare point estimates (DECISION-006)
+
+The test split contains only **133 grade-3 images (75 patients)** and **98 grade-4 images
+(66 patients)**. That is enough to populate a confusion matrix and to compute a stable QWK,
+which is dominated by the bulk classes. It is **not** enough for a tight interval on
+per-class recall.
+
+Therefore, for **grades 3 and 4**:
+
+- **Always report a bootstrap 95% CI. Never a bare point estimate** — not in a table, not
+  in a figure caption, not in a sentence, not in a chat message.
+- Expect the grade-4 recall interval to be roughly ±10 percentage points at n=98.
+- **A difference of a few points between two arms on rare-class recall is not evidence.**
+  Any claim that one arm improves rare-class performance requires **non-overlapping
+  intervals**. If they overlap, say the comparison is inconclusive.
+- When a table would be too narrow for intervals, cite the interval in the caption rather
+  than dropping it.
+
+Grades 0–2 have thousands of test images and may be reported as point estimates with CIs
+where space allows.
+
 ## Guardrails you enforce
 - **Accuracy is never the headline** (failure mode 7). The dataset is 73.48% class 0 — a
   model that never predicts anything else scores 73.48%.
