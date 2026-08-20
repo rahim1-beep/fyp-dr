@@ -186,6 +186,11 @@ def assert_fully_trainable(model: nn.Module) -> None:
     logs — the loss falls, the metric rises a little, and the result is a model at 20-45%
     accuracy for a reason nothing reports.
     """
+    if not any(True for _ in model.parameters()):
+        raise RuntimeError(
+            f"{type(model).__name__} has no parameters at all, so there is nothing to "
+            "fine-tune. This is almost always a stub or a misconfigured head."
+        )
     frac = trainable_fraction(model)
     if frac < 0.999:
         frozen = [n for n, p in model.named_parameters() if not p.requires_grad]

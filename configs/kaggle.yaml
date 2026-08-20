@@ -5,14 +5,22 @@
 env: kaggle
 
 paths:
-  eyepacs_root: /kaggle/input/eyepacs
+  # DECISION-020 — Kaggle moved input mounts from /kaggle/input/{slug} to
+  # /kaggle/input/datasets/{owner}/{slug}, and /kaggle/input is READ-ONLY so nothing can
+  # be symlinked into it. These are the current canonical locations; code must resolve
+  # them through src/data/kaggle_paths.resolve_input rather than trusting this literal,
+  # because the platform has already moved them once.
+  eyepacs_root: /kaggle/input/datasets/dreamer07/eyepacs
   eyepacs_labels_csv: null                # resolved by src/data/inspect.py, not assumed
-  aptos_root: /kaggle/input/aptos2019
+  aptos_root: /kaggle/input/datasets/mariaherrerot/aptos2019
   processed_root: /kaggle/working/processed
   splits_root: /kaggle/working/splits
   runs_root: /kaggle/working/runs
-  # Phase 2 cache is republished as a private Kaggle Dataset and re-mounted here:
-  processed_dataset_mount: /kaggle/input/fyp-dr-eyepacs-224
+  # Phase 2 cache, published 2026-08-21 as a private Kaggle Dataset (0.836 GB, 38,788
+  # images). `owner` is what the resolver needs when the datasets/ layout is in force.
+  processed_dataset_owner: rah098
+  processed_dataset_slug: fyp-dr-eyepacs-224
+  processed_dataset_mount: /kaggle/input/datasets/rah098/fyp-dr-eyepacs-224
 
 compute:
   device: cuda

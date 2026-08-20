@@ -719,9 +719,120 @@ code, with a test that fails when the assertion is removed.
 
 ---
 
+## DECISION-018 — Four images have no detectable retina; all four stay in their splits
+
+- **Date:** 2026-08-21
+- **Status:** Accepted
+- **Deviates from proposal:** No
+
+The full cache build finished with **38,784 of 38,788 images at `status: ok`** and four at
+`ok:no-retina`. `retina_mask` found no illuminated region in these frames, so
+`preprocess_image` took its documented fallback: the image is resized to 224x224 **without
+the square crop, without Ben Graham, and without the surround mask**.
+
+| image | split | patient | eye | label |
+|---|---|---|---|---:|
+| `32253_right` | **train** | 32253 | right | 1 |
+| `34689_left` | **train** | 34689 | left | 0 |
+| `43457_left` | **train** | 43457 | left | 1 |
+| `1986_left` | **val** | 1986 | left | 0 |
+
+All four patients have both eyes in the same split, so R1 is untouched. The other eye of
+each patient processed normally.
+
+**They stay in their splits.** Dropping a row is never a neutral act here: removing
+`1986_left` would silently rebalance the validation split, which is an R2 violation by
+omission, and it would make the val set a slightly different population from the one every
+other arm is measured on. The "Excluded data rows" section below therefore still reads
+**None**.
+
+**What this costs.** Those four cache entries are in a different image domain from the
+other 38,784 — unenhanced, uncropped, aspect-distorted. Three are in train, where they are
+four images out of 24,586 and will be treated as noise. The one that matters is
+**`1986_left` in val**: it is a validation image the model will almost certainly get wrong,
+and it is 1 of 5,268, so it can move validation accuracy by at most 0.019 percentage
+points. That is far below the noise floor of the QWK bootstrap and changes no decision.
+
+**Do not "fix" these by re-running with a lower mask threshold.** The threshold is a fixed
+absolute constant by the leakage auditor's binding condition (DECISION-013); tuning it
+until four specific images pass is fitting a preprocessing parameter to individual images,
+and those images are in the data the model is selected on.
+
+They are worth looking at again in Phase 5: if the Grad-CAM panel includes one, it will
+show the model attending to something that is not a retina, which is a useful negative
+example for the write-up rather than a defect.
+
+---
+
+## DECISION-019 — Pins follow the Kaggle image, and the image is the environment of record
+
+- **Date:** 2026-08-21
+- **Status:** Accepted
+- **Deviates from proposal:** No
+
+The first real Kaggle run measured the CPU image and it does not match what
+`requirements.txt` pinned:
+
+| package | was pinned | Kaggle CPU image (2026-08-21) | now pinned |
+|---|---|---|---|
+| numpy | 2.2.6 | **2.0.2** | 2.0.2 |
+| opencv | 4.12.0.88 | **4.13.0** | 4.13.0.92 |
+| torch | 2.9.1 | **2.10.0+cpu** | 2.10.0 |
+| torchvision | 0.24.1 | **0.25.0** | 0.25.0 |
+| timm | 1.0.28 | **1.0.26** | 1.0.26 |
+
+**The Kaggle image wins.** Never `pip install` torch over the preinstalled build — it is
+built against that image's CUDA and replacing it is the fastest way to lose a session to
+a broken driver stack. So the pins move to match the image, and the local machine installs
+the same versions, which is what makes a locally-inspected result and a Kaggle result the
+same artefact (R6).
+
+The cache was built under the image's versions, not under the old pins. That is fine and
+does not require a rebuild: the preprocessing output is deterministic per image and the
+provenance sidecar records the config, which is the thing that governs the pixels.
+
+**The GPU image may differ from the CPU image**, and Phase 4 runs on GPU. Cell 1 of every
+notebook prints the versions it actually has; if the GPU image differs, this table gains a
+column rather than the pins being changed again. What must not happen is a pin being
+edited from memory instead of from a printed version report.
+
+`timm` 1.0.26 vs 1.0.28 is the one worth watching: `normalisation()` reads
+`default_cfg` at runtime rather than hardcoding constants, so a change in timm's metadata
+is picked up automatically instead of silently disagreeing with a literal in a config.
+
+---
+
+## DECISION-020 — Kaggle input mounts are resolved, not assumed
+
+- **Date:** 2026-08-21
+- **Status:** Accepted
+- **Deviates from proposal:** No
+
+Kaggle changed where attached datasets appear. Measured on the Phase 2 build:
+
+    was:  /kaggle/input/{slug}/
+    now:  /kaggle/input/datasets/{owner}/{slug}/
+
+and `/kaggle/input` is read-only, so nothing can be symlinked *into* it — the workaround
+during the build was to symlink into `/kaggle/working/inputs/`.
+
+Hardcoding either layout is how the next notebook breaks. `src/data/kaggle_paths.py`
+resolves a dataset by trying the known layouts in order and raising with the actual
+directory listing when none matches, so a third layout costs one line here instead of a
+lost session. `configs/kaggle.yaml` records the current canonical paths, and the resolver
+is what code actually calls.
+
+This is exactly the class of thing CLAUDE.md S3 means by "every script is path-agnostic":
+the dataset root belongs in config and, where the platform can move it, behind a resolver.
+
+---
+
 ## Excluded data rows
 
-**None.** The Phase 1 reconciliation found the EyePACS dataset completely clean: 35,126 CSV
+**None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and
+**remain in their splits** — that is a processing note, not an exclusion.
+
+The Phase 1 reconciliation found the EyePACS dataset completely clean: 35,126 CSV
 rows, 35,126 image files, zero mismatches in either direction, zero duplicates, zero
 unparseable filenames, zero zero-byte files. APTOS likewise: 3,662 rows across the three
 author CSVs, 3,662 image stems on disk, zero duplicate `id_code`.

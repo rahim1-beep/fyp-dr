@@ -11,12 +11,23 @@
 # it is CUDA-matched and reinstalling is slow and can break the GPU runtime. The first
 # Kaggle notebook prints torch/torchvision/timm versions; if they differ from the pins
 # below, update these pins to match the Kaggle image rather than forcing the image to
-# match these. The pins here are what the LOCAL CPU environment installs.
+# match these.
+#
+# MEASURED — Kaggle CPU image, 2026-08-21, during the Phase 2 cache build (DECISION-019).
+# The pins below were moved to match it, and the local venv installs the same versions,
+# which is what makes a locally-inspected result and a Kaggle result the same artefact.
+#
+#     python 3.12.13   numpy 2.0.2   cv2 4.13.0
+#     torch 2.10.0+cpu   torchvision 0.25.0   timm 1.0.26
+#
+# THE GPU IMAGE MAY DIFFER FROM THE CPU IMAGE, and Phase 4 runs on GPU. Cell 1 of every
+# notebook prints what it actually has. If the GPU image differs, record it here as a
+# second measured block — never edit a pin from memory instead of from a printed report.
 
 # --- Core DL (R7: PyTorch + timm) ---
-torch==2.9.1
-torchvision==0.24.1
-timm==1.0.28
+torch==2.10.0
+torchvision==0.25.0
+timm==1.0.26
 
 # --- Imaging / preprocessing ---
 # Both opencv distributions end up installed and this is unavoidable: albumentations
@@ -24,8 +35,8 @@ timm==1.0.28
 # pip resolves them to DIFFERENT major versions (verified: headless 5.0 alongside
 # non-headless 4.12), putting two disagreeing cv2 builds on the path. Pin both to the
 # same version so whichever wins the import, the behaviour is identical.
-opencv-python==4.12.0.88
-opencv-python-headless==4.12.0.88
+opencv-python==4.13.0.92
+opencv-python-headless==4.13.0.92
 pillow==11.3.0
 albumentations==2.0.8
 
@@ -33,7 +44,7 @@ albumentations==2.0.8
 # pandas pinned to 2.x, not 3.x — 3.0 changed copy-on-write and string dtype defaults,
 # and the Kaggle image is on 2.x.
 pandas==2.3.3
-numpy==2.2.6
+numpy==2.0.2
 scikit-learn==1.7.2
 scipy==1.16.2
 

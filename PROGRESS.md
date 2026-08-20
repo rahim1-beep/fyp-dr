@@ -1,16 +1,14 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **The user must launch the full cache build on Kaggle** — it is a
-> ~2.5 h job and CLAUDE.md §7 forbids running it as a foreground session process.
-> Everything it needs is prepared: `notebooks/make_bundle.py` → upload → paste
-> `notebooks/phase2_build_cache.py`. That cell also runs the reconciliation, the leakage
-> tests, and the measured-size report before it will say READY TO PUBLISH.
+> **NEXT ACTION:** **Run the Phase 3 baseline on Kaggle** — `notebooks/phase3_baseline.py`,
+> four cells. GPU T4, **Internet ON** (timm downloads pretrained weights; cell 1 fails fast
+> if it is off). Smoke run first (2 epochs, 2,000 rows, ~5 min), then the real one
+> (8 epochs, ~60–90 min).
 >
-> **Gate status: contact sheet APPROVED by the user 2026-08-20.** The sheet was re-rendered
-> once more after the approval, with DECISION-016's 2.5% erosion applied, and is visually
-> unchanged.
+> Acceptance is a *correct* pipeline, not a good score: val QWK whose CI excludes zero, and
+> a confusion matrix that is not collapsed. Cell 4 checks both and says which.
 
-**Current phase:** Phase 2 — Preprocessing (code complete; cache build is the user's to run)
+**Current phase:** Phase 3 — Baseline. Phase 2 is **done**: cache built, reconciled, published.
 **Last updated:** 2026-08-20
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done
@@ -89,9 +87,30 @@ Phase 7 · 224×224 headline (DECISION-005) · no Intel XPU/IPEX (DECISION-003)
 - [x] `notebooks/make_bundle.py` + `notebooks/phase2_build_cache.py` — the Kaggle build
 - [x] Cache-path uniqueness proven **before** the build: 38,788 split rows → 38,788
       distinct cache paths, **0 claimed by more than one split**
-- [ ] **← USER RUNS THE KAGGLE BUILD** (~2.5 h, CPU, no GPU quota)
-- [ ] Cache all 35,126 EyePACS + 3,662 APTOS images
-- [ ] Persist as private Kaggle Dataset under `rah098`; log in DECISIONS.md
+- [x] **Kaggle build run 2026-08-21** — `RECONCILIATION PASSED`, leakage tests green
+- [x] Cached all 35,126 EyePACS + 3,662 APTOS images
+- [x] Published as private Kaggle Dataset `fyp-dr-eyepacs-224`
+
+### MEASURED — the real cache, 2026-08-21
+
+| | |
+|---|---|
+| Files | **38,788** |
+| Total | **0.836 GB** (a 42× reduction from 35.34 GB) |
+| Mean | **22.6 KB/image** (min 2.7, max 33.6) |
+| EyePACS | 35,126 files, 0.758 GB |
+| APTOS | 3,662 files, 0.078 GB |
+| Decode check | 800 sampled, **0 bad** |
+| Patients | 21,225, **no overlap across splits** |
+| `status != 'ok'` | **4**, all `ok:no-retina` (DECISION-018) |
+
+The 21.4 KB/image projection from the QA sample was 5% low against the real 22.6 —
+the QA sample happened to include three unusually small degraded files.
+
+Two things the build surfaced, both now fixed rather than remembered:
+**the Kaggle image's library versions did not match the pins** (DECISION-019), and
+**Kaggle moved input mounts** to `/kaggle/input/datasets/{owner}/{slug}/` with
+`/kaggle/input` read-only (DECISION-020, `src/data/kaggle_paths.py`).
 - [ ] CLAHE-on-green variant kept as an ablation arm (implemented, not yet run)
 
 ### Measured on the 20 QA images — replaces the earlier [ESTIMATE]
@@ -236,9 +255,19 @@ against a synthetic cache, so none of this waits on Kaggle.
       as an independent decoder and on a real EyePACS image
 - [x] `tests/test_metrics.py` (30, cross-checked against sklearn) + `tests/test_models.py`
       (24) + `tests/test_channel_order.py` (7). **Full suite: 184 green.**
-- [ ] `src/train/` — loop, AdamW, cosine+warmup, AMP, grad clip, early stopping on val QWK
+- [x] `src/train/losses.py` — CE / weighted CE / focal / ordinal; refuses class weights
+      **and** sampler together, because both correct the same imbalance
+- [x] `src/train/schedulers.py` — AdamW with no-decay on norms and biases, cosine with
+      warmup **stepped per batch**, LR curve printed into the run log
+- [x] `src/train/loop.py` — AMP, grad clip, early stopping on **val QWK**, best-checkpoint
+      save and restore, per-epoch collapse check, log appended every epoch
+- [x] `src/train/train.py` — the one entry point; runs the leakage gate, writes
+      `config.yaml` **before** the first batch, and has no test argument at all (R3)
+- [x] `tests/test_train.py` — 37 tests, the loop exercised end to end through the real
+      `DRDataset`. **Full suite: 221 green.**
+- [x] `notebooks/phase3_baseline.py` — smoke run then baseline, with an acceptance check
+- [ ] **← RUN IT** — ResNet18, arm A, 8 epochs
 - [ ] `src/eval/thresholds.py` — arm E's cut points, optimised on validation only (R3)
-- [ ] ResNet18, arm A, short schedule — purpose is a *correct* pipeline, not a good score
 
 **What the audit found — worth reading before touching this layer:**
 
