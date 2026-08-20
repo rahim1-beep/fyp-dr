@@ -1,65 +1,82 @@
-"""Phase 2 full cache build — paste this into ONE Kaggle notebook cell and run it.
+"""Phase 2 full cache build  -  the four Kaggle notebook cells, kept in the repo.
 
-Runs on Kaggle only. The local machine has no CUDA and, more to the point, does not have
-the 35.3 GB of source images (CLAUDE.md §3). Expect **~2.5 h** with --workers 4.
+Runs on Kaggle only. The local machine has no CUDA and does not have the 35.3 GB of
+source images (CLAUDE.md S3). Expect **~2.5 h** with `--workers 4`.
 
-GETTING THE CODE THERE
-----------------------
-No git remote is configured, so the code travels as a Kaggle utility Dataset:
+The step-by-step UI walkthrough lives alongside this file; these are the cells themselves,
+kept here so the repo and the runbook cannot drift apart. Print any cell with:
 
-    # locally
-    .venv/Scripts/python -m notebooks.make_bundle          # -> dist/fyp-dr-code.zip
-    # upload dist/fyp-dr-code.zip as a PRIVATE Kaggle Dataset named `fyp-dr-code`
-    # then in the notebook: + Add Input -> Datasets -> fyp-dr-code
+    python -m notebooks.phase2_build_cache 1      # or 2, 3, 4; no argument prints all
 
-The bundle carries `src/`, `configs/`, `tests/`, and `data/splits/` — the split CSVs
-travel WITH the code, because reconciliation compares the cache against them and a
-mismatched pair of versions is exactly the failure this step exists to catch.
-
-NOTEBOOK SETTINGS
------------------
-    Accelerator : None (this is CPU work — do not burn GPU quota on it)
-    Internet    : off
-    Inputs      : dreamer07/eyepacs, mariaherrerot/aptos2019, fyp-dr-code
-
-AFTER IT FINISHES
------------------
-The last three steps are the leakage-auditor's conditions and they are not optional:
-reconciliation, the leakage tests, and the measured size. If any of them fails, the cache
-does not get published — read the output, do not re-run and hope.
-
-Then: Save Version -> "Save & Run All", and when it completes, create a new Dataset from
-the notebook output so `/kaggle/working/processed/` survives the session wipe.
+Notebook settings: Accelerator **None** (this is CPU work  -  do not spend GPU quota),
+Internet **off**, three inputs attached: `dreamer07/eyepacs`, `mariaherrerot/aptos2019`,
+and your own `fyp-dr-code`.
 """
 
-CELL = r'''
-# ============================================================================
-# Phase 2 — full preprocessed cache build (EyePACS + APTOS)
-# ============================================================================
+import sys
+
+CELL_1 = r'''
+# -- Cell 1 -- setup, version report, pre-flight, leakage gate ----------------
 import os, shutil, subprocess, sys, time
 from pathlib import Path
 
-CODE = "/kaggle/input/fyp-dr-code"          # the utility dataset
 WORK = Path("/kaggle/working")
 REPO = WORK / "fyp-dr"
+OUT  = WORK / "processed"
 
-# The code must be WRITABLE (pytest writes .pytest_cache, and __pycache__ appears
-# everywhere); /kaggle/input is read-only, so copy it out first.
+print("inputs mounted:", sorted(p.name for p in Path("/kaggle/input").iterdir()))
+
+# Kaggle unzips an uploaded archive into the dataset, so the code arrives as a tree.
+# If it landed one level deeper, find it rather than failing forty minutes from now.
+CODE = Path("/kaggle/input/fyp-dr-code")
+if not (CODE / "src").is_dir():
+    found = [p for p in CODE.rglob("src/data/preprocess.py")]
+    if not found:
+        raise SystemExit(f"no src/ under {CODE}  -  check the fyp-dr-code dataset upload")
+    CODE = found[0].parents[2]
+print("code:", CODE)
+
+# /kaggle/input is read-only; pytest and __pycache__ need to write. Copy it out.
 if REPO.exists():
     shutil.rmtree(REPO)
 shutil.copytree(CODE, REPO)
 os.chdir(REPO)
 sys.path.insert(0, str(REPO))
 
-print("python :", sys.version.split()[0])
-print("cpus   :", os.cpu_count())
 import cv2, numpy, pandas
-print("cv2    :", cv2.__version__, "| numpy:", numpy.__version__,
-      "| pandas:", pandas.__version__)
-print("splits :", sorted(p.name for p in (REPO / "data/splits").glob("*.csv")))
+print(f"\npython {sys.version.split()[0]}  |  {os.cpu_count()} cpus")
+print(f"cv2 {cv2.__version__}  |  numpy {numpy.__version__}  |  pandas {pandas.__version__}")
+try:
+    import timm, torch, torchvision
+    print(f"torch {torch.__version__}  |  torchvision {torchvision.__version__}  "
+          f"|  timm {timm.__version__}")
+    print("^ if these differ from requirements.txt, update the pins to match THIS image")
+except ImportError as e:
+    print("torch/timm not importable here:", e)
+
+# -- Pre-flight: do the paths in the split CSVs actually exist? ---------------
+# Two hours into a build is a bad time to learn that APTOS is nested differently than
+# the manifest says. Three rows per split answers it in a second.
+from src.data.manifest import load_split
+
+SRC = {"eyepacs": Path("/kaggle/input/eyepacs"),
+       "aptos":   Path("/kaggle/input/aptos2019")}
+
+bad = []
+for name in ("train", "val", "test", "aptos_train", "aptos_val", "aptos_test"):
+    df = load_split(name)
+    for row in df.head(3).itertuples(index=False):
+        p = SRC[row.dataset] / row.image_path
+        if not p.exists():
+            bad.append(str(p))
+    print(f"{name:<12} {len(df):>6} rows   e.g. {SRC[df.dataset.iloc[0]] / df.image_path.iloc[0]}")
+if bad:
+    raise SystemExit("SOURCE PATHS NOT FOUND:\n  " + "\n  ".join(bad))
+print("\npre-flight OK  -  every sampled source path exists")
 
 
 def run(cmd):
+    cmd = [str(c) for c in cmd]
     print("\n$ " + " ".join(cmd), flush=True)
     t0 = time.time()
     rc = subprocess.run(cmd, cwd=REPO).returncode
@@ -67,76 +84,83 @@ def run(cmd):
     return rc
 
 
-# --- 0. Leakage gate BEFORE anything is written (CLAUDE.md §7) -------------
+# CLAUDE.md S7  -  the leakage tests run before anything is written, every time.
 assert run([sys.executable, "-m", "pytest", "tests/test_no_leakage.py", "-q"]) == 0, \
-    "leakage tests failed — nothing gets built until they are green"
+    "leakage tests failed  -  nothing gets built until they are green"
+'''
 
-OUT = WORK / "processed"
-
-# --- 1. EyePACS: 35,126 images --------------------------------------------
-rc_e = run([
+CELL_2 = r'''
+# -- Cell 2 -- EyePACS: 35,126 images. THE LONG ONE, roughly 2 hours ----------
+rc_eyepacs = run([
     sys.executable, "-m", "src.data.preprocess",
     "--split", "train", "--split", "val", "--split", "test",
     "--config", "configs/kaggle.yaml",
     "--src-root", "/kaggle/input/eyepacs",
-    "--out-root", str(OUT),
-    "--stats", str(WORK / "processed_stats.csv"),
+    "--out-root", OUT,
+    "--stats", WORK / "processed_stats.csv",
     "--workers", "4",
 ])
+print("eyepacs exit:", rc_eyepacs)
+'''
 
-# --- 2. APTOS: 3,662 images ------------------------------------------------
-rc_a = run([
+CELL_3 = r'''
+# -- Cell 3 -- APTOS: 3,662 images, roughly 10 minutes ------------------------
+rc_aptos = run([
     sys.executable, "-m", "src.data.preprocess",
     "--split", "aptos_train", "--split", "aptos_val", "--split", "aptos_test",
     "--config", "configs/kaggle.yaml",
     "--src-root", "/kaggle/input/aptos2019",
-    "--out-root", str(OUT),
-    "--stats", str(WORK / "aptos_stats.csv"),
+    "--out-root", OUT,
+    "--stats", WORK / "aptos_stats.csv",
     "--workers", "4",
 ])
+print("aptos exit:", rc_aptos)
 
-# A non-zero exit here means SOME IMAGE has status != 'ok'. That is not a reason to stop
-# — it is a reason to read the reconciliation report below, log those images in
-# docs/DECISIONS.md, and LEAVE THEM IN THEIR SPLIT (dropping a val/test row silently
-# rebalances that split: an R2 violation by omission).
-print(f"\npreprocess exit codes: eyepacs={rc_e} aptos={rc_a}")
+# A non-zero exit means SOME image has status != 'ok'. That is not a reason to stop: it
+# is a reason to read the reconciliation below, log those images in docs/DECISIONS.md,
+# and LEAVE THEM IN THEIR SPLIT. Dropping a val or test row silently rebalances that
+# split  -  an R2 violation by omission.
+'''
 
-# --- 3. Reconcile the cache against the split CSVs, row for row -----------
-rc_r = run([
+CELL_4 = r'''
+# -- Cell 4 -- reconcile, re-run the leakage tests, measure, prepare to publish
+rc_recon = run([
     sys.executable, "-m", "src.data.reconcile_cache",
-    "--cache-root", str(OUT),
+    "--cache-root", OUT,
     "--config", "configs/kaggle.yaml",
-    "--stats", str(WORK / "processed_stats.csv"),
-    "--stats", str(WORK / "aptos_stats.csv"),
+    "--stats", WORK / "processed_stats.csv",
+    "--stats", WORK / "aptos_stats.csv",
     "--decode-sample", "800",
 ])
 
-# --- 4. Leakage tests AGAIN, against the built artefact --------------------
-rc_t = run([sys.executable, "-m", "pytest", "tests/test_no_leakage.py", "-q"])
+rc_tests = run([sys.executable, "-m", "pytest", "tests/test_no_leakage.py", "-q"])
 
-# --- 5. Measured size ------------------------------------------------------
 tot = sum(p.stat().st_size for p in OUT.rglob("*.jpg"))
 n = sum(1 for _ in OUT.rglob("*.jpg"))
-print(f"\nMEASURED: {n} files, {tot / 1024**3:.3f} GB, mean {tot / n / 1024:.1f} KB")
-print(f"free in /kaggle/working: "
-      f"{shutil.disk_usage(WORK).free / 1024**3:.1f} GB")
+print(f"\nMEASURED: {n} files, {tot / 1024**3:.3f} GB, mean {tot / n / 1024:.1f} KB/image")
+print(f"free in /kaggle/working: {shutil.disk_usage(WORK).free / 1024**3:.1f} GB")
 
-ok = (rc_r == 0 and rc_t == 0)
-print("\n" + ("=" * 70))
-print("READY TO PUBLISH" if ok else "DO NOT PUBLISH — fix the failures above")
-print("=" * 70)
+ok = (rc_recon == 0 and rc_tests == 0)
+print("\n" + "=" * 72)
+print("READY TO PUBLISH" if ok else "DO NOT PUBLISH  -  fix the failures above")
+print("=" * 72)
 
-# Copy the stats CSVs and the split CSVs into the output so the published Dataset is
-# self-describing: whoever mounts it can tell which splits it was reconciled against.
 if ok:
+    # Make the published Dataset self-describing: whoever mounts it can tell which
+    # splits it was reconciled against and which images were flagged.
     shutil.copytree(REPO / "data/splits", OUT / "splits", dirs_exist_ok=True)
     for f in ("processed_stats.csv", "aptos_stats.csv"):
         shutil.copy(WORK / f, OUT / f)
-    shutil.rmtree(REPO)      # keep the output Dataset to the cache alone
-    print("\nNow: Save Version -> Save & Run All, then New Dataset from the output.")
-    print("Name it `fyp-dr-eyepacs-224`, PRIVATE — configs/kaggle.yaml already expects")
-    print("it at /kaggle/input/fyp-dr-eyepacs-224.")
+    os.chdir(WORK)               # never rmtree the directory you are standing in
+    shutil.rmtree(REPO)          # keep the output Dataset to the cache alone
+    print("\nNow: Save Version -> Save & Run All. When it finishes, open the notebook's")
+    print("Output tab and create a New Dataset named  fyp-dr-eyepacs-224  (PRIVATE).")
+    print("configs/kaggle.yaml already expects it at /kaggle/input/fyp-dr-eyepacs-224.")
 '''
 
+CELLS = [CELL_1, CELL_2, CELL_3, CELL_4]
+
 if __name__ == "__main__":
-    print(CELL)
+    which = sys.argv[1:] or ["1", "2", "3", "4"]
+    for w in which:
+        print(CELLS[int(w) - 1])
