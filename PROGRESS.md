@@ -1,13 +1,12 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** Phase 2 — write `src/data/preprocess.py`, then render the contact sheet
-> from the already-selected `docs/phase2_qa_sample.csv` (20 images, 17.1 MB).
-> **HARD GATE: do not cache all 35,126 images until the user signs off on the sheet.**
+> **NEXT ACTION:** **← USER SIGN-OFF GATE.** Review `docs/phase2_contact_sheet.png`.
+> Everything upstream of the gate is built, tested, and run on real images.
+> On approval, run the full cache build on Kaggle (command in `state/session_handoff.md`).
 >
-> **First action of the session:** confirm the 9 subagents in `.claude/agents/` now
-> dispatch by name (they were created mid-session last time and needed a restart).
+> **HARD GATE: do not cache all 35,126 images until the user signs off on the sheet.**
 
-**Current phase:** Phase 1 — Data foundation
+**Current phase:** Phase 2 — Preprocessing (at the sign-off gate)
 **Last updated:** 2026-08-20
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done
@@ -67,17 +66,67 @@ Phase 7 · 224×224 headline (DECISION-005) · no Intel XPU/IPEX (DECISION-003)
 **HARD GATE: do not cache all 35,126 images until the user signs off on the sheet.**
 
 - [x] QA sample selected — `docs/phase2_qa_sample.csv` (20 images, seed 42, train split only)
-- [ ] `src/data/preprocess.py` — circle-crop (non-black bbox on blurred grayscale
-      threshold) → Ben Graham → 224×224 → individual JPEGs (R5)
-- [ ] `scan_quality()` — pixel-stat pass (mean brightness, saturation, disc centroid
-      offset) to find genuinely dark / over-exposed / off-centre images. File size alone
-      cannot identify those.
-- [ ] Render the contact sheet from `docs/phase2_qa_sample.csv`
+- [x] `leakage-auditor` Phase 2 entry gate — **PASS**, 3 binding conditions, all satisfied
+      (DECISION-012, DECISION-013)
+- [x] `src/data/fetch_sample.py` — pulls named images from Kaggle without the 35.3 GB
+- [x] 20 QA images downloaded, every byte count matching the remote listing
+- [x] `src/data/preprocess.py` — retina mask → square crop → Ben Graham (normalised
+      convolution) → 224×224 → individual JPEGs (R5)
+- [x] `scan_quality()` — 8 pixel statistics + advisory flags, fixed absolute thresholds
+- [x] `src/data/contact_sheet.py` — before/after renderer
+- [x] `tests/test_preprocess.py` — **21 tests**; full suite **59 green**
+- [x] Contact sheet rendered from real images → `docs/phase2_contact_sheet.png`
 - [ ] **← USER SIGN-OFF GATE**
 - [ ] Cache all 35,126 EyePACS + 3,662 APTOS images
-- [ ] **Measure and report actual cache size before uploading**
 - [ ] Persist as private Kaggle Dataset under `rah098`; log in DECISIONS.md
-- [ ] CLAHE-on-green variant kept as an ablation arm
+- [ ] CLAHE-on-green variant kept as an ablation arm (implemented, not yet run)
+
+### Measured on the 20 QA images — replaces the earlier [ESTIMATE]
+
+| | Value |
+|---|---|
+| Mean output size | **21.6 KB/image** [MEASURED] |
+| Projected EyePACS cache | **0.72 GB** (35,126 images) |
+| Projected APTOS cache | **0.08 GB** (3,662 images) |
+| **Total** | **~0.80 GB** — a 44× reduction from 35.34 GB |
+| Throughput | 0.94 s/image single-threaded [MEASURED] |
+| **Full cache build** | **10.1 h @1 worker → 2.5 h @4 workers** |
+
+Comfortably inside `warn_working_dir_gb: 15`. The earlier 0.82 GB estimate was accurate;
+it is now a measurement. **Use `--workers 4` on Kaggle** — a single-threaded build would
+not fit in a session. Parallel output verified byte-identical to serial.
+
+### Three defects found and fixed by building the sheet
+
+The contact sheet earned its place as a gate — it exposed three problems that metrics
+could not have:
+
+1. **White halo around every retina** (DECISION-009). Ben Graham's blur straddled the
+   retina/black boundary, ringing each image at 1.44× inner brightness — brighter than
+   any lesion, and on grade-4 images it washed lesions out entirely. Fixed with a
+   normalised convolution over the retina mask.
+2. **Black bars and camera-dependent lesion scale** (DECISION-010). Bounding-box-then-pad
+   left the retina filling a fraction of the frame that depended on the camera's aspect
+   ratio. Fixed with a square crop centred on the retina.
+3. **340-hour build time** (DECISION-011). The naive large-sigma Gaussian took ~35 s/image.
+   Fixed with a downscaled-domain blur: 145× faster, max error 4/255.
+
+A fourth was caught by the statistics rather than the image: the focus measure was
+resolution-dependent and flagged **19 of 20 images as blurred** (DECISION-013).
+
+### Quality-flag result on the QA sample
+
+Exactly the **3 deliberately-bad images** flagged, 17 clean — and the pixel statistics
+independently rank the same three last as file size did, despite sharing no inputs.
+
+| image | grade | flags |
+|---|---|---|
+| `3829_left` | 2 | tiny-retina, dark, mostly-black, off-centre, blurred, low-contrast |
+| `39106_left` | 3 | dark, blurred |
+| `15942_right` | 0 | blurred |
+
+**None of these are dropped.** Flags are advisory (DECISION-013); the "Excluded data rows"
+section of `docs/DECISIONS.md` remains **None**.
 
 ### Contact sheet requirements (user, 2026-08-20)
 

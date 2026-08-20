@@ -335,6 +335,140 @@ seed, generator, git SHA, fractions, and class distribution. **Every reader must
 
 ---
 
+## DECISION-009 — Ben Graham's local average is a normalised convolution over the retina mask
+
+- **Date:** 2026-08-20
+- **Status:** Accepted
+- **Deviates from proposal:** No — the proposal specifies Ben Graham enhancement; this
+  fixes *how* it is computed at the retina boundary.
+
+**The defect.** Ben Graham's method is `alpha*img + beta*blur(img) + gamma` with
+`alpha=4, beta=-4, gamma=128`. Computed naively, the Gaussian window near the edge of the
+retina straddles the black surround, so `blur` is dragged toward zero while `img` is not.
+`4*img - 4*blur` then blows up, ringing every image in a **white halo brighter than any
+lesion**. Measured on the QA sample: mean brightness in the 0.85–0.99r annulus was
+**1.44×** the inner-disc mean, and on grade-4 examples the halo washed out lesions that
+are plainly visible once it is removed.
+
+**Why it matters beyond appearance.** The halo is a constant artefact at a constant
+location. A CNN can key on it, and Grad-CAM will light it up — which would corrupt the
+Phase 5 sanity gate ("heatmaps on lesions, not borders").
+
+**The fix.** The local average is computed as a normalised convolution over the retina
+mask, `blur(img*mask) / blur(mask)`, so it averages only over pixels that were actually
+imaged. Variants compared visually on 5 images (ideal-circle mask + plain blur, real mask
++ plain blur, real mask + normalised convolution); the last was clearly best and is what
+`src/data/preprocess.py:ben_graham` implements.
+
+Locked in by `tests/test_preprocess.py::test_ben_graham_does_not_ring_the_retina_edge`,
+which fails if the edge/inner brightness ratio returns above 1.15.
+
+---
+
+## DECISION-010 — Square crop centred on the retina, not bounding-box-then-pad
+
+- **Date:** 2026-08-20
+- **Status:** Accepted
+- **Deviates from proposal:** No — implementation detail of "circle crop".
+
+EyePACS retinas are routinely **truncated top and bottom** by the sensor, so the
+non-black bounding box is wider than it is tall. Padding that box to a square leaves
+black bars inside the frame, and the retina then fills a fraction of the output that
+depends on the **camera's aspect ratio rather than on the eye** — so the apparent scale
+of a lesion varies by camera model, which is a spurious cue correlated with acquisition
+site.
+
+`square_crop` instead takes a square of side 2r centred on the retina, where r is its
+larger half-extent, so the retina occupies a consistent fraction of every 224×224 output.
+The mask is carried through the crop so image and mask cannot drift out of registration.
+
+---
+
+## DECISION-011 — Large-sigma Gaussian computed on a downscaled copy
+
+- **Date:** 2026-08-20
+- **Status:** Accepted
+- **Deviates from proposal:** No — a performance optimisation with a measured error bound.
+
+**The problem.** Ben Graham's sigma is `width/10`, so a 2560px-wide image needs sigma 256
+and `cv2.GaussianBlur` builds a ~1537-tap separable kernel. **Measured: 30.8 s for one
+image**, ~35 s/image over the QA sample, which projects to roughly **340 hours** for
+35,126 images. The cache would never have been built.
+
+**The fix.** A Gaussian that wide is pure low frequency, so it is computed on a copy
+downscaled until sigma is 48px and then scaled back. Because sigma is itself proportional
+to width, the working image is always ~480px wide regardless of source size.
+
+**Measured error** on a 1920×2560 image, after the full `4*img - 4*blur + 128` (which
+amplifies any blur error fourfold): **max 4/255, mean 0.29** — below JPEG q95 quantisation
+noise, and smooth by construction, so it cannot add or remove lesion-scale detail.
+Speed-up 145×. Re-measured by `tests/test_preprocess.py::test_large_sigma_blur_approximates_the_exact_blur`
+rather than trusted from this note.
+
+---
+
+## DECISION-012 — Preprocessed cache is flat and split-agnostic
+
+- **Date:** 2026-08-20
+- **Status:** Accepted — **required by `leakage-auditor` before the cache build**
+- **Deviates from proposal:** No
+
+The cache is written as:
+
+```
+{processed_root}/eyepacs/{patientID}_{eye}.jpg
+{processed_root}/aptos/aptos_{id_code}.jpg
+```
+
+**Deliberately NOT** `train/`, `val/`, `test/` subdirectories. Split membership is
+resolved only from `data/splits/*.csv` at `Dataset` construction time. A split-shaped
+cache would silently mismatch the CSVs after any re-split, and no existing test would
+catch it.
+
+The APTOS source path `train_images/train_images/{id}.png` is flattened for the same
+reason: that directory structure **is** the author-provided split which DECISION-004
+discards, and preserving it would smuggle a discarded partition back into the project.
+The `aptos_` prefix prevents hash-named APTOS files from colliding with EyePACS
+`{patientID}_{eye}` names in a flat namespace.
+
+Enforced by `tests/test_preprocess.py::test_cache_layout_is_flat_and_carries_no_split_name`
+and `::test_aptos_cache_path_discards_the_author_split_and_is_namespaced`.
+
+---
+
+## DECISION-013 — Quality flags are advisory, with fixed absolute thresholds
+
+- **Date:** 2026-08-20
+- **Status:** Accepted — **required by `leakage-auditor` before the cache build**
+- **Deviates from proposal:** No
+
+`scan_quality()` computes per-image pixel statistics (brightness, retina fraction,
+clipping, darkness, centroid offset, saturation, focus, contrast) and `flags()` labels
+suspect images.
+
+Two constraints, both binding:
+
+1. **Thresholds are fixed absolute constants, never percentiles over the dataset.** A
+   percentile cutoff computed across all 35,126 images would let val and test influence
+   which train images are flagged. They were calibrated against the 20-image QA sample,
+   which is **drawn from the train split only**.
+2. **Nothing is dropped.** Flags are advisory and exist to direct human attention. No
+   image is excluded from any split without an entry in this file — see
+   "Excluded data rows" below, which remains **None**.
+
+**Focus had to be made resolution-independent.** A Laplacian is a per-pixel operator, so
+on the same scene a higher-resolution capture scores *lower*. Measured natively across
+the QA sample's 0.1–16 MP range, a 4.9 MP image scored 152.0 and a 16.1 MP image 1.9, and
+a single absolute threshold flagged **19 of 20 images as blurred**, including obviously
+sharp ones. The measure now resamples the retina core to a fixed 512px width first.
+After that fix, `laplacian_var` separated cleanly: **0.5 / 1.6 / 1.9** for the three
+known-degraded images against **4.3** for the lowest good one, so the threshold is 3.0.
+
+That the pixel statistics independently rank the same three images last as *file size*
+did — two criteria sharing no inputs — is a genuine cross-check on both.
+
+---
+
 ## Excluded data rows
 
 **None.** The Phase 1 reconciliation found the EyePACS dataset completely clean: 35,126 CSV

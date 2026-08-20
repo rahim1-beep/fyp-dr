@@ -1,160 +1,131 @@
 # Session Handoff
 
-**Session:** 2026-08-20 (session 1)
-**Phase:** 1 — Data foundation — **COMPLETE**
-**Next phase:** 2 — Preprocessing
+**Session:** 2026-08-20 (session 2)
+**Phase:** 2 — Preprocessing — **at the user sign-off gate**
+**Next phase:** 2 (cache build) once the contact sheet is approved
 
 ---
 
-## What was done this session
-
-**Phase 0 — Orientation.** Read `BOOTSTRAP.md` and `docs/proposal.pdf`. Audited the
-environment. Produced the plan, assumptions, failure-mode defences, and questions F1–F6.
-**User approved**; answers recorded as DECISION-001…005.
-
-**Phase 1 — Data foundation. Complete.**
-- Repo skeleton, `.gitignore`, `CLAUDE.md`, `PROGRESS.md`, 9 subagents, 4 slash commands.
-- `.venv` on Python 3.12.10. `requirements.txt` pinned for cp312, dry-run resolved.
-- Configs: `base`, `local`, `kaggle`, `arm_a`…`arm_f`.
-- Labels CSV located, schema discovered, full reconciliation — **zero mismatches**.
-- APTOS distribution measured from labels CSVs only (DECISION-007).
-- **Patient-level 70/15/15 split generated, seed 42.**
-- `tests/test_no_leakage.py` — **38 tests green.**
-- Reviewed by `leakage-auditor` — **PASS** (verdict + actions in DECISION-008).
-- `src/data/manifest.py` — the only supported reader for split CSVs.
-
-## Auditor findings that changed the code
-
-The audit passed but surfaced four things worth fixing, all done before commit:
-
-1. **`assign_splits` had no minimum-per-split guard** — a stratum with n < 4 patients
-   silently produced an empty val *and* test (all-zero confusion-matrix column). Now
-   raises. Verified to fire.
-2. **The venv was off-spec** — splits were first generated under `numpy 2.5.2`/`pandas
-   3.0.5` against pins of `2.2.6`/`2.3.3`. Venv corrected, splits regenerated; assignments
-   byte-identical, only the header changed. **If you rebuild the venv, install from
-   `requirements.txt`, not ad hoc.**
-3. **Split headers now record `python/numpy/pandas` versions** — numpy's Generator stream
-   is not stable across versions (NEP 19).
-4. **The test suite checked totals against a hardcoded integer**, so a complete-but-wrong
-   manifest would have passed. Now reconciles against `trainLabels.csv` and rules out
-   min-grade stratification rather than merely asserting max-grade.
-
-## Key technique: reconciliation without downloading
-
-`kaggle datasets files` returns filenames and sizes without transferring image bytes.
-Paging the full listing gives a complete remote manifest, so CSV↔disk reconciliation runs
-on a laptop that will never hold the 35.3 GB dataset. Only the 465 KB labels CSV was
-downloaded. Same trick used for APTOS.
-
-Regenerate the listings (gitignored under `data/raw/`):
-
-```
-.venv\Scripts\python -m src.data.list_remote --slug dreamer07/eyepacs --out data/raw/eyepacs/remote_listing.csv
-.venv\Scripts\python -m src.data.list_remote --slug mariaherrerot/aptos2019 --out data/raw/aptos/remote_listing.csv
-kaggle datasets download dreamer07/eyepacs -f "trainLabels.csv/trainLabels.csv" -p data/raw/eyepacs --unzip
-kaggle datasets download mariaherrerot/aptos2019 -f train_1.csv -p data/raw/aptos --unzip   # also valid.csv, test.csv
-```
-
-## Gotchas discovered (do not rediscover these)
-
-1. **EyePACS labels live at `trainLabels.csv/trainLabels.csv`** — a *directory* named
-   `trainLabels.csv` containing a file of the same name.
-2. **EyePACS CSV `image` values carry no extension** (`10_left`) while disk files do
-   (`10_left.jpeg`). Joining on the raw filename matches **zero rows**.
-3. **APTOS images are `.png`**, double-nested: `train_images/train_images/{id}.png`.
-4. **Split CSVs carry a `#` provenance header** — every reader must pass
-   `pandas.read_csv(..., comment='#')` or the header parses as data.
-5. **Two opencv distributions are unavoidable.** `albumentations` needs
-   `opencv-python-headless`, `grad-cam` needs `opencv-python`; unpinned, pip resolves them
-   to different major versions. Both pinned to 4.12.0.88.
-6. **pandas pinned to 2.3.3, not 3.x** — 3.0 changed copy-on-write and string dtypes.
-7. **Custom subagents in `.claude/agents/` are not available until Claude Code restarts.**
-   They were created this session, so the auditor ran as a general-purpose agent with the
-   brief inlined. Next session they should be selectable by name.
-
 ## FIRST ACTION NEXT SESSION
 
-**Confirm the 9 subagents in `.claude/agents/` dispatch by name.** They were created
-mid-session and Claude Code only loads agent definitions at startup — last session the
-`leakage-auditor` dispatch failed with "Agent type not found" and had to run as a
-general-purpose agent with the brief inlined. The user restarted specifically to fix this.
-Verify before relying on delegation, and report it to the user.
+**Check whether the user has approved `docs/phase2_contact_sheet.png`.** Everything
+upstream of the gate is built, tested, and run on real images. Nothing downstream may
+proceed until they say yes.
 
-## Exact next command
+Subagent dispatch was verified this session — **all nine dispatch by name**. The
+`leakage-auditor` and `code-reviewer` both ran as real named agents. The Phase 1 gotcha
+about needing a restart is resolved; delete that worry.
 
-Phase 2 preprocessing. **Phase 2 is approved.** Nothing heavy runs locally — no CUDA
-device, and the images are on Kaggle.
+## What was done this session
 
-The QA sample is **already selected and committed**: `docs/phase2_qa_sample.csv`
-(20 images, seed 42, all TRAIN split, 17.1 MB to download). Regenerate with
-`python -m src.data.qa_sample` if needed.
+**Phase 2 preprocessing, built and validated on real images, stopped at the gate.**
 
-Next artefacts to write:
-1. `src/data/preprocess.py` — circle-crop (non-black bbox on blurred grayscale threshold)
-   → Ben Graham → 224×224 → individual JPEGs.
-2. `scan_quality()` — pixel statistics (mean brightness, saturation, disc centroid offset)
-   to find genuinely dark / over-exposed / off-centre images. **File size alone cannot
-   identify those**; the current poor-quality picks are size-based proxies and should be
-   confirmed or improved by this scan.
-3. The contact sheet renderer.
+- `src/data/fetch_sample.py` — downloads named images from Kaggle without the 35.3 GB.
+- `src/data/preprocess.py` — retina mask → square crop → Ben Graham (normalised
+  convolution) → 224×224 → individual JPEGs. Plus `scan_quality()` and a parallel
+  batch driver.
+- `src/data/contact_sheet.py` — the before/after QA renderer.
+- `tests/test_preprocess.py` — 21 tests. **Full suite: 59 green.**
+- `docs/phase2_contact_sheet.png` — rendered from the 20 real QA images.
+- DECISION-009 … DECISION-013 logged.
 
-**Contact sheet requirements are in `PROGRESS.md` under Phase 2 — read them.** Summary:
-side-by-side at equal display size, patient ID + grade labelled on each pair, ≥6 of ~20
-from grades 1–2 (current sample has 9), 2–3 deliberately bad inputs (current sample has 3).
+## MEASURED numbers — these replace the old [ESTIMATE]
 
-### HARD GATE
+| | Value |
+|---|---|
+| Mean output size | **21.6 KB/image** |
+| EyePACS cache | **0.72 GB** (35,126) |
+| APTOS cache | **0.08 GB** (3,662) |
+| **Total** | **~0.80 GB**, a 44× reduction from 35.34 GB |
+| Throughput | 0.94 s/image, 1 worker |
+| Full build | **10.1 h @1 worker → 2.5 h @4 workers** |
 
-**Do not cache all 35,126 images until the user signs off on the contact sheet.**
+The old 0.82 GB projection was accurate. It is now a measurement, not an estimate.
 
-### Cache persistence — confirmed with the user
+## Gotchas discovered this session (do not rediscover these)
 
-`/kaggle/working/processed/` during the run → then published as a **private Kaggle Dataset**
-under account `rah098` so it survives the session wipe → re-mounted read-only at
-`/kaggle/input/fyp-dr-eyepacs-224` for training (already wired as
-`paths.processed_dataset_mount` in `configs/kaggle.yaml`).
+1. **The kaggle CLI cannot download a single nested file.** It fails to URL-encode the
+   path separators and gets 404 for every file in these datasets — including
+   `trainLabels.csv/trainLabels.csv`, which it downloaded successfully in session 1, so
+   this is a regression in kaggle 1.7.4.5, not a dataset quirk. Use
+   `src/data/fetch_sample.py`, which calls the endpoint with `quote(path, safe="")`.
+2. **Kaggle serves large files ZIP-WRAPPED.** Files above roughly 1 MB come back as a
+   one-entry ZIP (`PK` magic) with `Content-Type: image/jpeg`; smaller files come back
+   raw. Written straight to disk the large ones are ZIPs named `.jpeg`, `cv2.imdecode`
+   returns None, and the byte count looks like a truncated download. `fetch_sample.py`
+   sniffs the magic bytes.
+3. **A large-sigma `cv2.GaussianBlur` is catastrophically slow.** sigma = width/10 means
+   a ~1537-tap kernel and **30.8 s for one image**. See DECISION-011.
+4. **Laplacian-variance focus is resolution-dependent.** It flagged 19 of 20 images as
+   blurred. Must be measured at a normalised scale. See DECISION-013.
+5. **`retina_mask` returns uint8 0/255, not bool.** Boolean-index with `mask > 0` —
+   indexing a numpy array *with* a uint8 array is integer fancy-indexing and silently
+   returns the wrong pixels rather than raising.
+6. **The local venv had only numpy/pandas/pyyaml/pytest installed**, despite
+   `requirements.txt` being "resolved" in session 1. The imaging subset (opencv, pillow,
+   matplotlib, tqdm, kaggle) was installed at pinned versions this session; pytest was
+   corrected from 9.1.1 to the pinned 8.4.2. **torch/timm are still NOT installed
+   locally** — install them before any local smoke test or the Phase 7 demo.
 
-**Report the measured cache size before uploading.** Projection below is an estimate only —
-measure the real per-image mean on the 20 QA images first, then project.
+## Exact next command — AFTER SIGN-OFF ONLY
 
-## Expected cache size — **[ESTIMATE]**, not measured
+Full cache build, on Kaggle, in a notebook (never a foreground session process):
 
-No image has been preprocessed yet, so this is a projection and **must be labelled
-`[ESTIMATE]` wherever it appears** (R4) until replaced by a measurement.
+```bash
+python -m src.data.preprocess \
+    --split train --split val --split test \
+    --config configs/kaggle.yaml \
+    --src-root /kaggle/input/eyepacs \
+    --out-root /kaggle/working/processed \
+    --stats /kaggle/working/processed_stats.csv \
+    --workers 4
 
-A 224×224 RGB JPEG at quality 95 typically lands at 15–30 KB.
+python -m src.data.preprocess \
+    --split aptos_train --split aptos_val --split aptos_test \
+    --config configs/kaggle.yaml \
+    --src-root /kaggle/input/aptos2019 \
+    --out-root /kaggle/working/processed \
+    --stats /kaggle/working/aptos_stats.csv \
+    --workers 4
+```
 
-| | Images | @15 KB | @22 KB (central) | @30 KB |
-|---|---:|---:|---:|---:|
-| EyePACS | 35,126 | 0.50 GB | **0.74 GB** | 1.00 GB |
-| APTOS | 3,662 | 0.05 GB | **0.08 GB** | 0.10 GB |
-| **Total** | 38,788 | 0.55 GB | **~0.82 GB** | 1.11 GB |
+`--workers 4` is not optional: single-threaded is 10.1 h and will not fit in a session.
 
-Source is 35.34 GB, so the cache should be roughly a **40× reduction**. Comfortably inside
-`/kaggle/working`'s cap (`warn_working_dir_gb: 15` in `configs/kaggle.yaml`) and inside
-Kaggle Dataset limits.
+**Then, before anything trains:**
+1. Reconcile cache file count against the split CSVs, row for row. The leakage-auditor
+   requires this and a re-run of `tests/test_no_leakage.py` before the gate opens.
+2. Any image with `status != 'ok'` gets a `docs/DECISIONS.md` entry. **It is never
+   dropped from a split** — dropping a val/test row silently rebalances that split,
+   which is an R2 violation by omission.
+3. Report the real measured cache size before uploading.
+4. Publish `/kaggle/working/processed/` as a private Kaggle Dataset under `rah098`,
+   re-mounted at `/kaggle/input/fyp-dr-eyepacs-224` (already wired as
+   `paths.processed_dataset_mount` in `configs/kaggle.yaml`).
 
-**Replace this with a measured number before uploading**, projected from the actual mean
-output size over the 20 QA images.
+## Watch out for this in Phase 3
+
+**Colour order.** The cache is written BGR-by-cv2, which is correct on disk. But
+`src/data/dataset.py` does not exist yet, and if it loads with PIL it gets RGB while
+cv2 gives BGR. timm's `default_cfg` normalisation assumes **RGB**. Getting this backwards
+trains a model that works but underperforms, with no error anywhere — exactly the class of
+silent failure that lands a DR project at 20–45% accuracy. Pick one loader, assert the
+channel order once, and test it.
 
 ## Open questions for the user
 
-1. **GitHub** — private repo + collaborator access for Ameena Ahmed and Muhammad Ali
-   Abdullah. **Do not push without asking.** No remote is configured yet. *(User has since
-   said they are distributing as an archive, so this may be moot — confirm.)*
-2. **Supervisor** — written confirmation of DECISION-001 (Streamlit → FastAPI + Next.js)
-   before Phase 7.
-3. **Arm F vs Phase 6** — if Arm F wins, APTOS cannot be the external validation set for
-   it. The trade-off is logged (DECISION-007); the choice is the user's to make when the
-   numbers exist.
+1. **Contact sheet approval** — the live gate.
+2. **GitHub** — private repo + collaborator access for Ameena Ahmed and Muhammad Ali
+   Abdullah. **Do not push without asking.** No remote is configured. User previously
+   mentioned distributing as an archive instead; confirm which.
+3. **Supervisor** — written confirmation of DECISION-001 before Phase 7.
+4. **Arm F vs Phase 6** — unchanged from session 1; decide when the numbers exist.
 
 ## Known-broken / not yet built
 
-- `src/data/{preprocess,dataset,sampler}.py` — not written.
+- `src/data/{dataset,sampler}.py` — not written.
 - `src/models/`, `src/train/`, `src/eval/`, `src/xai/`, `src/inference/` — empty.
 - No Kaggle notebook has been run; **GPU quota fully unconsumed.**
 - `docs/EXPERIMENTS.md` does not exist (no runs).
-- Torch pins unverified against the Kaggle image — the first Kaggle notebook must print its
-  versions and the pins updated to match (note in `requirements.txt`).
-- Git identity is repo-local `syedrahim079 <syedrahim079@gmail.com>`; user confirmed single
-  authorship is intended.
+- torch/torchvision/timm not installed locally; pins still unverified against the Kaggle
+  image. The first Kaggle notebook must print its versions and the pins updated to match.
+- The CLAHE-on-green ablation path is implemented but has never been run.
