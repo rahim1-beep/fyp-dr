@@ -87,6 +87,10 @@ class DRDataset(Dataset):
     reports metrics broken down by source dataset (DECISION-007), the eval code needs to
     know which manifest row each prediction came from, and reconstructing that from a
     shuffled DataLoader is a classic silent misalignment. Training loops ignore it.
+
+    **The index is positional. Join it as `loader.dataset.df.iloc[idx]`** — never `.loc`
+    on a frame the caller kept a reference to. `__init__` refuses a non-RangeIndex frame
+    so that rule cannot be broken quietly.
     """
 
     def __init__(
@@ -106,10 +110,41 @@ class DRDataset(Dataset):
         if len(df) == 0:
             raise ValueError("manifest has no rows")
 
-        labels = pd.unique(df["label"].dropna())
-        bad = sorted(set(labels) - {0, 1, 2, 3, 4})
+        # The returned index is POSITIONAL in this frame. If the caller's frame carries a
+        # shuffled or gapped index, `.loc[idx]` on the caller's side returns a different
+        # row than the one the model saw, and a pooled frame built with a bare pd.concat
+        # has duplicate labels so `.loc[idx]` returns SEVERAL rows. Both are silent.
+        # Refuse the ambiguity instead of documenting it: the join is
+        # `loader.dataset.df.iloc[idx]`.
+        if not df.index.equals(pd.RangeIndex(len(df))):
+            raise ValueError(
+                "manifest index must be a clean RangeIndex — pass "
+                "df.reset_index(drop=True) (or pd.concat(..., ignore_index=True)). The "
+                "index returned by __getitem__ is positional, and joining it against a "
+                "shuffled or duplicated index silently returns the wrong row."
+            )
+
+        # NaN counts as a violation, not as something to drop. A NaN label survives
+        # construction, becomes a NaN sampler weight, and fails at the first draw of the
+        # first epoch — on Kaggle, forty minutes in, rather than here.
+        if df["label"].isna().any():
+            n = int(df["label"].isna().sum())
+            raise ValueError(f"{n} row(s) have a NaN label")
+        bad = sorted(set(pd.unique(df["label"])) - {0, 1, 2, 3, 4})
         if bad:
             raise ValueError(f"labels outside 0-4: {bad}")
+
+        # §2.1 forbids duplicated rows in any manifest. tests/test_no_leakage.py enforces
+        # that on the committed CSVs; nothing enforced it on the frame actually handed to
+        # a DataLoader, so physical oversampling by pd.concat was accepted here in silence.
+        dup = df["image_path"].duplicated()
+        if dup.any():
+            examples = df.loc[dup, "image_path"].head(3).tolist()
+            raise ValueError(
+                f"{int(dup.sum())} duplicate image_path row(s), e.g. {examples}. "
+                "Physical oversampling is forbidden (CLAUDE.md §2.1) — balance with "
+                "WeightedRandomSampler via src/data/sampler.py."
+            )
 
         self.df = df.reset_index(drop=True)
         self.cache_root = Path(cache_root)

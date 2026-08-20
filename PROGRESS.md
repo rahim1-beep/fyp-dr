@@ -223,11 +223,35 @@ against a synthetic cache, so none of this waits on Kaggle.
 - [x] `src/data/sampler.py` — `WeightedRandomSampler` per §2.1, and `build_loaders`
       **refuses a sampler on val or test** rather than trusting the caller
 - [x] `tests/test_dataset.py` — 24 tests. **Full suite: 99 green.**
-- [~] `leakage-auditor` review of the data layer — dispatched
+- [x] `leakage-auditor` review of the data layer — **FAIL, 4 blockers, all fixed**
+      (DECISION-017, and a correction inside DECISION-007)
+- [x] `src/data/reconcile_cache.py` gained the R1 check it was missing, plus a cache
+      provenance sidecar, stats set-comparison, and a stratified decode sample
+- [x] `tests/test_reconcile.py` — 14 tests. **Full suite: 123 green.**
 - [ ] `src/models/factory.py` — timm, full fine-tune, normalisation from `default_cfg`
 - [ ] `src/train/` — loop, AdamW, cosine+warmup, AMP, grad clip, early stopping on val QWK
 - [ ] `src/eval/metrics.py` — QWK first
 - [ ] ResNet18, arm A, short schedule — purpose is a *correct* pipeline, not a good score
+
+**What the audit found — worth reading before touching this layer:**
+
+Three of the four blockers were demonstrated with a printed exit code, not argued.
+
+1. **`reconcile_cache` printed `RECONCILIATION PASSED` and exited 0 on a patient with the
+   left eye in train and the right eye in test.** Its R1 check compared *cache paths*, and
+   two images of one patient have two different names, two different files, zero
+   collisions and zero orphans. No count of files can see this. It now compares
+   `patient_id` across split roles, first, before anything else.
+2. **The sampler's val/test guard was a substring blocklist and failed open** on
+   `holdout`, `development`, `tuning`, `screening_2026`, on a dropped `split` column, and
+   on an all-NaN one. Now an allowlist: `{"train", "aptos_train"}`.
+3. **`build_loaders` never checked R1 — and the suite's headline R2 fixture was a
+   100-patient overlap, and green.** That was the proof the assertion was missing. The
+   assertion is in, the fixtures are disjoint, and removing the assertion now fails a test.
+4. **Arm F's origin/severity correlation is real** — P(aptos | grade) runs 0.065 at grade 0
+   to 0.291 at grade 4 — **and DECISION-007 claimed it was absent.** Corrected there, with
+   the measured table. The balanced sampler amplifies the payoff for using it: grade 4
+   goes from 2.6% of the gradient to ~20%, 29% of it APTOS.
 
 **Design notes worth not relitigating:**
 

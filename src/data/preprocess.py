@@ -798,6 +798,56 @@ def summarise(stats: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
+PROVENANCE_FILE = "_cache_provenance.json"
+
+
+def record_provenance(out_root: Path, cfg: PreprocessConfig, src_root: Path,
+                      n_images: int, splits: list[str] | None = None) -> Path:
+    """Append this build to the cache's provenance sidecar.
+
+    APPENDS rather than overwrites: the cache is built by two separate invocations
+    (EyePACS, then APTOS) into one flat root, and the second must not erase the first's
+    record.
+
+    Why it exists: `reconcile_cache.py` can otherwise only count files and check one
+    dimension, image size. A cache half-built before DECISION-016 landed and half after -
+    two different `mask_erode_frac` values, so two different image domains sharing one
+    directory - reconciles perfectly clean. Every count matches, every file decodes, and
+    the model trains on a mixture nobody chose.
+    """
+    import json
+    from datetime import datetime, timezone
+
+    path = out_root / PROVENANCE_FILE
+    doc = {"runs": []}
+    if path.exists():
+        try:
+            doc = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            doc = {"runs": []}
+    doc.setdefault("runs", []).append({
+        "started": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "src_root": str(src_root),
+        "splits": splits or [],
+        "n_images": int(n_images),
+        "git": _git_sha(),
+        "preprocess": asdict(cfg),
+    })
+    out_root.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def _git_sha() -> str:
+    import subprocess
+    try:
+        r = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=REPO,
+                           capture_output=True, text=True, check=True)
+        return r.stdout.strip()
+    except Exception:
+        return "unknown"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -854,6 +904,10 @@ def main() -> int:
 
     print()
     print(summarise(stats))
+
+    prov = record_provenance(args.out_root, cfg, args.src_root, len(stats),
+                             splits=list(args.split))
+    print(f"\nprovenance appended to {prov}")
 
     if args.stats:
         args.stats.parent.mkdir(parents=True, exist_ok=True)

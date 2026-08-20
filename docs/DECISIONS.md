@@ -238,10 +238,43 @@ view, illumination, compression. If only grades 3–4 were imported, **dataset o
 correlate with severity**, and the model could reach a high score by learning "this looks
 like an APTOS camera" as a proxy for "this is severe." That is a domain artefact
 masquerading as a clinical finding: it would inflate rare-class recall on any test set
-containing APTOS images and collapse on EyePACS-only data. Pooling everything keeps origin
-uncorrelated with label, so any gain is attributable to the extra data rather than to a
-detectable acquisition signature. `xai-engineer`'s Grad-CAM sanity check is the
-second line of defence here.
+containing APTOS images and collapse on EyePACS-only data.
+
+> **CORRECTION, 2026-08-20 (leakage audit).** This decision originally said "pooling
+> everything keeps origin uncorrelated with label." **That is wrong, and the table above
+> refutes it.** APTOS is 8.06% grade 4 against EyePACS's 2.02%, which *guarantees* a
+> correlation. Measured on the committed arm-F pooled training split:
+>
+> | grade | n | of which APTOS | P(aptos \| grade) |
+> |---|---:|---:|---:|
+> | 0 | 19,337 | 1,264 | 0.065 |
+> | 1 | 1,987 | 259 | 0.130 |
+> | 2 | 4,375 | 699 | 0.160 |
+> | 3 | 742 | 135 | 0.182 |
+> | 4 | 708 | 206 | **0.291** |
+> | marginal | 27,149 | 2,563 | 0.094 |
+>
+> Monotonic, a 4.4x spread. All-or-nothing pooling **bounds** the correlation — importing
+> only grades 3-4 would put it near 1.0 — but it does not remove it.
+>
+> **The balanced sampler amplifies the payoff.** One real balanced epoch (seed 7) lifts
+> grade 4 from 2.6% of the gradient to about 20%, and 29% of those draws are APTOS. So
+> "APTOS camera implies severe" is a shortcut worth several times more under arm F WITH
+> the sampler than under arm F alone. The sampler is behaving exactly as §2.1 specifies;
+> the confound is in the arm, not the mechanism.
+>
+> **Consequences, all binding:**
+> 1. `describe_balance` emits a `p_aptos` column for pooled frames, so every arm-F run log
+>    shows the correlation rather than leaving it to be rediscovered.
+> 2. Arm F evaluation **must** report metrics broken down by source dataset. That is what
+>    `DRDataset`'s returned index is for.
+> 3. **Cross-arm selection uses arm F's val QWK restricted to the EyePACS val rows.**
+>    Arm F's pooled val is a different population — n=5,818 with 9.5% APTOS, against
+>    n=5,268 for arms A-E — and QWK is distribution-sensitive, so the pooled number is not
+>    comparable to A-E's. Log both; select on the EyePACS-only one.
+> 4. If arm F wins, the write-up must show the gain survives the per-origin breakdown.
+
+`xai-engineer`'s Grad-CAM sanity check is the second line of defence here.
 
 **Consequence — the trade-off to defend in the write-up.** Under Arm F, APTOS is consumed
 as **training** data, so it **cannot also serve as the Phase 6 external validation set**
@@ -607,6 +640,82 @@ that is a ~3px strip, and special-casing it would mean detecting which boundary 
 are optical and which are the sensor — complexity out of proportion to the loss.
 
 `configs/base.yaml` → `preprocess.mask_erode_frac: 0.025`.
+
+---
+
+## DECISION-017 — Partitioning invariants are enforced at every layer, not documented at one
+
+- **Date:** 2026-08-20
+- **Status:** Accepted — `leakage-auditor` returned **FAIL / CHANGES REQUIRED** on the
+  Phase 3 data layer
+- **Deviates from proposal:** No
+
+The audit found four blockers, three of them demonstrated by execution rather than
+inferred. All are fixed and each has a regression test.
+
+**1. `reconcile_cache` certified a leaking partition with exit code 0.** Its R1 check
+compared *cache paths* across splits. A patient with the left eye in train and the right
+eye in test produces two different filenames, two different cache files, zero collisions
+and zero orphans — so the check passed, and the tool the auditor had mandated as the
+pre-training gate blessed the textbook R1 violation. **No count of files can see this**;
+patient identity has to be compared directly. There is now a check on `patient_id`, run
+first, comparing split *roles* so that arm F's `train` + `aptos_train` are correctly
+treated as one side of the boundary.
+
+**2. The sampler's val/test guard was a substring blocklist, and it failed open.**
+Measured: `holdout`, `development`, `tuning`, `screening_2026` were all accepted; a frame
+with the `split` column dropped skipped the check entirely; an all-NaN column emptied the
+set via `dropna()` and also skipped it. The last two were live, not hypothetical, because
+`DRDataset` requires only `{image_path, label, dataset}` — a frame that was a valid
+Dataset input was a frame with no guard. Replaced by an **allowlist**,
+`TRAIN_SPLIT_NAMES = {"train", "aptos_train"}`, with a missing column and a NaN value both
+counted as violations. A blocklist fails open on every name nobody thought of.
+
+**3. `build_loaders` never checked R1, and the test suite's headline fixture violated it.**
+`load_arm_splits` checks patient disjointness, but every path that calls `load_split`
+directly bypasses it. `build_loaders` is the one function that sees all three frames at
+once. It now asserts the three pairwise `patient_id` intersections. The audit also found
+that `tests/test_dataset.py` **constructed a 100-patient overlap as its R2 fixture and was
+green** — which is itself the proof the assertion was missing. The fixtures now use
+disjoint patients, and `test_loaders_refuse_a_partition_that_shares_patients` locks it.
+
+**4. Arm F's origin/severity correlation is real and was documented as absent.** See the
+correction inside DECISION-007.
+
+Also fixed, from the same audit:
+
+- **R3:** `build_loaders(include_test=False)` by default. `load_arm_splits` returns three
+  frames, so the natural call passed three and a live test loader existed for the whole of
+  training. Touching the test set should be an act, not an inheritance.
+- **The returned index was positional but sold as a join key.** Against a caller frame
+  with a shuffled index, `.loc[idx]` returned a different row than the model saw
+  (measured: `ds[5]` reported `5_left.jpeg`, the row actually loaded was `142_left.jpeg`).
+  `DRDataset` now refuses a non-RangeIndex frame; the documented join is
+  `loader.dataset.df.iloc[idx]`.
+- **Physical oversampling was accepted in silence.** `pd.concat([train] + [rare] * 8)`
+  produced 256 duplicated rows inside a Dataset with no complaint, while the module
+  docstring claimed the forbidden operations were "not expressible." §2.1 forbids
+  duplicated rows *in any manifest*; `tests/test_no_leakage.py` enforced that on the
+  committed CSVs only. `DRDataset` now asserts `image_path` uniqueness, and the
+  overclaiming docstring is gone — a safety claim that is not true tells the next reviewer
+  not to check.
+- **NaN labels** survived construction and failed at the first draw of the first epoch, on
+  Kaggle. Refused at construction.
+- **Half-specified normalisation** (`mean` without `std`) silently reverted *both* to
+  ImageNet, discarding the caller's explicit value. Now raises.
+- **Cache provenance.** `reconcile_cache` was content-blind: only `image_size` was
+  verified, so a cache half-built before DECISION-016 and half after — two different
+  `mask_erode_frac` values, two image domains in one directory — reconciled perfectly
+  clean. `preprocess.py` now appends a `_cache_provenance.json` sidecar (full config, git
+  SHA, source root, count) per invocation, and reconciliation compares every field.
+- The stats CSVs are now **set-compared** against the split rows rather than read only for
+  a status column, the split headers are checked to share a seed (DECISION-008), and the
+  decode sample is **stratified by dataset** — unstratified, APTOS got ~9% of the checks
+  purely for being ~9% of the cache, and APTOS is the half whose source format differs.
+
+**The principle.** Every one of these passed review at the layer where it was written and
+failed at the layer where it was used. Invariants get asserted at the point of use, by
+code, with a test that fails when the assertion is removed.
 
 ---
 

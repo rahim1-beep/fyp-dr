@@ -5,18 +5,24 @@ flat and split-agnostic (DECISION-012), which is the right design but means noth
 the directory listing tells you whether it matches the splits. This module is what makes
 that check explicit rather than assumed.
 
-Four questions, all of which have to be answered "yes" before anything trains:
+Five questions, all of which have to be answered "yes" before anything trains:
 
-  1. Does every split row have a cache file?          (missing -> a silently short epoch)
-  2. Does every cache file belong to a split row?     (orphan  -> an image from nowhere)
-  3. Does every file decode, at the configured size?  (corrupt -> a crash mid-epoch, or
+  1. Is every PATIENT in exactly one split?           (R1 - the leakage question itself)
+  2. Does every split row have a cache file?          (missing -> a silently short epoch)
+  3. Does every cache file belong to a split row?     (orphan  -> an image from nowhere)
+  4. Does every file decode, at the configured size?  (corrupt -> a crash mid-epoch, or
                                                        worse, a black image that trains)
-  4. Does any image map to more than one split?       (R1 — the leakage question itself)
+  5. Does any image map to more than one cache file?  (collision -> one file shared across
+                                                       the train/test boundary)
 
-(4) is the one that matters most and is the cheapest to get wrong: two split rows whose
-`image_path` differs but whose cache stem collides would share one file across the
-train/test boundary. `tests/test_no_leakage.py` checks the SPLITS; this checks the
-artefact the model will actually open.
+(1) IS THE ONE THAT MATTERS AND IT IS NOT (5). A patient with a left eye in train and a
+right eye in test produces two different filenames, two different cache files, zero
+collisions and zero orphans - and (5) reports PASSED. That is the textbook R1 violation
+this project exists to avoid, and an earlier version of this file certified it with exit
+code 0. Patient identity is checked directly, on `patient_id`.
+
+`tests/test_no_leakage.py` checks the committed CSVs. This runs on Kaggle against
+whatever CSVs were uploaded, so it cannot assume those tests ever ran here.
 
 Nothing here drops, moves, or rewrites anything. It reports and exits non-zero.
 
@@ -29,7 +35,9 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
+from dataclasses import asdict
 from collections import defaultdict
 from pathlib import Path
 
@@ -37,12 +45,21 @@ import cv2
 import numpy as np
 import pandas as pd
 
-from src.data.manifest import load_split
+from src.data.manifest import load_split, read_header
 from src.data.preprocess import cache_relpath, load_preprocess_config
 
 REPO = Path(__file__).resolve().parents[2]
 EYEPACS_SPLITS = ["train", "val", "test"]
 APTOS_SPLITS = ["aptos_train", "aptos_val", "aptos_test"]
+
+# Which splits are the same side of the partition. Arm F pools eyepacs+aptos within a
+# role, so `train` and `aptos_train` may legitimately share nothing but must both be
+# disjoint from every val and test split.
+ROLES = {"train": "train", "aptos_train": "train",
+         "val": "val", "aptos_val": "val",
+         "test": "test", "aptos_test": "test"}
+
+PROVENANCE_FILE = "_cache_provenance.json"
 
 
 def expected_rows(splits: list[str]) -> pd.DataFrame:
@@ -60,6 +77,63 @@ def expected_rows(splits: list[str]) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True)
 
 
+def patient_overlaps(exp: pd.DataFrame) -> list[str]:
+    """R1, on patient identity. Returns one message per offending pair of roles."""
+    if "patient_id" not in exp.columns:
+        return ["split CSVs have no patient_id column, so R1 cannot be checked"]
+
+    roles = exp["split_file"].map(ROLES)
+    unknown = sorted(set(exp.loc[roles.isna(), "split_file"]))
+    problems = []
+    if unknown:
+        problems.append(
+            f"split file(s) {unknown} have no known role (train/val/test); refusing to "
+            "guess which side of the partition they are on"
+        )
+
+    by_role = {r: set(g["patient_id"]) for r, g in exp.assign(_r=roles).groupby("_r")}
+    names = sorted(by_role)
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            overlap = by_role[a] & by_role[b]
+            if overlap:
+                problems.append(
+                    f"R1 VIOLATION: {len(overlap)} patient(s) appear in both {a} and {b}, "
+                    f"e.g. {sorted(map(str, overlap))[:5]}"
+                )
+    return problems
+
+
+def check_provenance(root: Path, cfg) -> list[str]:
+    """Compare the cache's provenance sidecar against the config being reconciled.
+
+    Without this the check is content-blind: a cache half-built before DECISION-016 and
+    half after - two different `mask_erode_frac` values, two different image domains -
+    reconciles perfectly clean, because every count matches and every file decodes.
+    """
+    path = root / PROVENANCE_FILE
+    if not path.exists():
+        return [f"no {PROVENANCE_FILE} in the cache; it was built by a version of "
+                "preprocess.py that did not record its config, so the pipeline that "
+                "produced these files cannot be verified"]
+
+    entries = json.loads(path.read_text(encoding="utf-8")).get("runs", [])
+    if not entries:
+        return [f"{PROVENANCE_FILE} records no runs"]
+
+    want = asdict(cfg)
+    problems = []
+    for e in entries:
+        got = e.get("preprocess", {})
+        diff = {k: (got.get(k), v) for k, v in want.items() if got.get(k) != v}
+        if diff:
+            problems.append(
+                f"cache run {e.get('started', '?')} ({e.get('src_root', '?')}) was built "
+                f"with a different preprocess config: {diff} (got, wanted)"
+            )
+    return problems
+
+
 def decode_check(paths: list[Path], size: int, sample: int, seed: int = 42) -> list[str]:
     """Decode `sample` randomly chosen files (all of them if sample <= 0).
 
@@ -70,8 +144,19 @@ def decode_check(paths: list[Path], size: int, sample: int, seed: int = 42) -> l
     if not paths:
         return []
     if 0 < sample < len(paths):
+        # Stratified by dataset directory. An unstratified 400-of-38,788 sample gives
+        # APTOS about 9% of the checks purely because it is 9% of the cache, and APTOS is
+        # the half whose source format differs (.png, double-nested, different camera).
         rng = np.random.default_rng(seed)
-        chosen = [paths[i] for i in rng.choice(len(paths), sample, replace=False)]
+        groups: dict[str, list[Path]] = {}
+        for p in paths:
+            groups.setdefault(p.parent.name, []).append(p)
+        per = max(1, sample // len(groups))
+        chosen = []
+        for g in sorted(groups):
+            gp = groups[g]
+            k = min(per, len(gp))
+            chosen += [gp[i] for i in rng.choice(len(gp), k, replace=False)]
     else:
         chosen = paths
 
@@ -115,9 +200,14 @@ def main() -> int:
 
     problems: list[str] = []
 
-    # (4) FIRST — one cache file claimed by rows in two different splits is the leakage
-    # failure this whole project is organised around, and it makes every other count look
-    # fine while it does it.
+    # (1) R1, FIRST, on patient identity. Everything below counts files, and no count of
+    # files can see a patient straddling the boundary.
+    problems += patient_overlaps(exp)
+    n_pat = exp["patient_id"].nunique() if "patient_id" in exp.columns else -1
+    print(f"patients   : {n_pat}")
+
+    # (5) One cache file claimed by rows in two different splits - a stem collision, not
+    # a patient overlap. Both are fatal; they are different failures.
     owners: dict[str, set[str]] = defaultdict(set)
     for cp, sp in zip(exp["cache_path"], exp["split_file"]):
         owners[cp].add(sp)
@@ -183,6 +273,7 @@ def main() -> int:
     # Non-'ok' statuses. These are NOT dropped — CLAUDE.md §4 and DECISION-013. They need
     # a docs/DECISIONS.md entry and they stay in their split, because removing a val or
     # test row silently rebalances that split, an R2 violation by omission.
+    frames: list[pd.DataFrame] = []
     if args.stats:
         frames = [pd.read_csv(s, comment="#") for s in args.stats if s.exists()]
         if frames:
@@ -201,6 +292,38 @@ def main() -> int:
         missing_stats = [str(s) for s in args.stats if not s.exists()]
         if missing_stats:
             problems.append(f"stats CSV not found: {missing_stats}")
+
+    # Provenance: was this cache built by the pipeline this config describes?
+    problems += check_provenance(root, cfg)
+
+    # The stats CSVs must describe exactly the split rows, no more and no less. Free, and
+    # it catches a stats file from a different run being read for the status column.
+    if args.stats and frames:
+        described = set()
+        for s_df, s_path in zip(frames, [s for s in args.stats if s.exists()]):
+            if "image_path" not in s_df.columns:
+                problems.append(f"{s_path} has no image_path column")
+                continue
+            described |= set(s_df["image_path"])
+        wanted_src = set(exp["image_path"])
+        if described and described != wanted_src:
+            problems.append(
+                f"the stats CSVs describe {len(described)} images but the splits hold "
+                f"{len(wanted_src)}: {len(wanted_src - described)} split row(s) have no "
+                f"stats row, {len(described - wanted_src)} stats row(s) are in no split"
+            )
+
+    # Split provenance (DECISION-008): every CSV must come from the same generator run.
+    try:
+        seeds = {n: [l for l in read_header(n) if "seed" in l.lower()] for n in splits}
+        distinct = {tuple(v) for v in seeds.values()}
+        if len(distinct) > 1:
+            problems.append(
+                f"the split CSVs do not share a seed header: {seeds}. They were not "
+                "generated together, so reconciling against them proves nothing."
+            )
+    except FileNotFoundError as exc:
+        problems.append(f"could not read a split header: {exc}")
 
     print()
     if problems:
