@@ -228,9 +228,16 @@ against a synthetic cache, so none of this waits on Kaggle.
 - [x] `src/data/reconcile_cache.py` gained the R1 check it was missing, plus a cache
       provenance sidecar, stats set-comparison, and a stratified decode sample
 - [x] `tests/test_reconcile.py` — 14 tests. **Full suite: 123 green.**
-- [ ] `src/models/factory.py` — timm, full fine-tune, normalisation from `default_cfg`
+- [x] `src/models/factory.py` — timm, full fine-tune, normalisation from `default_cfg`,
+      all six arm configs build; `assert_fully_trainable` makes failure mode 2 loud
+- [x] `src/eval/metrics.py` — QWK, balanced accuracy, referable sens/spec, bootstrap CIs,
+      and `detect_collapse` implementing the §2 detection rule
+- [x] **BGR/RGB settled end to end** — `tests/test_channel_order.py`, checked against PIL
+      as an independent decoder and on a real EyePACS image
+- [x] `tests/test_metrics.py` (30, cross-checked against sklearn) + `tests/test_models.py`
+      (24) + `tests/test_channel_order.py` (7). **Full suite: 184 green.**
 - [ ] `src/train/` — loop, AdamW, cosine+warmup, AMP, grad clip, early stopping on val QWK
-- [ ] `src/eval/metrics.py` — QWK first
+- [ ] `src/eval/thresholds.py` — arm E's cut points, optimised on validation only (R3)
 - [ ] ResNet18, arm A, short schedule — purpose is a *correct* pipeline, not a good score
 
 **What the audit found — worth reading before touching this layer:**

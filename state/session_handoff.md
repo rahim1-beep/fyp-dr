@@ -127,15 +127,34 @@ paths with **zero claimed by more than one split**, so the flat layout cannot al
 image across the train/test boundary. That was the leakage risk in DECISION-012 and it is
 now settled independently of whether the build succeeds.
 
-## Phase 3 — started, and the colour-order trap is closed
+## Phase 3 — the colour-order question is CLOSED
 
-`src/data/dataset.py` converts BGR→RGB in exactly one place, `load_cached_image`, and
-`tests/test_dataset.py::test_cached_bgr_is_delivered_as_rgb` asserts it. timm's
-`default_cfg` normalisation assumes RGB; `normalisation_from_model` pulls mean/std from
-the model rather than the config or the data. Do not add mean/std to any YAML.
+`tests/test_channel_order.py` settles it end to end and nobody needs to re-derive it:
 
-`src/data/sampler.py` implements §2.1 and refuses a sampler over any split whose name
-contains "val" or "test". Arm F's pooled train+aptos_train is explicitly allowed.
+- There is **no such thing as a BGR file.** `cv2.imwrite` takes a BGR array and writes a
+  correct JPEG; the cache holds ordinary images.
+- `src/data/dataset.py::load_cached_image` converts BGR→RGB **exactly once**, and its
+  output is asserted **pixel-identical to PIL's**, an independent decoder sharing no code
+  with cv2. One test deliberately shows the un-converted array failing that comparison, so
+  the check is known to be capable of failing.
+- Red dominance is tracked from a source file, through the real batch driver, into a real
+  cache file, back through the real Dataset, to the tensor — on a synthetic fundus and on
+  a **real EyePACS image**.
+- timm's constants are RGB and channel-asymmetric, so a swap would shift red by ~0.35σ and
+  blue the other way on every image forever. A test asserts the asymmetry itself, so if
+  normalisation ever went symmetric the file's assumptions get revisited.
+
+Ben Graham subtracts the local mean, so a flat disc cancels to grey 128 and carries no
+hue. Colour assertions use `enhancement="none"`; testing hue through Ben Graham asserts
+nothing.
+
+## Watch out in Phase 4 — pretrained weights need internet
+
+`model.pretrained: true` makes timm download weights from HuggingFace. **Kaggle notebooks
+have Internet OFF by default**, and the cache build cell requires it off. The first
+TRAINING notebook must either turn Internet on (Settings → Internet → On; needs a verified
+phone number on the account) or mount the weights as a Kaggle Dataset. Discovering this at
+the top of a training run costs the session.
 
 ## Open questions for the user
 
