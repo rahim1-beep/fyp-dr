@@ -36,8 +36,6 @@ Phase 7 · 224×224 headline (DECISION-005) · no Intel XPU/IPEX (DECISION-003)
 - [x] `.venv` on Python 3.12.10
 - [x] `docs/DECISIONS.md` seeded with DECISION-001 … 005
 - [~] `.claude/agents/` (9) and `.claude/commands/` (4)
-- [ ] `requirements.txt` pinned for cp312 (Windows CPU + Linux CUDA)
-- [ ] Config system: `configs/{base,local,kaggle}.yaml`
 - [x] `requirements.txt` pinned for cp312 (Windows CPU + Linux CUDA)
 - [x] Config system: `configs/{base,local,kaggle}.yaml` + `arm_a..arm_f.yaml`
 - [x] **Locate labels CSV; report real column names, dtypes, row count, distinct labels**
@@ -74,8 +72,13 @@ Phase 7 · 224×224 headline (DECISION-005) · no Intel XPU/IPEX (DECISION-003)
       convolution) → 224×224 → individual JPEGs (R5)
 - [x] `scan_quality()` — 8 pixel statistics + advisory flags, fixed absolute thresholds
 - [x] `src/data/contact_sheet.py` — before/after renderer
-- [x] `tests/test_preprocess.py` — **21 tests**; full suite **59 green**
-- [x] Contact sheet rendered from real images → `docs/phase2_contact_sheet.png`
+- [x] `tests/test_preprocess.py` (22) + `tests/test_preprocess_plumbing.py` (10)
+      — full suite **70 green**
+- [x] `code-reviewer` review — **CHANGES REQUIRED, 7 defects, all fixed**
+      (DECISION-014, DECISION-015)
+- [x] QA cache rebuilt with the fixed pipeline → `data/processed/qa/`
+- [x] Contact sheet **re-rendered from the actual cache files**, scale-matched,
+      3 panels per image → `docs/phase2_contact_sheet.png`
 - [ ] **← USER SIGN-OFF GATE**
 - [ ] Cache all 35,126 EyePACS + 3,662 APTOS images
 - [ ] Persist as private Kaggle Dataset under `rah098`; log in DECISIONS.md
@@ -85,7 +88,7 @@ Phase 7 · 224×224 headline (DECISION-005) · no Intel XPU/IPEX (DECISION-003)
 
 | | Value |
 |---|---|
-| Mean output size | **21.6 KB/image** [MEASURED] |
+| Mean output size | **21.5 KB/image** [MEASURED] |
 | Projected EyePACS cache | **0.72 GB** (35,126 images) |
 | Projected APTOS cache | **0.08 GB** (3,662 images) |
 | **Total** | **~0.80 GB** — a 44× reduction from 35.34 GB |
@@ -95,6 +98,28 @@ Phase 7 · 224×224 headline (DECISION-005) · no Intel XPU/IPEX (DECISION-003)
 Comfortably inside `warn_working_dir_gb: 15`. The earlier 0.82 GB estimate was accurate;
 it is now a measurement. **Use `--workers 4` on Kaggle** — a single-threaded build would
 not fit in a session. Parallel output verified byte-identical to serial.
+
+### The code review found seven more — two invalidated the gate artefact itself
+
+`code-reviewer` returned **CHANGES REQUIRED**. All seven are fixed and test-locked.
+
+| # | Defect | Fix |
+|---|---|---|
+| 1 | Two rows sharing a filename stem silently overwrote one cache file, both reporting `ok` | `RuntimeError` on duplicate `cache_path` |
+| 2 | A bright corner blob joined the retina in the crop extent: side 606→902 px, retina rendered **0.67×**, status still `ok` | largest connected component only (DECISION-014) |
+| 3 | The no-retina fallback emits a different image domain and left no record under `--no-scan` | `status = "ok:no-retina"`, set independently of the scan |
+| 4 | A NaN `image_path` raised out of the pool and destroyed the run — on the 2.5 h Kaggle build, the whole session, no stats CSV | whole worker body wrapped; one bad row is one bad row |
+| 5 | **The sheet's "before" panel was downsampled below the "after" panel** — retina 139–203 px vs 224, every pair biased **0.62×–0.91×** in preprocessing's favour | original square-cropped from native pixels (DECISION-015) |
+| 6 | **The sheet rendered a recomputation, not the cache.** The q95 round-trip costs mean 3.60/255, max 64, and lifts 39.3% of the masked surround off zero | `--cache-root` required; the panel is the decoded cache file |
+| 7 | A size-mismatched download stayed on disk and counted as `cached` forever | `dest.unlink(missing_ok=True)` |
+
+Defects 5 and 6 mean the sheet in commit `c948c1a` was not a valid gate artefact and was
+**never approved**. The current sheet is rendered from a cache rebuilt after fix 2.
+
+The reviewer independently verified as correct: the normalised convolution (within 1/255
+of the exact masked form), `square_crop`'s index arithmetic across 5 edge cases, the
+multiprocessing count/order/bit-identity, BGR handling end to end, and that **nothing in
+the pipeline computes a statistic across images** — the leakage surface is clean.
 
 ### Three defects found and fixed by building the sheet
 
@@ -121,7 +146,7 @@ independently rank the same three last as file size did, despite sharing no inpu
 
 | image | grade | flags |
 |---|---|---|
-| `3829_left` | 2 | tiny-retina, dark, mostly-black, off-centre, blurred, low-contrast |
+| `3829_left` | 2 | tiny-retina, dark, mostly-black, off-centre, blurred, low-contrast, bright-artefact |
 | `39106_left` | 3 | dark, blurred |
 | `15942_right` | 0 | blurred |
 

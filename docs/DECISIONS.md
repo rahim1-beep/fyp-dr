@@ -469,6 +469,61 @@ did — two criteria sharing no inputs — is a genuine cross-check on both.
 
 ---
 
+## DECISION-014 — The retina mask keeps only the largest connected component
+
+- **Date:** 2026-08-20
+- **Status:** Accepted — raised by `code-reviewer`
+- **Deviates from proposal:** No
+
+The mask started as a plain brightness threshold, so any bright non-retinal object joined
+the retina in the region whose extent `square_crop` centres on. Measured on a synthetic
+fundus with a small specular blob in one corner, the crop side went **606 → 902 px** and
+the retina fraction **0.788 → 0.364**: the retina rendered at roughly **0.67×** its proper
+scale, shrinking every lesion by a third of its pixels. `status` stayed `"ok"` and the
+output looked plausible — a scale error is invisible when there is nothing beside it at
+the correct scale.
+
+Effective lesion size in pixels is the single feature this pipeline exists to preserve, and
+an inconsistent one across images is a scale nuisance variable the model would have to
+learn around.
+
+`retina_mask` now keeps only the largest connected component. The discarded area fraction
+is recorded per image as `off_disc_bright_fraction` and raises a `bright-artefact` flag
+above 0.15, so a *genuinely* split retina (a lens shadow cutting the disc in two) is
+reported rather than silently halved. On the 20-image QA sample exactly one image trips
+it — `3829_left`, which is the near-black one that has almost no retina to find.
+
+`tests/test_preprocess_plumbing.py::test_bright_artefact_does_not_shrink_the_retina` locks
+the crop side to within 4 px of the clean image's.
+
+---
+
+## DECISION-015 — The contact sheet renders the real cache file, at a matched retina scale
+
+- **Date:** 2026-08-20
+- **Status:** Accepted — raised by `code-reviewer`
+- **Deviates from proposal:** No
+
+The sheet is the artefact the user approves the whole 35,126-image cache from, so it must
+show what will actually be on disk. The first version did neither of those things:
+
+1. **The "before" panel was downsampled below the "after" panel.** The original was fitted
+   into the panel box while the processed image was a native 224 px; measured across the
+   sample the retina occupied **139–203 px** against 224, so every pair was biased
+   **0.62×–0.91×** in preprocessing's favour. Some of the apparent gain in sharpness was
+   just the left panel being smaller. The original is now square-cropped from native pixels
+   and rendered at the same retina scale.
+2. **The "after" panel was an in-memory recomputation, not the cached JPEG.** Measured, the
+   q95 round-trip costs mean **3.60/255** and max **64/255**, and lifts **39.3%** of the
+   masked surround off exact zero. The sheet approved a file that was never written.
+   `--cache-root` is now required and the panel is the decoded cache file.
+
+A third panel was added: a 3× detail crop, original above processed, so the fine structure
+the enhancement is meant to reveal can be judged rather than inferred from a 224 px
+thumbnail.
+
+---
+
 ## Excluded data rows
 
 **None.** The Phase 1 reconciliation found the EyePACS dataset completely clean: 35,126 CSV

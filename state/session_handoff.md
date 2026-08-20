@@ -9,8 +9,9 @@
 ## FIRST ACTION NEXT SESSION
 
 **Check whether the user has approved `docs/phase2_contact_sheet.png`.** Everything
-upstream of the gate is built, tested, and run on real images. Nothing downstream may
-proceed until they say yes.
+upstream of the gate is built, tested, code-reviewed, and run on real images. Nothing
+downstream may proceed until they say yes. The sheet was re-rendered after the code
+review; if the user's approval predates commit `6cbc52f`, it does not carry over.
 
 Subagent dispatch was verified this session — **all nine dispatch by name**. The
 `leakage-auditor` and `code-reviewer` both ran as real named agents. The Phase 1 gotcha
@@ -24,16 +25,25 @@ about needing a restart is resolved; delete that worry.
 - `src/data/preprocess.py` — retina mask → square crop → Ben Graham (normalised
   convolution) → 224×224 → individual JPEGs. Plus `scan_quality()` and a parallel
   batch driver.
-- `src/data/contact_sheet.py` — the before/after QA renderer.
-- `tests/test_preprocess.py` — 21 tests. **Full suite: 59 green.**
-- `docs/phase2_contact_sheet.png` — rendered from the 20 real QA images.
-- DECISION-009 … DECISION-013 logged.
+- `src/data/contact_sheet.py` — the QA renderer: original / cached / 3x detail.
+- `tests/test_preprocess.py` (22) + `tests/test_preprocess_plumbing.py` (10).
+  **Full suite: 70 green.**
+- `docs/phase2_contact_sheet.png` — rendered from the 20 real QA images **and their
+  actual cache files**.
+- DECISION-009 … DECISION-015 logged.
+
+**`code-reviewer` ran and returned CHANGES REQUIRED — 7 defects, all now fixed.** Two of
+them (the "before" panel downsampled below the "after" panel; the "after" panel being an
+in-memory recomputation rather than the cached JPEG) invalidated the first sheet, so the
+version in commit `c948c1a` was never a valid gate artefact. The QA cache was rebuilt
+after the connected-component fix and the sheet re-rendered from it. See PROGRESS.md for
+the full table.
 
 ## MEASURED numbers — these replace the old [ESTIMATE]
 
 | | Value |
 |---|---|
-| Mean output size | **21.6 KB/image** |
+| Mean output size | **21.5 KB/image** |
 | EyePACS cache | **0.72 GB** (35,126) |
 | APTOS cache | **0.08 GB** (3,662) |
 | **Total** | **~0.80 GB**, a 44× reduction from 35.34 GB |
@@ -66,6 +76,33 @@ The old 0.82 GB projection was accurate. It is now a measurement, not an estimat
    matplotlib, tqdm, kaggle) was installed at pinned versions this session; pytest was
    corrected from 9.1.1 to the pinned 8.4.2. **torch/timm are still NOT installed
    locally** — install them before any local smoke test or the Phase 7 demo.
+
+## Regenerating the gate artefact
+
+Both steps, in this order — the sheet reads the cache, so a stale cache means a stale sheet:
+
+```bash
+.venv/Scripts/python -m src.data.preprocess --manifest docs/phase2_qa_sample.csv     --src-root data/raw/qa --out-root data/processed/qa --stats docs/phase2_qa_stats.csv
+
+.venv/Scripts/python -m src.data.contact_sheet --sample docs/phase2_qa_sample.csv     --src-root data/raw/qa --cache-root data/processed/qa     --out docs/phase2_contact_sheet.png --stats docs/phase2_qa_quality.csv
+```
+
+`--cache-root` is required and deliberately has no default (DECISION-015).
+
+## Open pipeline question raised by the corrected sheet
+
+**Ben Graham leaves a bright rim at the retina boundary.** Measured over the 20 cached
+images, mean |pixel - 128| in the outer annulus (0.90-1.00 r) against the interior
+(< 0.85 r) is **1.61x on average, up to 2.82x**. This is not the halo DECISION-009 fixed —
+the reviewer confirmed the normalised convolution matches the exact masked form to 1/255.
+It is the retina's own optical vignetting, which falls off faster than sigma = w/10 and so
+gets amplified by design. Ben Graham's original pipeline suppressed it by multiplying by a
+circular mask at **0.9 r**, which costs 19% of the retinal area including peripheral
+lesions that matter at grades 3-4.
+
+**Not changed unilaterally** — it is a pipeline decision over all 35,126 images and it
+belongs to the user's sign-off. Options: leave as is; erode the mask 2-3% (removes the
+vignetted boundary pixels, keeps ~95% of the area); or Ben Graham's 0.9 r.
 
 ## Exact next command — AFTER SIGN-OFF ONLY
 
