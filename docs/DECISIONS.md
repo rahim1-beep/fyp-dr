@@ -524,6 +524,92 @@ thumbnail.
 
 ---
 
+## DECISION-016 — The retina mask is eroded 2.5% before the final re-mask
+
+- **Date:** 2026-08-20
+- **Status:** Accepted — user decision at the Phase 2 sign-off gate
+- **Deviates from proposal:** No
+
+### The artefact
+
+Ben Graham's enhancement subtracts a local mean at sigma = width/10. The retina's own
+optical vignetting falls off far faster than that, so the enhancement amplifies the
+boundary falloff into a bright rim. Measured over the 20 cached QA images, mean
+|pixel − 128| in the outer annulus (0.90–1.00 r) against the interior (< 0.85 r) was
+**1.61× on average and up to 2.83×** (`1776_left`).
+
+This is **not** the halo DECISION-009 fixed. `code-reviewer` confirmed the normalised
+convolution matches the exact masked form to within 1/255. The rim is real optical
+structure in the source, amplified by design.
+
+### The three options
+
+| Option | Rim | Area cost | Verdict |
+|---|---|---|---|
+| **Leave it** | 1.61× | 0 | A high-contrast ring at a fixed radius in all 38,788 images, uncorrelated with grade. A CNN can learn to ignore it, but it is the strongest edge in the frame and spends capacity. |
+| **Ben Graham's 0.9 r mask** | 1.32× | **19% of retinal area** | Rejected. Grade 4 is already the thinnest class — 98 test images (DECISION-006) — and proliferative disease appears in the periphery, which is exactly what a fixed 0.9 r cut discards. |
+| **Erode 2.5% of the equivalent radius** | see below | **3.2%** | **Chosen.** |
+
+**Rationale (user, 2026-08-20):** full 0.9 r masking costs 19% of retinal area including
+the periphery where proliferative disease appears, and grade 4 is already the thinnest
+class at 98 test images. Erosion removes the vignetted pixels themselves rather than a
+fixed fraction, so the cost tracks the artefact.
+
+### Residual — the number the user asked to be recorded, and it is not the flattering one
+
+**A fixed 0.90–1.00 r annulus barely moves: 1.610 → 1.516 at 2.5% erosion.** That metric
+is degenerate under erosion, because trimming the boundary also moves which pixels fall
+into a fixed radial band — the rim follows the boundary inward.
+
+Measured properly, as a profile of mean |pixel − 128| against **depth from the actual
+retina edge** in units of the equivalent radius, over the same 20 images:
+
+| depth from edge | mean \|dev\| | vs interior |
+|---|---|---|
+| 0.000–0.010 | 76.10 | **2.61×** |
+| 0.010–0.025 | 54.29 | 1.86× |
+| 0.025–0.050 | 46.36 | 1.59× |
+| 0.050–0.075 | 39.63 | 1.36× |
+| 0.075–0.100 | 33.08 | 1.14× |
+| 0.100–0.150 | 26.53 | 0.91× |
+| > 0.150 | 22.9–29.1 | ≈ 1.00× |
+
+So the excess is steep and shallow: it decays to the interior level by roughly **10% of
+the radius**. Erosion at 2.5% removes the two worst bands — the outermost pixels drop from
+**2.61× to ≈1.59×**, about **63% of the peak excess** — but leaves a ≈1.6× edge at the new
+boundary. It suppresses the peak; it does not eliminate the rim. Eliminating it entirely
+needs the ~10% cut that is Ben Graham's 0.9 r, at the area cost that was rejected.
+
+**This was reported to the user before the cache build**, as they asked. 2.5% stands.
+The knee of the profile is at 0.05 (1.36×, ~9.5% area) if the trade is ever reopened.
+**It will not be reopened on aesthetics** — only on evidence, and the specified evidence
+is the Phase 5 Grad-CAM sanity check showing the model keying on the rim.
+
+### Implementation
+
+`erode_mask(mask, frac)` uses a **distance transform**, not `cv2.erode` with a fixed
+kernel: EyePACS retinas are routinely truncated top and bottom, and a distance transform
+peels a constant depth off whatever shape is actually present. It also scales with the
+image, so a 400px source and a 4928px source lose the same *fraction*.
+
+Two properties are test-locked:
+
+- **The erosion applies only to the final re-mask.** The normalised convolution still
+  averages over the full mask, so every retained pixel is bit-identical to what it would
+  have been with no erosion (`test_erosion_only_trims_and_never_alters_a_retained_pixel`).
+  Erosion removes; it never alters.
+- `scan_quality` still measures the **un-eroded** mask, so DECISION-013's fixed absolute
+  thresholds keep the calibration they were set with.
+
+One accepted cost: on a retina truncated by the sensor, the erosion also trims ~2.5% along
+the straight cut edge, where the pixels are valid retina rather than vignetting. At 224px
+that is a ~3px strip, and special-casing it would mean detecting which boundary segments
+are optical and which are the sensor — complexity out of proportion to the loss.
+
+`configs/base.yaml` → `preprocess.mask_erode_frac: 0.025`.
+
+---
+
 ## Excluded data rows
 
 **None.** The Phase 1 reconciliation found the EyePACS dataset completely clean: 35,126 CSV

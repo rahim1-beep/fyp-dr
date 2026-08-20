@@ -1,12 +1,16 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **← USER SIGN-OFF GATE.** Review `docs/phase2_contact_sheet.png`.
-> Everything upstream of the gate is built, tested, and run on real images.
-> On approval, run the full cache build on Kaggle (command in `state/session_handoff.md`).
+> **NEXT ACTION:** **The user must launch the full cache build on Kaggle** — it is a
+> ~2.5 h job and CLAUDE.md §7 forbids running it as a foreground session process.
+> Everything it needs is prepared: `notebooks/make_bundle.py` → upload → paste
+> `notebooks/phase2_build_cache.py`. That cell also runs the reconciliation, the leakage
+> tests, and the measured-size report before it will say READY TO PUBLISH.
 >
-> **HARD GATE: do not cache all 35,126 images until the user signs off on the sheet.**
+> **Gate status: contact sheet APPROVED by the user 2026-08-20.** The sheet was re-rendered
+> once more after the approval, with DECISION-016's 2.5% erosion applied, and is visually
+> unchanged.
 
-**Current phase:** Phase 2 — Preprocessing (at the sign-off gate)
+**Current phase:** Phase 2 — Preprocessing (code complete; cache build is the user's to run)
 **Last updated:** 2026-08-20
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done
@@ -79,7 +83,13 @@ Phase 7 · 224×224 headline (DECISION-005) · no Intel XPU/IPEX (DECISION-003)
 - [x] QA cache rebuilt with the fixed pipeline → `data/processed/qa/`
 - [x] Contact sheet **re-rendered from the actual cache files**, scale-matched,
       3 panels per image → `docs/phase2_contact_sheet.png`
-- [ ] **← USER SIGN-OFF GATE**
+- [x] **USER SIGN-OFF RECEIVED 2026-08-20** — sheet approved
+- [x] DECISION-016: 2.5% boundary erosion, with the residual measured and reported
+- [x] `src/data/reconcile_cache.py` — the leakage-auditor's 4 conditions, one command
+- [x] `notebooks/make_bundle.py` + `notebooks/phase2_build_cache.py` — the Kaggle build
+- [x] Cache-path uniqueness proven **before** the build: 38,788 split rows → 38,788
+      distinct cache paths, **0 claimed by more than one split**
+- [ ] **← USER RUNS THE KAGGLE BUILD** (~2.5 h, CPU, no GPU quota)
 - [ ] Cache all 35,126 EyePACS + 3,662 APTOS images
 - [ ] Persist as private Kaggle Dataset under `rah098`; log in DECISIONS.md
 - [ ] CLAHE-on-green variant kept as an ablation arm (implemented, not yet run)
@@ -88,7 +98,7 @@ Phase 7 · 224×224 headline (DECISION-005) · no Intel XPU/IPEX (DECISION-003)
 
 | | Value |
 |---|---|
-| Mean output size | **21.5 KB/image** [MEASURED] |
+| Mean output size | **21.4 KB/image** [MEASURED] |
 | Projected EyePACS cache | **0.72 GB** (35,126 images) |
 | Projected APTOS cache | **0.08 GB** (3,662 images) |
 | **Total** | **~0.80 GB** — a 44× reduction from 35.34 GB |
@@ -138,6 +148,22 @@ could not have:
 
 A fourth was caught by the statistics rather than the image: the focus measure was
 resolution-dependent and flagged **19 of 20 images as blurred** (DECISION-013).
+
+### The rim, measured properly — DECISION-016
+
+The user chose 2.5% mask erosion over Ben Graham's 0.9 r (19% of retinal area, including
+the periphery where proliferative disease appears, against a grade-4 test support of 98).
+
+**The residual is not the flattering number.** A fixed 0.90–1.00 r annulus barely moves,
+**1.610 → 1.516**, because trimming the boundary also moves which pixels fall in a fixed
+radial band. Measured against depth from the *actual* edge, the excess is steep and
+shallow — 2.61× at the outermost 1%, 1.86× at 1–2.5%, 1.59× at 2.5–5%, and back to the
+interior level by 10%.
+
+So 2.5% erosion removes the two worst bands (**≈63% of the peak excess**, 2.61× → ≈1.59×)
+and costs 3.2% of the area, but leaves a ≈1.6× edge. It suppresses the peak; it does not
+eliminate the rim. **Reported to the user before the build, as they asked.** Revisit only
+on Phase 5 Grad-CAM evidence that the model keys on the rim — not on aesthetics.
 
 ### Quality-flag result on the QA sample
 

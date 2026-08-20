@@ -46,6 +46,7 @@ preprocess:
   image_size: 224               # DECISION-005 — 224 for all headline results
   jpeg_quality: 95
   cache_format: jpeg            # R5 — individual files, never one .npy
+  mask_erode_frac: 0.025        # DECISION-016 — trim the vignetted boundary ring
 
 augment:
   # R2/proposal §5.3 — TRAIN SPLIT ONLY. No augmentation on val/test.

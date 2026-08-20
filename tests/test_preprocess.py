@@ -29,6 +29,7 @@ from src.data.preprocess import (
     PreprocessConfig,
     QualityStats,
     cache_relpath,
+    erode_mask,
     large_sigma_blur,
     load_preprocess_config,
     preprocess_image,
@@ -391,3 +392,68 @@ def test_the_three_known_bad_qa_images_are_flagged():
             pytest.skip(f"{name} not downloaded")
         img = cv2.imdecode(np.fromfile(str(p), np.uint8), cv2.IMREAD_COLOR)
         assert scan_quality(img).flags(), f"{name} is known-degraded but was not flagged"
+
+
+# ----------------------------------------------------------------------------------
+# Boundary erosion (DECISION-016)
+# ----------------------------------------------------------------------------------
+
+def test_erosion_removes_the_intended_depth_and_nothing_more():
+    """2.5% of the equivalent radius, not 2.5% of the area and not a fixed pixel count."""
+    mask = np.zeros((600, 600), np.uint8)
+    cv2.circle(mask, (300, 300), 250, 255, -1)
+
+    out = erode_mask(mask, 0.025)
+    r_out = np.sqrt(float((out > 0).sum()) / np.pi)
+    assert abs(r_out - 250 * 0.975) < 2.0, f"radius {r_out:.1f}, wanted ~243.8"
+
+    # area cost must be roughly 2 * frac, i.e. ~5%, nowhere near Ben Graham's 19%
+    kept = (out > 0).sum() / (mask > 0).sum()
+    assert 0.94 < kept < 0.96, f"kept {kept:.1%}"
+
+
+def test_erosion_is_scale_invariant():
+    """A 400px source and a 4928px source must lose the same FRACTION. A fixed kernel
+    would peel a third of the small image and a rounding error off the large one."""
+    kept = []
+    for size in (400, 1600, 3200):
+        m = np.zeros((size, size), np.uint8)
+        cv2.circle(m, (size // 2, size // 2), int(size * 0.45), 255, -1)
+        kept.append((erode_mask(m, 0.025) > 0).sum() / (m > 0).sum())
+    assert max(kept) - min(kept) < 0.01, f"area kept varies with scale: {kept}"
+
+
+def test_erosion_survives_a_truncated_retina():
+    """EyePACS retinas are routinely cut off top and bottom. A circular structuring
+    element assumes a circle; the distance transform does not."""
+    img = synthetic_fundus(w=800, h=520, r=380)      # disc taller than the frame
+    mask = retina_mask(img)
+    out = erode_mask(mask, 0.025)
+    assert (out > 0).any()
+    kept = (out > 0).sum() / (mask > 0).sum()
+    assert 0.90 < kept < 0.99, f"kept {kept:.1%} of a truncated retina"
+
+
+def test_erosion_only_trims_and_never_alters_a_retained_pixel():
+    """The normalised convolution must still average over the FULL mask. If erosion were
+    applied before the enhancement, the local mean near the new boundary would be
+    recomputed and every retained pixel would shift — silently changing the image the
+    approved contact sheet showed."""
+    import dataclasses
+
+    cfg = load_preprocess_config(REPO / "configs" / "base.yaml")
+    img = synthetic_fundus(w=1000, h=1000, r=420)
+
+    full = preprocess_image(img, dataclasses.replace(cfg, mask_erode_frac=0.0))
+    trimmed = preprocess_image(img, dataclasses.replace(cfg, mask_erode_frac=0.025))
+
+    kept = cv2.cvtColor(trimmed, cv2.COLOR_BGR2GRAY) > 0
+    assert kept.sum() > 0.5 * kept.size
+    assert np.array_equal(full[kept], trimmed[kept]), (
+        "erosion changed the value of a pixel it kept; it must only remove"
+    )
+
+
+def test_zero_erosion_is_exactly_a_no_op():
+    mask = retina_mask(synthetic_fundus(w=600, h=600))
+    assert np.array_equal(erode_mask(mask, 0.0), mask)

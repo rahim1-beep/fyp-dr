@@ -8,14 +8,24 @@
 
 ## FIRST ACTION NEXT SESSION
 
-**Check whether the user has approved `docs/phase2_contact_sheet.png`.** Everything
-upstream of the gate is built, tested, code-reviewed, and run on real images. Nothing
-downstream may proceed until they say yes. The sheet was re-rendered after the code
-review; if the user's approval predates commit `6cbc52f`, it does not carry over.
+**The contact sheet is APPROVED (user, 2026-08-20). The gate is open.** The blocker is now
+purely that the ~2.5 h cache build has to run on Kaggle and the user launches it
+(CLAUDE.md §7 — never a foreground session process).
 
-Subagent dispatch was verified this session — **all nine dispatch by name**. The
-`leakage-auditor` and `code-reviewer` both ran as real named agents. The Phase 1 gotcha
-about needing a restart is resolved; delete that worry.
+1. Ask whether the Kaggle build has been run. If not, the handover is ready:
+   `.venv/Scripts/python -m notebooks.make_bundle` → upload `dist/fyp-dr-code.zip` as the
+   private Dataset `fyp-dr-code` → paste `notebooks/phase2_build_cache.py`'s `CELL` into
+   one Kaggle cell. That cell runs the leakage tests, both builds, the reconciliation, the
+   leakage tests again, and the size report, and prints READY TO PUBLISH or refuses.
+2. If it HAS been run: read the reconciliation output, give any `status != 'ok'` image a
+   `docs/DECISIONS.md` entry **and leave it in its split**, then publish
+   `fyp-dr-eyepacs-224` (private, under `rah098`).
+3. Either way, **Phase 3 is not blocked by the build.** `src/data/dataset.py` and
+   `src/data/sampler.py` can be written and tested against synthetic images. The user's
+   instruction was explicit: go straight to Phase 3, and no further refinement passes on
+   preprocessing unless something downstream demands it.
+
+Subagent dispatch was verified in session 2 — **all nine dispatch by name**.
 
 ## What was done this session
 
@@ -29,8 +39,10 @@ about needing a restart is resolved; delete that worry.
 - `tests/test_preprocess.py` (22) + `tests/test_preprocess_plumbing.py` (10).
   **Full suite: 70 green.**
 - `docs/phase2_contact_sheet.png` — rendered from the 20 real QA images **and their
-  actual cache files**.
-- DECISION-009 … DECISION-015 logged.
+  actual cache files**. **Approved by the user 2026-08-20.**
+- `src/data/reconcile_cache.py`, `notebooks/make_bundle.py`,
+  `notebooks/phase2_build_cache.py` — the Kaggle build and its three gates.
+- DECISION-009 … DECISION-016 logged.
 
 **`code-reviewer` ran and returned CHANGES REQUIRED — 7 defects, all now fixed.** Two of
 them (the "before" panel downsampled below the "after" panel; the "after" panel being an
@@ -43,7 +55,7 @@ the full table.
 
 | | Value |
 |---|---|
-| Mean output size | **21.5 KB/image** |
+| Mean output size | **21.4 KB/image** |
 | EyePACS cache | **0.72 GB** (35,126) |
 | APTOS cache | **0.08 GB** (3,662) |
 | **Total** | **~0.80 GB**, a 44× reduction from 35.34 GB |
@@ -89,55 +101,31 @@ Both steps, in this order — the sheet reads the cache, so a stale cache means 
 
 `--cache-root` is required and deliberately has no default (DECISION-015).
 
-## Open pipeline question raised by the corrected sheet
+## The rim question — decided, DECISION-016
 
-**Ben Graham leaves a bright rim at the retina boundary.** Measured over the 20 cached
-images, mean |pixel - 128| in the outer annulus (0.90-1.00 r) against the interior
-(< 0.85 r) is **1.61x on average, up to 2.82x**. This is not the halo DECISION-009 fixed —
-the reviewer confirmed the normalised convolution matches the exact masked form to 1/255.
-It is the retina's own optical vignetting, which falls off faster than sigma = w/10 and so
-gets amplified by design. Ben Graham's original pipeline suppressed it by multiplying by a
-circular mask at **0.9 r**, which costs 19% of the retinal area including peripheral
-lesions that matter at grades 3-4.
+2.5% mask erosion, chosen by the user over Ben Graham's 0.9 r. **The residual was measured
+and reported as asked, and it is not flattering:** a fixed annulus ratio moves only
+1.610 → 1.516, and against depth from the actual edge the excess runs 2.61× at the
+outermost 1% and reaches the interior level only by 10% of the radius. Erosion at 2.5%
+removes ~63% of the peak excess and leaves a ≈1.6× edge.
 
-**Not changed unilaterally** — it is a pipeline decision over all 35,126 images and it
-belongs to the user's sign-off. Options: leave as is; erode the mask 2-3% (removes the
-vignetted boundary pixels, keeps ~95% of the area); or Ben Graham's 0.9 r.
+**Do not reopen this on aesthetics.** The user's stated trigger for revisiting is Phase 5
+Grad-CAM evidence that the model keys on the rim.
 
-## Exact next command — AFTER SIGN-OFF ONLY
+## The Kaggle build
 
-Full cache build, on Kaggle, in a notebook (never a foreground session process):
+`notebooks/phase2_build_cache.py` holds the exact cell. `--workers 4` is not optional:
+single-threaded is 10.1 h and will not fit in a session. Set the accelerator to **None** —
+this is CPU work and must not burn GPU quota.
 
-```bash
-python -m src.data.preprocess \
-    --split train --split val --split test \
-    --config configs/kaggle.yaml \
-    --src-root /kaggle/input/eyepacs \
-    --out-root /kaggle/working/processed \
-    --stats /kaggle/working/processed_stats.csv \
-    --workers 4
+The three auditor conditions are wired into that cell, not left to memory:
+reconciliation (`src/data/reconcile_cache.py`), a re-run of `tests/test_no_leakage.py`
+against the built artefact, and the measured size. It prints DO NOT PUBLISH if any fails.
 
-python -m src.data.preprocess \
-    --split aptos_train --split aptos_val --split aptos_test \
-    --config configs/kaggle.yaml \
-    --src-root /kaggle/input/aptos2019 \
-    --out-root /kaggle/working/processed \
-    --stats /kaggle/working/aptos_stats.csv \
-    --workers 4
-```
-
-`--workers 4` is not optional: single-threaded is 10.1 h and will not fit in a session.
-
-**Then, before anything trains:**
-1. Reconcile cache file count against the split CSVs, row for row. The leakage-auditor
-   requires this and a re-run of `tests/test_no_leakage.py` before the gate opens.
-2. Any image with `status != 'ok'` gets a `docs/DECISIONS.md` entry. **It is never
-   dropped from a split** — dropping a val/test row silently rebalances that split,
-   which is an R2 violation by omission.
-3. Report the real measured cache size before uploading.
-4. Publish `/kaggle/working/processed/` as a private Kaggle Dataset under `rah098`,
-   re-mounted at `/kaggle/input/fyp-dr-eyepacs-224` (already wired as
-   `paths.processed_dataset_mount` in `configs/kaggle.yaml`).
+**Already proven, before the build:** the 38,788 split rows map to 38,788 distinct cache
+paths with **zero claimed by more than one split**, so the flat layout cannot alias an
+image across the train/test boundary. That was the leakage risk in DECISION-012 and it is
+now settled independently of whether the build succeeds.
 
 ## Watch out for this in Phase 3
 
@@ -150,7 +138,7 @@ channel order once, and test it.
 
 ## Open questions for the user
 
-1. **Contact sheet approval** — the live gate.
+1. **Kaggle build** — the user launches it; see "The Kaggle build" above.
 2. **GitHub** — private repo + collaborator access for Ameena Ahmed and Muhammad Ali
    Abdullah. **Do not push without asking.** No remote is configured. User previously
    mentioned distributing as an archive instead; confirm which.

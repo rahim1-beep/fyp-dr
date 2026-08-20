@@ -79,6 +79,7 @@ class PreprocessConfig:
     image_size: int = 224
     jpeg_quality: int = 95
     cache_format: str = "jpeg"
+    mask_erode_frac: float = 0.025
 
     def __post_init__(self) -> None:
         if self.enhancement not in {"ben_graham", "clahe_green", "none"}:
@@ -93,18 +94,42 @@ class PreprocessConfig:
             )
         if not 1 <= self.jpeg_quality <= 100:
             raise ValueError(f"jpeg_quality={self.jpeg_quality} out of range")
+        if not 0.0 <= self.mask_erode_frac < 0.5:
+            raise ValueError(
+                f"mask_erode_frac={self.mask_erode_frac} out of range; it is a fraction "
+                "of the retina's equivalent radius (DECISION-016 uses 0.025)"
+            )
 
 
-def load_preprocess_config(path: Path) -> PreprocessConfig:
-    cfg = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-    block = cfg.get("preprocess")
-    if block is None:
-        raise KeyError(f"{path} has no `preprocess:` block")
+BASE_CONFIG = REPO / "configs" / "base.yaml"
+
+
+def _preprocess_block(path: Path) -> dict:
+    cfg = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    block = cfg.get("preprocess") or {}
     unknown = set(block) - set(PreprocessConfig.__dataclass_fields__)
     if unknown:
         # A typo'd key that silently does nothing is how a config drifts away from the
         # behaviour it claims to describe.
         raise KeyError(f"{path} preprocess block has unknown key(s): {sorted(unknown)}")
+    return block
+
+
+def load_preprocess_config(path: Path) -> PreprocessConfig:
+    """base.yaml, then the named overlay on top of it.
+
+    `configs/kaggle.yaml` and `configs/local.yaml` are ENVIRONMENT overlays — they carry
+    paths and compute settings, not a `preprocess:` block. Requiring one outright meant
+    `--config configs/kaggle.yaml`, the documented full-build command, died with a
+    KeyError on Kaggle. Merging also guarantees the two environments preprocess
+    identically unless an overlay deliberately says otherwise, which is the property
+    that makes a locally-inspected cache and a Kaggle-built cache the same artefact.
+    """
+    block = dict(_preprocess_block(BASE_CONFIG))
+    if Path(path).resolve() != BASE_CONFIG.resolve():
+        block.update(_preprocess_block(path))
+    if not block:
+        raise KeyError(f"neither {BASE_CONFIG} nor {path} has a `preprocess:` block")
     return PreprocessConfig(**block)
 
 
@@ -214,6 +239,35 @@ def square_crop(bgr: np.ndarray, mask: np.ndarray) -> tuple[np.ndarray, np.ndarr
     out_img[ay0 - sy0:ay1 - sy0, ax0 - sx0:ax1 - sx0] = bgr[ay0:ay1, ax0:ax1]
     out_msk[ay0 - sy0:ay1 - sy0, ax0 - sx0:ax1 - sx0] = mask[ay0:ay1, ax0:ax1]
     return out_img, out_msk
+
+
+
+def erode_mask(mask: np.ndarray, frac: float) -> np.ndarray:
+    """Shrink the retina mask inward by `frac` of its equivalent radius (DECISION-016).
+
+    The retina's own optical vignetting falls off far faster than Ben Graham's
+    sigma = width/10, so the enhancement amplifies it into a bright rim: measured over the
+    20 QA images, mean |pixel - 128| in the outer annulus ran 1.61x the interior and up to
+    2.82x. Those boundary pixels are the falloff itself and carry no retinal detail, so
+    removing them costs nothing diagnostic.
+
+    Distance transform rather than `cv2.erode` with a fixed kernel: EyePACS retinas are
+    routinely truncated top and bottom, and a distance transform peels a constant physical
+    depth off whatever shape is actually there. It also scales with the image, so a 4928px
+    source and a 400px source lose the same FRACTION rather than the same pixel count.
+
+    The erosion applies ONLY to the final re-mask. The normalised convolution still
+    averages over the full mask, because the local mean should be computed from every real
+    retinal pixel available, including the ones about to be trimmed.
+    """
+    if frac <= 0:
+        return mask
+    r_equiv = np.sqrt(float((mask > 0).sum()) / np.pi)
+    depth = frac * r_equiv
+    if depth < 1.0:                      # sub-pixel: nothing to remove
+        return mask
+    dist = cv2.distanceTransform((mask > 0).astype(np.uint8), cv2.DIST_L2, 5)
+    return ((dist > depth).astype(np.uint8)) * 255
 
 
 # ----------------------------------------------------------------------------------
@@ -370,7 +424,11 @@ def preprocess_image(bgr: np.ndarray, cfg: PreprocessConfig) -> np.ndarray:
     # artefact at a constant location for the network to key on. INTER_NEAREST keeps the
     # mask binary; a smooth interpolation would leave a feathered rim of partial values.
     if cfg.circle_crop:
+        # DECISION-016: the re-mask uses an ERODED mask, trimming the vignetted boundary
+        # ring that Ben Graham amplifies. Eroded here, at output resolution, so the trim
+        # is measured against the pixels actually being kept.
         small = cv2.resize(mask, (n, n), interpolation=cv2.INTER_NEAREST)
+        small = erode_mask(small, cfg.mask_erode_frac)
         out = cv2.bitwise_and(out, out, mask=small)
     return out
 
