@@ -827,6 +827,86 @@ the dataset root belongs in config and, where the platform can move it, behind a
 
 ---
 
+## DECISION-021 — The cache is published as ONE verified archive, never a loose tree
+
+- **Date:** 2026-08-21
+- **Status:** Accepted — forced by a real failure
+- **Deviates from proposal:** No
+
+### What happened
+
+The Phase 2 build ran correctly. All 38,788 images were written, reconciliation passed,
+the leakage tests were green, and the measured size was 0.836 GB. **Kaggle caps a
+notebook's saved OUTPUT at 500 files**, so the publish step kept **499 of 38,788 images**
+— 1.3% — and said nothing. `/kaggle/working` is wiped between sessions, so the other
+38,289 were gone, along with 2.5 hours of compute. `fyp-dr-eyepacs-224` never existed.
+
+**The build was right and the packaging was wrong**, which is why every in-session check
+passed. Reconciliation ran against the live tree, before the boundary where the loss
+happened. Nothing in the pipeline was looking at the artefact that would actually survive.
+
+### The rule
+
+**Pack to one file, verify the archive, then delete the source — in that order, inside the
+same session.**
+
+1. `src/data/archive_cache.py pack` zips the cache with `ZIP_STORED` (the payload is
+   38,788 JPEGs; deflate spends minutes to save low single digits) into
+   `fyp-dr-eyepacs-224.zip`, with `splits/`, both stats CSVs and
+   `_cache_provenance.json` inside it, so the published dataset describes itself.
+2. It **refuses to pack a short source tree** — the expected image count is checked before
+   a byte is written. Packing a short tree and verifying the archive against that same
+   short tree would agree with itself perfectly.
+3. `verify_archive` then reads the **central directory back** and checks the image count,
+   the sidecars, zero-byte entries, and the total size against 0.836 GB. That is what a
+   consumer reads, and it is exactly the check that would have caught 499.
+4. Only after verification passes does the notebook delete the loose tree. If verification
+   fails, the tree is still there and the session must not end.
+5. One file is under any file-count cap, and the count is asserted again at the end of the
+   cell: if `/kaggle/working` holds more than 400 files, it warns.
+
+Training reverses it: `unpack` extracts to `/kaggle/working` and **re-counts the extracted
+images**, because "the archive was complete" and "the extraction completed" are different
+claims, and training depends on the second.
+
+`tests/test_archive.py` includes the regression directly — an archive rebuilt holding 5 of
+20 images, which `verify_archive` must reject.
+
+### Kaggle API vs notebook output — considered, and the notebook output wins
+
+Pushing straight to a dataset from the notebook via `kaggle datasets create` was the
+obvious alternative. It needs, and cell 5 does not:
+
+- **Internet ON** for the whole build session, which is otherwise unnecessary — the
+  preprocessing pipeline has no network dependency at all.
+- **Credentials in the notebook**, via Add-ons → Secrets (`KAGGLE_USERNAME`, `KAGGLE_KEY`).
+  Never `kaggle.json` in the repo, which `.gitignore` already forbids.
+
+Its one real advantage is that the notebook can confirm the dataset landed **while the
+session is still alive**, instead of trusting a UI step afterwards — which is precisely
+what failed. That is a genuine argument, and it is why the API version is kept as an
+optional cell 5b rather than dismissed.
+
+**The manual publish is still the recommendation**, because the archive removes the
+failure mode the API was going to protect against: once the output is a single verified
+file, the cap cannot truncate it, and "create a dataset from one file" is a step with
+nothing to silently drop. Adding a credential and a network dependency to a 2.5-hour
+CPU-only job buys a confirmation that a verified single file no longer needs. The API
+route also has upload behaviour this project has not tested — in particular whether Kaggle
+re-extracts an uploaded archive into the dataset — and the middle of a rebuild is the
+wrong time to find out.
+
+**Revisit if** the manual publish ever fails again, or once arms A–F make dataset
+publishing a routine step rather than a one-off.
+
+### The general lesson, worth more than the fix
+
+Every check in Phase 2 ran against the artefact **in the session**, and the thing that
+broke was the artefact **that left the session**. A verification that does not run on the
+bytes that survive is a verification of something else.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

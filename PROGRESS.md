@@ -1,14 +1,16 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **Run the Phase 3 baseline on Kaggle** — `notebooks/phase3_baseline.py`,
-> four cells. GPU T4, **Internet ON** (timm downloads pretrained weights; cell 1 fails fast
-> if it is off). Smoke run first (2 epochs, 2,000 rows, ~5 min), then the real one
-> (8 epochs, ~60–90 min).
+> **NEXT ACTION:** **Rebuild the Phase 2 cache on Kaggle** — the first build was correct
+> but its OUTPUT was truncated to 499 of 38,788 files by Kaggle's 500-file cap, and
+> `/kaggle/working` is wiped, so `fyp-dr-eyepacs-224` does not exist (DECISION-021).
+> `notebooks/phase2_build_cache.py` now has a **cell 5** that packs the cache into one
+> archive, verifies it by reading the central directory back, and only then deletes the
+> loose tree. ~2.5 h, CPU, Accelerator None.
 >
-> Acceptance is a *correct* pipeline, not a good score: val QWK whose CI excludes zero, and
-> a confusion matrix that is not collapsed. Cell 4 checks both and says which.
+> Then Phase 3: `notebooks/phase3_baseline.py`, GPU + Internet ON.
 
-**Current phase:** Phase 3 — Baseline. Phase 2 is **done**: cache built, reconciled, published.
+**Current phase:** Phase 2 rebuild, then Phase 3. The Phase 2 *pipeline* is done and
+proven; the published artefact has to be produced again (DECISION-021).
 **Last updated:** 2026-08-20
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done
@@ -88,8 +90,26 @@ Phase 7 · 224×224 headline (DECISION-005) · no Intel XPU/IPEX (DECISION-003)
 - [x] Cache-path uniqueness proven **before** the build: 38,788 split rows → 38,788
       distinct cache paths, **0 claimed by more than one split**
 - [x] **Kaggle build run 2026-08-21** — `RECONCILIATION PASSED`, leakage tests green
-- [x] Cached all 35,126 EyePACS + 3,662 APTOS images
-- [x] Published as private Kaggle Dataset `fyp-dr-eyepacs-224`
+- [x] Cached all 35,126 EyePACS + 3,662 APTOS images — the build was **correct**
+- [~] **Publishing FAILED silently** — Kaggle caps notebook output at 500 files and kept
+      **499 of 38,788**. `/kaggle/working` is wiped, so the cache is gone and
+      `fyp-dr-eyepacs-224` does not exist (DECISION-021)
+- [x] `src/data/archive_cache.py` + `tests/test_archive.py` (13) — pack to one file,
+      verify the central directory, refuse a short source, re-count on extract
+- [ ] **← RE-RUN THE BUILD** with cell 5, then publish the single archive
+
+### The publishing failure — worth reading before the rebuild
+
+Everything in Phase 2 verified the artefact **inside the session**, and the thing that
+broke was the artefact **that left it**. Reconciliation passed against a live tree of
+38,788 files; the output cap then kept 499, after every check had run, and reported
+nothing. A verification that does not run on the bytes that survive is a verification of
+something else.
+
+The fix is ordering, not cleverness: **pack → verify the archive → delete the source**,
+all inside the session, with the pack step refusing a short source tree before it writes
+anything. See DECISION-021, which also records why the Kaggle API route was considered
+and not adopted.
 
 ### MEASURED — the real cache, 2026-08-21
 
@@ -101,6 +121,7 @@ Phase 7 · 224×224 headline (DECISION-005) · no Intel XPU/IPEX (DECISION-003)
 | EyePACS | 35,126 files, 0.758 GB |
 | APTOS | 3,662 files, 0.078 GB |
 | Decode check | 800 sampled, **0 bad** |
+| Published | **NO — output truncated to 499 files (DECISION-021)** |
 | Patients | 21,225, **no overlap across splits** |
 | `status != 'ok'` | **4**, all `ok:no-retina` (DECISION-018) |
 

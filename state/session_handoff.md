@@ -8,24 +8,17 @@
 
 ## FIRST ACTION NEXT SESSION
 
-**The contact sheet is APPROVED (user, 2026-08-20). The gate is open.** The blocker is now
-purely that the ~2.5 h cache build has to run on Kaggle and the user launches it
-(CLAUDE.md §7 — never a foreground session process).
+**The Phase 2 cache has to be rebuilt.** The 2026-08-21 build was correct — reconciliation
+passed, 38,788 images, 0.836 GB — but Kaggle's **500-file cap on notebook output** kept
+499 of them when the session was saved, silently, after every check had run.
+`/kaggle/working` is wiped, so `fyp-dr-eyepacs-224` was never created.
 
-1. Ask whether the Kaggle build has been run. If not, the handover is ready:
-   `.venv/Scripts/python -m notebooks.make_bundle` → upload `dist/fyp-dr-code.zip` as the
-   private Dataset `fyp-dr-code` → paste `notebooks/phase2_build_cache.py`'s `CELL` into
-   one Kaggle cell. That cell runs the leakage tests, both builds, the reconciliation, the
-   leakage tests again, and the size report, and prints READY TO PUBLISH or refuses.
-2. If it HAS been run: read the reconciliation output, give any `status != 'ok'` image a
-   `docs/DECISIONS.md` entry **and leave it in its split**, then publish
-   `fyp-dr-eyepacs-224` (private, under `rah098`).
-3. Either way, **Phase 3 is not blocked by the build.** `src/data/dataset.py` and
-   `src/data/sampler.py` can be written and tested against synthetic images. The user's
-   instruction was explicit: go straight to Phase 3, and no further refinement passes on
-   preprocessing unless something downstream demands it.
+Nothing about the pipeline is suspect. Re-run `notebooks/phase2_build_cache.py`, which now
+has a **cell 5**: pack to one archive, verify it by reading the central directory back,
+and only then delete the loose tree (DECISION-021). ~2.5 h, Accelerator **None**.
 
-Subagent dispatch was verified in session 2 — **all nine dispatch by name**.
+Then Phase 3 (`notebooks/phase3_baseline.py`) — GPU, Internet **ON**, and cell 1 extracts
+the archive and re-counts to 38,788 before training.
 
 ## What was done this session
 

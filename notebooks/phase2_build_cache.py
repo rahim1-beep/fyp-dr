@@ -6,7 +6,12 @@ source images (CLAUDE.md S3). Expect **~2.5 h** with `--workers 4`.
 The step-by-step UI walkthrough lives alongside this file; these are the cells themselves,
 kept here so the repo and the runbook cannot drift apart. Print any cell with:
 
-    python -m notebooks.phase2_build_cache 1      # or 2, 3, 4; no argument prints all
+    python -m notebooks.phase2_build_cache 1      # 1-5; 6 is the optional API cell
+
+CELL 5 IS NOT OPTIONAL (DECISION-021). Kaggle caps notebook OUTPUT at 500 FILES.
+The first build of this cache wrote all 38,788 images correctly and the saved output
+kept 499 of them, silently. The cache is now packed into ONE archive and that archive
+is verified while the session is still alive, before the loose tree is deleted.
 
 Notebook settings: Accelerator **None** (this is CPU work  -  do not spend GPU quota),
 Internet **off**, three inputs attached: `dreamer07/eyepacs`, `mariaherrerot/aptos2019`,
@@ -123,7 +128,7 @@ print("aptos exit:", rc_aptos)
 '''
 
 CELL_4 = r'''
-# -- Cell 4 -- reconcile, re-run the leakage tests, measure, prepare to publish
+# -- Cell 4 -- reconcile, re-run the leakage tests, measure -------------------
 rc_recon = run([
     sys.executable, "-m", "src.data.reconcile_cache",
     "--cache-root", OUT,
@@ -142,25 +147,99 @@ print(f"free in /kaggle/working: {shutil.disk_usage(WORK).free / 1024**3:.1f} GB
 
 ok = (rc_recon == 0 and rc_tests == 0)
 print("\n" + "=" * 72)
-print("READY TO PUBLISH" if ok else "DO NOT PUBLISH  -  fix the failures above")
+print("READY TO ARCHIVE" if ok else "DO NOT ARCHIVE - fix the failures above")
 print("=" * 72)
 
 if ok:
-    # Make the published Dataset self-describing: whoever mounts it can tell which
-    # splits it was reconciled against and which images were flagged.
+    # The sidecars travel INSIDE the archive, so the published dataset says which splits
+    # it was reconciled against, which images were flagged, and what config produced the
+    # pixels. Copy them into the cache tree before packing.
     shutil.copytree(REPO / "data/splits", OUT / "splits", dirs_exist_ok=True)
     for f in ("processed_stats.csv", "aptos_stats.csv"):
         shutil.copy(WORK / f, OUT / f)
-    os.chdir(WORK)               # never rmtree the directory you are standing in
-    shutil.rmtree(REPO)          # keep the output Dataset to the cache alone
-    print("\nNow: Save Version -> Save & Run All. When it finishes, open the notebook's")
-    print("Output tab and create a New Dataset named  fyp-dr-eyepacs-224  (PRIVATE).")
-    print("configs/kaggle.yaml already expects it at /kaggle/input/fyp-dr-eyepacs-224.")
+    print("\nsidecars copied into the cache. Run cell 5 to pack it.")
 '''
 
-CELLS = [CELL_1, CELL_2, CELL_3, CELL_4]
+CELL_5 = r'''
+# -- Cell 5 -- pack into ONE file and PROVE it is complete --------------------
+# DECISION-021. Kaggle caps notebook OUTPUT at 500 FILES. The first build wrote all
+# 38,788 images correctly and the saved output kept 499 of them - silently, after
+# reconciliation had passed, at the boundary between the session and the output. Then
+# /kaggle/working is wiped. One archive is one file, and one file is under any
+# file-count cap.
+ARCHIVE = WORK / "fyp-dr-eyepacs-224.zip"
+
+rc_pack = run([
+    sys.executable, "-m", "src.data.archive_cache", "pack",
+    "--cache-root", OUT,
+    "--out", ARCHIVE,
+    "--arcname", "processed",
+    "--expect-images", "38788",
+    "--expect-gb", "0.836",
+])
+
+if rc_pack != 0:
+    raise SystemExit(
+        "ARCHIVE VERIFICATION FAILED. The loose tree is still on disk - do not end this "
+        "session and do not publish. Read the problems printed above."
+    )
+
+# Only now is deleting the tree safe, and only because the archive was read back and
+# checked while the source still existed to be compared against.
+shutil.rmtree(OUT)
+os.chdir(WORK)                 # never rmtree the directory you are standing in
+shutil.rmtree(REPO, ignore_errors=True)
+
+left = sorted(p for p in WORK.rglob("*") if p.is_file())
+print(f"\n/kaggle/working now holds {len(left)} file(s):")
+for p in left:
+    print(f"  {p.relative_to(WORK)}  {p.stat().st_size / 1024**3:.3f} GB")
+if len(left) > 400:
+    print("\nWARNING: more than 400 files - the 500-file output cap is close.")
+
+print("\nNow: Save Version -> Save & Run All. When it finishes, open the Output tab,")
+print("confirm you see ONE .zip of about 0.836 GB, and create a New Dataset from it")
+print("named  fyp-dr-eyepacs-224  (PRIVATE).")
+'''
+
+CELL_5B = r'''
+# -- Cell 5b (OPTIONAL) -- publish straight from the notebook via the Kaggle API ------
+# Only worth it if you would rather the notebook confirm the dataset landed than click
+# through the Output tab. It needs BOTH of these, neither of which cell 5 needs:
+#   * Internet ON for this session
+#   * Add-ons -> Secrets -> KAGGLE_KEY (and KAGGLE_USERNAME), from kaggle.com/settings
+# Run it INSTEAD of the manual publish step, after cell 5 has verified the archive.
+import json, os
+
+from kaggle_secrets import UserSecretsClient
+
+sec = UserSecretsClient()
+os.environ["KAGGLE_USERNAME"] = sec.get_secret("KAGGLE_USERNAME")
+os.environ["KAGGLE_KEY"] = sec.get_secret("KAGGLE_KEY")
+
+STAGE = WORK / "publish"
+STAGE.mkdir(exist_ok=True)
+shutil.move(str(ARCHIVE), STAGE / ARCHIVE.name)
+(STAGE / "dataset-metadata.json").write_text(json.dumps({
+    "title": "fyp-dr-eyepacs-224",
+    "id": f"{os.environ['KAGGLE_USERNAME']}/fyp-dr-eyepacs-224",
+    "licenses": [{"name": "other"}],
+}, indent=2))
+
+# --dir-mode zip would re-zip; the archive is already one file, so upload it as-is.
+rc_pub = run([sys.executable, "-m", "kaggle", "datasets", "create",
+              "-p", STAGE, "--private"])
+print("publish exit:", rc_pub)
+
+# The point of doing it this way: confirm it landed WHILE THE SESSION IS STILL ALIVE.
+if rc_pub == 0:
+    run([sys.executable, "-m", "kaggle", "datasets", "files",
+         f"{os.environ['KAGGLE_USERNAME']}/fyp-dr-eyepacs-224"])
+'''
+
+CELLS = [CELL_1, CELL_2, CELL_3, CELL_4, CELL_5, CELL_5B]
 
 if __name__ == "__main__":
-    which = sys.argv[1:] or ["1", "2", "3", "4"]
+    which = sys.argv[1:] or ["1", "2", "3", "4", "5"]   # 6 prints the optional API cell
     for w in which:
         print(CELLS[int(w) - 1])
