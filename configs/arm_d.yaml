@@ -1,0 +1,11 @@
+# Arm D — balanced sampler + focal loss.
+imbalance:
+  arm: D
+  sampler: weighted_random
+  loss: focal
+  focal_gamma: 2.0
+  focal_alpha: null             # null = uniform; sampler already balances
+  class_weights: false
+model:
+  head: softmax
+  num_outputs: 5

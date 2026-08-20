@@ -1,0 +1,11 @@
+# Arm B — WeightedRandomSampler balancing classes per epoch + cross-entropy.
+# R2: the sampler operates INSIDE the training split only, after the patient-level
+# partition is frozen. Val/test keep their natural distribution.
+imbalance:
+  arm: B
+  sampler: weighted_random      # weights = 1 / class_count, computed on TRAIN ONLY
+  loss: cross_entropy
+  class_weights: false
+model:
+  head: softmax
+  num_outputs: 5

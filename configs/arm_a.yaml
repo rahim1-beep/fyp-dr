@@ -1,0 +1,9 @@
+# Arm A — natural distribution + plain cross-entropy. The honest baseline.
+imbalance:
+  arm: A
+  sampler: none                 # natural train distribution
+  loss: cross_entropy
+  class_weights: false
+model:
+  head: softmax
+  num_outputs: 5

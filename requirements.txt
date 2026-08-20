@@ -1,0 +1,64 @@
+# fyp-dr — pinned dependencies (R6).
+#
+# Target: CPython 3.12 (cp312) on BOTH
+#   - Windows / win_amd64, CPU only   (local: 3.12.10)
+#   - Linux / manylinux, CUDA          (Kaggle: 3.12.13)
+# See docs/DECISIONS.md DECISION-002.
+#
+# Install locally:   py -3.12 -m venv .venv && .venv\Scripts\pip install -r requirements.txt
+#
+# TORCH NOTE: on Kaggle, DO NOT pip-install torch over the image's preinstalled build —
+# it is CUDA-matched and reinstalling is slow and can break the GPU runtime. The first
+# Kaggle notebook prints torch/torchvision/timm versions; if they differ from the pins
+# below, update these pins to match the Kaggle image rather than forcing the image to
+# match these. The pins here are what the LOCAL CPU environment installs.
+
+# --- Core DL (R7: PyTorch + timm) ---
+torch==2.9.1
+torchvision==0.24.1
+timm==1.0.28
+
+# --- Imaging / preprocessing ---
+# Both opencv distributions end up installed and this is unavoidable: albumentations
+# depends on opencv-python-headless, grad-cam depends on opencv-python. Left unpinned,
+# pip resolves them to DIFFERENT major versions (verified: headless 5.0 alongside
+# non-headless 4.12), putting two disagreeing cv2 builds on the path. Pin both to the
+# same version so whichever wins the import, the behaviour is identical.
+opencv-python==4.12.0.88
+opencv-python-headless==4.12.0.88
+pillow==11.3.0
+albumentations==2.0.8
+
+# --- Data / metrics ---
+# pandas pinned to 2.x, not 3.x — 3.0 changed copy-on-write and string dtype defaults,
+# and the Kaggle image is on 2.x.
+pandas==2.3.3
+numpy==2.2.6
+scikit-learn==1.7.2
+scipy==1.16.2
+
+# --- Plots ---
+matplotlib==3.10.6
+seaborn==0.13.2
+
+# --- Config / utilities ---
+pyyaml==6.0.2
+tqdm==4.67.1
+
+# --- Explainability (Phase 5) ---
+grad-cam==1.5.5
+
+# --- Testing ---
+pytest==8.4.2
+
+# --- Data acquisition (inspection only; EyePACS is never downloaded locally) ---
+kaggle==1.7.4.5
+
+# --- Backend (Phase 7; see DECISION-001) ---
+fastapi==0.120.4
+uvicorn[standard]==0.38.0
+python-multipart==0.0.20
+pydantic==2.12.3
+python-magic-bin==0.4.14; sys_platform == "win32"
+python-magic==0.4.27; sys_platform != "win32"
+httpx==0.28.1

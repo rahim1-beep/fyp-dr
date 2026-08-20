@@ -1,0 +1,10 @@
+# Arm C — natural distribution + class-weighted cross-entropy.
+imbalance:
+  arm: C
+  sampler: none
+  loss: cross_entropy
+  class_weights: true           # computed from TRAIN split counts only
+  class_weight_scheme: inverse_frequency
+model:
+  head: softmax
+  num_outputs: 5

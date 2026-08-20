@@ -1,0 +1,122 @@
+{
+  "schema": {
+    "columns": [
+      "image",
+      "level"
+    ],
+    "n_columns": 2,
+    "raw_dtypes": {
+      "image": "string",
+      "level": "string"
+    },
+    "image_column": "image",
+    "label_column": "level",
+    "distinct_label_values_raw": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4"
+    ],
+    "non_integer_label_values": [],
+    "distinct_label_values": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "inferred_label_dtype": "int64"
+  },
+  "counts": {
+    "listing_entries_total": 35127,
+    "listing_image_files": 35126,
+    "listing_non_image_entries": [
+      "trainLabels.csv/trainLabels.csv"
+    ],
+    "labels_csv_rows": 35126,
+    "labels_csv_unique_ids": 35126,
+    "image_bytes_total": 37944223074,
+    "image_bytes_mean": 1080231.824688265,
+    "image_bytes_min": 8254,
+    "image_bytes_max": 2169494
+  },
+  "class_distribution": {
+    "counts": {
+      "0": 25810,
+      "1": 2443,
+      "2": 5292,
+      "3": 873,
+      "4": 708
+    },
+    "percent": {
+      "0": 73.478,
+      "1": 6.955,
+      "2": 15.066,
+      "3": 2.485,
+      "4": 2.016
+    },
+    "total": 35126,
+    "majority_class": 0,
+    "majority_class_rate_percent": 73.478,
+    "imbalance_ratio_max_over_min": 36.45
+  },
+  "patients": {
+    "n_patients": 17563,
+    "images_per_patient_distribution": {
+      "2": 17563
+    },
+    "patients_without_exactly_two_images_count": 0,
+    "patients_without_exactly_two_images": [],
+    "patients_missing_an_eye_count": 0,
+    "max_grade_distribution": {
+      "0": 12155,
+      "1": 1442,
+      "2": 3022,
+      "3": 499,
+      "4": 445
+    },
+    "max_grade_percent": {
+      "0": 69.208,
+      "1": 8.21,
+      "2": 17.207,
+      "3": 2.841,
+      "4": 2.534
+    },
+    "patients_with_asymmetric_grades": 2240,
+    "grade_spread_distribution": {
+      "0": 15323,
+      "1": 1485,
+      "2": 723,
+      "3": 11,
+      "4": 21
+    }
+  },
+  "mismatches": {
+    "in_csv_not_on_disk_count": 0,
+    "in_csv_not_on_disk": [],
+    "on_disk_not_in_csv_count": 0,
+    "on_disk_not_in_csv": [],
+    "matched_count": 35126,
+    "truncated_to_first_100": false
+  },
+  "anomalies": {
+    "duplicate_csv_ids_count": 0,
+    "duplicate_csv_ids": [],
+    "duplicate_disk_stems_count": 0,
+    "duplicate_disk_stems": [],
+    "unparseable_filenames_count": 0,
+    "unparseable_filenames": [],
+    "zero_byte_files_count": 0,
+    "zero_byte_files": []
+  },
+  "assertions": {
+    "exactly_5_distinct_labels": true,
+    "labels_are_0_to_4": true,
+    "no_duplicate_csv_ids": true,
+    "no_unparseable_filenames": true,
+    "csv_rows_equal_disk_files": true,
+    "perfect_bidirectional_match": true,
+    "no_zero_byte_files": true
+  }
+}

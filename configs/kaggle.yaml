@@ -1,0 +1,35 @@
+# kaggle.yaml — Kaggle Notebooks overlay. All heavy work runs here.
+# /kaggle/input is READ-ONLY. Outputs go to /kaggle/working, which is wiped between
+# sessions — persist checkpoints and split CSVs before a session ends.
+
+env: kaggle
+
+paths:
+  eyepacs_root: /kaggle/input/eyepacs
+  eyepacs_labels_csv: null                # resolved by src/data/inspect.py, not assumed
+  aptos_root: /kaggle/input/aptos2019
+  processed_root: /kaggle/working/processed
+  splits_root: /kaggle/working/splits
+  runs_root: /kaggle/working/runs
+  # Phase 2 cache is republished as a private Kaggle Dataset and re-mounted here:
+  processed_dataset_mount: /kaggle/input/fyp-dr-eyepacs-224
+
+compute:
+  device: cuda
+  amp: true
+  num_workers: 4
+  pin_memory: true
+
+train:
+  batch_size: 64                          # T4 16 GB @ 224px; auto-scale down on OOM
+  epochs: 30
+
+persistence:
+  # /kaggle/working has a size cap and does not survive the session.
+  warn_working_dir_gb: 15
+  must_persist:
+    - splits/*.csv
+    - runs/*/config.yaml
+    - runs/*/metrics.json
+    - runs/*/train_log.csv
+    - runs/*/checkpoints/best.pth

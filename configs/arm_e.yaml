@@ -1,0 +1,17 @@
+# Arm E — ordinal/regression head. Single output, thresholds optimised on VALIDATION
+# for QWK (R3 — never on test).
+# DR grades are ORDERED: predicting a 4 as a 0 is far worse than a 4 as a 3, and softmax
+# cross-entropy is blind to that. This arm frequently wins on QWK. Report it.
+imbalance:
+  arm: E
+  sampler: none
+  loss: smooth_l1               # smooth_l1 | mse
+model:
+  head: ordinal_regression
+  num_outputs: 1
+eval:
+  threshold_optimisation:
+    enabled: true
+    split: val                  # R3 — validation only, never test
+    objective: qwk
+    init: [0.5, 1.5, 2.5, 3.5]

@@ -1,0 +1,27 @@
+# local.yaml — Windows laptop overlay.
+# This machine is code-editing, split-inspecting, and web-app-demo ONLY (DECISION-003).
+# No CUDA device. Do not attempt training here.
+
+env: local
+
+paths:
+  # EyePACS is NOT present locally (35.3 GB). Only the labels CSV and a ~50-image
+  # demo sample are pulled down.
+  eyepacs_root: null
+  eyepacs_labels_csv: data/raw/eyepacs/labels.csv
+  aptos_root: data/raw/aptos
+  processed_root: data/processed
+  splits_root: data/splits
+  runs_root: runs
+  sample_images: data/raw/sample          # ~50 images spanning all 5 grades, for the demo
+
+compute:
+  device: cpu                             # no CUDA; Intel XPU/IPEX explicitly not pursued
+  amp: false                              # AMP is a CUDA path
+  num_workers: 0                          # Windows — see CLAUDE.md §7
+  pin_memory: false
+
+train:
+  # Present only so a smoke test can run. Real training happens on Kaggle.
+  batch_size: 4
+  epochs: 1

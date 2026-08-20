@@ -1,0 +1,95 @@
+# base.yaml — shared defaults. Environment overlays (local.yaml / kaggle.yaml) supply
+# every path; arm_*.yaml supply the imbalance-handling strategy.
+# NEVER hardcode a path in code. Read it from here.
+
+project:
+  name: fyp-dr
+  seed: 42                      # R6 — recorded in every run config
+
+data:
+  # Filename convention: {patientID}_{eye}.jpeg  → split on the FIRST underscore.
+  eyepacs:
+    image_subdir: data/data
+    image_ext: .jpeg
+    # labels_csv is resolved at inspection time, NOT assumed. See Phase 1.
+    labels_csv: null
+    label_column: null          # discovered, not assumed to be "level"
+    image_column: null          # discovered, not assumed to be "image"
+  aptos:
+    id_column: id_code
+    label_column: diagnosis
+    # Author-provided splits are IGNORED (DECISION-004); all images pooled.
+    use_author_split: false
+  num_classes: 5                # asserted, not trusted
+  class_names: ["No DR", "Mild", "Moderate", "Severe", "Proliferative"]
+
+split:
+  # R1 — group by patient, stratify the PATIENT list on each patient's max grade.
+  strategy: patient_level
+  stratify_on: max_grade
+  train: 0.70
+  val: 0.15
+  test: 0.15
+  seed: 42
+
+preprocess:
+  circle_crop: true
+  enhancement: ben_graham       # ben_graham | clahe_green | none
+  ben_graham_sigma_scale: 10    # sigma = image_width / scale
+  ben_graham_alpha: 4
+  ben_graham_beta: -4
+  ben_graham_gamma: 128
+  image_size: 224               # DECISION-005 — 224 for all headline results
+  jpeg_quality: 95
+  cache_format: jpeg            # R5 — individual files, never one .npy
+
+augment:
+  # R2/proposal §5.3 — TRAIN SPLIT ONLY. No augmentation on val/test.
+  enabled: true
+  horizontal_flip: 0.5
+  vertical_flip: 0.5
+  rotation_degrees: 20
+  brightness: 0.15
+  contrast: 0.15
+  scale: [0.9, 1.1]
+  shift: 0.05
+
+model:
+  arch: resnet18                # timm model name
+  pretrained: true
+  # R7 / failure mode 2 — full fine-tune. frozen-only is not expressible here.
+  freeze_warmup_epochs: 0       # 0-2; head-only warmup, then unfreeze EVERYTHING
+  drop_rate: 0.0
+  # Normalisation mean/std are pulled from timm's model.default_cfg at runtime.
+  # Do NOT add mean/std keys here (failure mode 3).
+
+train:
+  epochs: 30
+  batch_size: 32                # auto-scaled to VRAM by the env overlay
+  optimizer: adamw
+  lr: 3.0e-4
+  weight_decay: 1.0e-4
+  scheduler: cosine
+  warmup_epochs: 2
+  grad_clip: 1.0
+  amp: true
+  label_smoothing: 0.1          # CE arms only
+  early_stopping:
+    monitor: val_qwk            # NOT loss, NOT accuracy
+    mode: max
+    patience: 7
+  checkpoint:
+    save_best: true
+    monitor: val_qwk
+
+eval:
+  primary_metric: qwk
+  referable_threshold: 2        # referable DR = grade >= 2
+  bootstrap_n: 1000
+  bootstrap_ci: 0.95
+  # Detection rule (§1): fail loudly on a collapsed model.
+  assert_no_empty_confusion_column: true
+  warn_if_accuracy_near_majority_rate: 0.02
+
+imbalance:
+  arm: A                        # overridden by configs/arm_*.yaml
