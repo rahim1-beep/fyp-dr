@@ -129,14 +129,56 @@ def retina_mask(bgr: np.ndarray, blur_ksize: int = 15, thresh: int = 10) -> np.n
     retinas are routinely truncated top and bottom by the sensor, so an inscribed circle
     would include black regions that were never imaged.
     """
+    mask, _ = largest_component(_raw_bright_mask(bgr, blur_ksize, thresh))
+    return mask
+
+
+def _raw_bright_mask(bgr: np.ndarray, blur_ksize: int = 15,
+                     thresh: int = 10) -> np.ndarray:
+    """Everything above threshold after morphological cleanup — retina AND any artefact.
+
+    Split out from `retina_mask` so `scan_quality` can compare this against the selected
+    component and report how much bright area was rejected as non-retinal.
+    """
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
     gray = cv2.GaussianBlur(gray, (blur_ksize, blur_ksize), 0)
     mask = ((gray > thresh).astype(np.uint8)) * 255
 
     k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, k)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, k)
-    return mask
+    return cv2.morphologyEx(mask, cv2.MORPH_OPEN, k)
+
+
+def largest_component(mask: np.ndarray) -> tuple[np.ndarray, float]:
+    """Keep only the biggest connected region. Returns (mask, discarded_area_fraction).
+
+    Without this, ANY bright cluster surviving the 15x15 open is treated as retina:
+    lens flare, a specular blob, a bright annotation burned into the corner. It inflates
+    the bounding box, `square_crop` then centres a much larger square on the union, and
+    the retina is rendered SMALLER in the 224x224 output.
+
+    Measured on a 1000x1000 frame with one 60x90 bright patch injected in a corner:
+    crop side 606 -> 902, retina fraction 0.788 -> 0.364. The retina lands at ~0.67x
+    linear scale, so a microaneurysm loses a third of its pixels — and the output is
+    still a plausible-looking fundus JPEG with status 'ok'. Exactly the silent failure
+    this project cannot afford.
+
+    The discarded fraction is returned so it can be RECORDED per image rather than
+    thrown away; a large value means the frame had substantial non-retinal brightness
+    and is worth a human look.
+    """
+    total = int((mask > 0).sum())
+    if total == 0:
+        return mask, 0.0
+
+    n, labels, stats, _ = cv2.connectedComponentsWithStats((mask > 0).astype(np.uint8), 8)
+    if n <= 2:                      # background + at most one region
+        return mask, 0.0
+
+    idx = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
+    keep = (labels == idx)
+    kept = int(keep.sum())
+    return keep.astype(np.uint8) * 255, 1.0 - kept / total
 
 
 def square_crop(bgr: np.ndarray, mask: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -377,6 +419,9 @@ class QualityStats:
     saturation: float           # mean HSV S over retina. Low => washed out / greyscale.
     laplacian_var: float        # focus, measured at a NORMALISED 512px scale (see below).
     contrast: float             # std of grey over retina.
+    # Area of thresholded-bright regions DISCARDED as non-retina by largest_component.
+    # High => flare, specular blobs, or burned-in annotation competing with the disc.
+    off_disc_bright_fraction: float = 0.0
 
     def flags(self) -> list[str]:
         """Reasons this image is suspect. An empty list means it looks fine.
@@ -413,6 +458,8 @@ class QualityStats:
             f.append("blurred")
         if self.contrast < 12:
             f.append("low-contrast")
+        if self.off_disc_bright_fraction > 0.15:
+            f.append("bright-artefact")
         return f
 
 
@@ -453,12 +500,14 @@ def scan_quality(bgr: np.ndarray) -> QualityStats:
     # retina_mask returns uint8 0/255; boolean-index with `> 0`, because indexing an
     # array with a uint8 array is integer fancy-indexing, not masking, and would quietly
     # return the wrong pixels rather than raising.
-    mask = retina_mask(bgr) > 0
+    raw = _raw_bright_mask(bgr)
+    kept, discarded = largest_component(raw)
+    mask = kept > 0
     n_ret = int(mask.sum())
 
     if n_ret == 0:
         # A genuinely black frame. Report it honestly rather than dividing by zero.
-        return QualityStats(0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0)
+        return QualityStats(0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
     ret_gray = gray[mask].astype(np.float64)
@@ -487,6 +536,7 @@ def scan_quality(bgr: np.ndarray) -> QualityStats:
         saturation=float(sat.mean()),
         laplacian_var=lap,
         contrast=float(ret_gray.std()),
+        off_disc_bright_fraction=float(discarded),
     )
 
 
@@ -519,45 +569,55 @@ def _process_one(
     report it. One corrupt file must not abort a 35k-image build.
     """
     rel, dataset, label, src_root, out_root, cfg, scan = task
-    out_rel = cache_relpath(rel, dataset)
-    src = Path(src_root) / rel
 
     rec = {
         "image_path": rel,
         "dataset": dataset,
         "label": label,
-        "cache_path": out_rel,
+        "cache_path": None,
         "status": "ok",
         "out_bytes": 0,
     }
 
-    if not src.exists():
-        rec["status"] = "missing"
-        return rec
-
+    # EVERYTHING is inside the try, including cache_relpath and the stat calls.
+    # `mp.Pool.imap` re-raises in the consumer, so a single unhandled exception here
+    # propagates out of process_manifest and discards EVERY record — on the ~2.5 hour
+    # Kaggle build that is the whole session, with no stats CSV written. A NaN
+    # image_path was enough to trigger it (TypeError in Path.__truediv__).
     try:
+        out_rel = cache_relpath(rel, dataset)
+        rec["cache_path"] = out_rel
+        src = Path(src_root) / rel
+
+        if not src.exists():
+            rec["status"] = "missing"
+            return rec
+
         bgr = imread_unicode(src)
-    except Exception as exc:                       # noqa: BLE001 - recorded, not hidden
-        rec["status"] = f"error:{type(exc).__name__}"
-        return rec
+        if bgr is None:
+            rec["status"] = "unreadable"
+            return rec
 
-    if bgr is None:
-        rec["status"] = "unreadable"
-        return rec
+        rec["src_h"], rec["src_w"] = bgr.shape[0], bgr.shape[1]
+        rec["src_bytes"] = src.stat().st_size
 
-    rec["src_h"], rec["src_w"] = bgr.shape[0], bgr.shape[1]
-    rec["src_bytes"] = src.stat().st_size
-
-    try:
         if scan:
             q = scan_quality(bgr)
             rec.update(asdict(q))
             rec["quality_flags"] = ";".join(q.flags())
+
+        # The no-retina fallback produces a stretched, un-cropped, un-enhanced, un-masked
+        # image — a completely different domain from every other cache entry. It must be
+        # visible in the record INDEPENDENTLY of --scan, or a --no-scan build has no
+        # trace of which images took that path.
+        if not retina_mask(bgr).any():
+            rec["status"] = "ok:no-retina"
+
         rec["out_bytes"] = imwrite_unicode(
             Path(out_root) / out_rel, preprocess_image(bgr, cfg), cfg.jpeg_quality
         )
     except Exception as exc:                       # noqa: BLE001 - recorded, not hidden
-        rec["status"] = f"error:{type(exc).__name__}"
+        rec["status"] = f"error:{type(exc).__name__}: {exc}"[:200]
 
     return rec
 
@@ -619,11 +679,34 @@ def process_manifest(
                 if progress and (i % 250 == 0 or i == total):
                     print(f"  {i}/{total}", flush=True)
 
+    if not records:
+        # from_records([]) yields a column-less frame and every later access is a
+        # KeyError. An empty manifest is a caller error worth naming.
+        raise ValueError('manifest contained no rows; nothing to preprocess')
+
     out = pd.DataFrame.from_records(records)
-    assert len(out) == len(df), (
-        f"{len(df)} images in, {len(out)} rows out — the cache must never silently "
-        "disagree with the manifest"
-    )
+
+    # `assert` would be stripped under `python -O`; these are correctness gates on a
+    # cache every downstream result depends on, so they raise unconditionally.
+    if len(out) != len(df):
+        raise RuntimeError(
+            f"{len(df)} images in, {len(out)} rows out — the cache must never silently "
+            "disagree with the manifest"
+        )
+
+    # Rows-in == rows-out does NOT imply one file per row. Two manifest rows whose
+    # filenames share a stem map to the same cache path; the second silently overwrites
+    # the first and BOTH report status 'ok'. That is a lost image wearing a success
+    # label, and it is exactly the kind of defect this project cannot detect later.
+    written = out.loc[out["status"].astype(str).str.startswith("ok"), "cache_path"]
+    dupes = written[written.duplicated(keep=False)].dropna()
+    if len(dupes):
+        collisions = sorted(dupes.unique())[:10]
+        raise RuntimeError(
+            f"{dupes.nunique()} cache path(s) written by more than one manifest row — "
+            f"images would silently overwrite each other: {collisions}"
+        )
+
     return out
 
 
@@ -692,6 +775,14 @@ def main() -> int:
 
     if args.limit:
         df = df.head(args.limit)
+
+    # CLAUDE.md §4: assert exactly 5 distinct labels. A manifest that has quietly lost a
+    # rare class produces an all-zero confusion-matrix column much later, by which point
+    # the cause is far away. --limit legitimately truncates the label set, so skip then.
+    if "label" in df.columns and not args.limit:
+        labels = sorted(pd.unique(df["label"].dropna()))
+        if labels != [0, 1, 2, 3, 4]:
+            ap.error(f"expected labels [0, 1, 2, 3, 4], manifest has {labels}")
 
     print(f"config    : {args.config}")
     print(f"pipeline  : circle_crop={cfg.circle_crop} enhancement={cfg.enhancement} "

@@ -18,6 +18,7 @@ that need real fundus images are skipped unless data/raw/qa/ is populated.
 
 from __future__ import annotations
 
+import textwrap
 from pathlib import Path
 
 import cv2
@@ -239,21 +240,62 @@ def test_focus_measure_is_resolution_independent():
     )
 
 
-def test_flag_thresholds_are_constants_not_data_dependent():
-    """leakage-auditor condition 1.
+def test_flag_thresholds_separate_good_from_degraded():
+    """Threshold behaviour only.
 
-    `flags()` must depend only on the one image's own statistics. If it ever consults a
-    dataset-wide percentile, val and test start influencing which train images are
-    flagged. Constructing QualityStats directly — with no dataset in scope at all — and
-    getting stable answers is the property under test.
+    NOT a leakage test, despite what an earlier version of this name claimed: two
+    synthetic points on opposite sides of every threshold would pass even if `flags()`
+    consulted a dataset-wide percentile table. The real leakage property is checked by
+    test_flags_reads_no_module_state below.
     """
-    good = QualityStats(120.0, 0.75, 0.0, 0.01, 0.01, 120.0, 40.0, 30.0)
-    bad = QualityStats(15.0, 0.05, 0.0, 0.80, 0.35, 10.0, 0.5, 5.0)
+    good = QualityStats(120.0, 0.75, 0.0, 0.01, 0.01, 120.0, 40.0, 30.0, 0.0)
+    bad = QualityStats(15.0, 0.05, 0.0, 0.80, 0.35, 10.0, 0.5, 5.0, 0.5)
 
     assert good.flags() == []
     for expected in ("tiny-retina", "dark", "mostly-black", "off-centre",
-                     "washed-out", "blurred", "low-contrast"):
+                     "washed-out", "blurred", "low-contrast", "bright-artefact"):
         assert expected in bad.flags()
+
+    # clipped_fraction is 0.0 in both fixtures above, so exercise it explicitly rather
+    # than leaving the over-exposed branch untested.
+    blown = QualityStats(200.0, 0.75, 0.40, 0.0, 0.01, 120.0, 40.0, 30.0, 0.0)
+    assert "over-exposed" in blown.flags()
+
+
+def test_flags_reads_no_module_state():
+    """leakage-auditor condition 1, checked at the source level.
+
+    `flags()` must be a pure function of `self`. If it ever reads a module-level table —
+    a dataset percentile, a cached calibration — then val and test begin influencing
+    which train images are flagged. Names loaded inside the function body are inspected
+    directly, because a behavioural test cannot distinguish a constant from a lookup that
+    happens to agree.
+    """
+    import ast
+    import inspect
+
+    src = textwrap.dedent(inspect.getsource(QualityStats.flags))
+    tree = ast.parse(src)
+
+    import builtins
+
+    # Builtins appear via the `-> list[str]` annotation and are not state.
+    allowed = {"self", "f"} | set(dir(builtins))
+    loaded = {
+        node.id for node in ast.walk(tree)
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
+    }
+    assert loaded <= allowed, (
+        f"flags() reads non-local names {sorted(loaded - allowed)} — a dataset-derived "
+        "threshold would be a leakage vector"
+    )
+
+    # Every comparison must be against a literal.
+    for cmp_node in (n for n in ast.walk(tree) if isinstance(n, ast.Compare)):
+        for comparator in cmp_node.comparators:
+            assert isinstance(comparator, ast.Constant), (
+                f"flags() compares against {ast.dump(comparator)}, not a literal constant"
+            )
 
 
 def test_black_frame_quality_is_reported_not_crashed():

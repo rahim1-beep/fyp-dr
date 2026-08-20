@@ -95,6 +95,16 @@ def fetch(slug: str, remote_path: str, dest: Path, auth: tuple[str, str]) -> int
         )
 
     body = r.content
+
+    # Sniff the actual magic bytes rather than trusting Content-Type, which the API sets
+    # to image/jpeg even when returning a ZIP. A JSON or HTML error body would otherwise
+    # be written out with a .jpeg extension and only surface much later as a None decode.
+    if body[:1] in (b"{", b"<"):
+        raise RuntimeError(
+            f"{remote_path}: server returned a {len(body)}-byte text body, not an image: "
+            f"{body[:120]!r}"
+        )
+
     if body[:2] == b"PK":
         with zipfile.ZipFile(io.BytesIO(body)) as zf:
             names = zf.namelist()
@@ -154,8 +164,12 @@ def main() -> int:
 
         want = sizes.get(rel)
         if want is not None and n != want:
-            failures.append((rel, f"size mismatch: got {n}, listing says {want}"))
-            print(f"[{i:>3}/{len(paths)}] SIZE!!  {rel}: got {n}, expected {want}")
+            # Delete it. Left on disk, the next run's `dest.exists()` check reports it as
+            # `cached`, counts it toward success, and exits 0 — so one bad download
+            # becomes permanent and invisible.
+            dest.unlink(missing_ok=True)
+            failures.append((rel, f"size mismatch: got {n}, listing says {want} (removed)"))
+            print(f"[{i:>3}/{len(paths)}] SIZE!!  {rel}: got {n}, expected {want} — removed")
             continue
 
         total += n
