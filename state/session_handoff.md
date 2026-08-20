@@ -127,14 +127,15 @@ paths with **zero claimed by more than one split**, so the flat layout cannot al
 image across the train/test boundary. That was the leakage risk in DECISION-012 and it is
 now settled independently of whether the build succeeds.
 
-## Watch out for this in Phase 3
+## Phase 3 — started, and the colour-order trap is closed
 
-**Colour order.** The cache is written BGR-by-cv2, which is correct on disk. But
-`src/data/dataset.py` does not exist yet, and if it loads with PIL it gets RGB while
-cv2 gives BGR. timm's `default_cfg` normalisation assumes **RGB**. Getting this backwards
-trains a model that works but underperforms, with no error anywhere — exactly the class of
-silent failure that lands a DR project at 20–45% accuracy. Pick one loader, assert the
-channel order once, and test it.
+`src/data/dataset.py` converts BGR→RGB in exactly one place, `load_cached_image`, and
+`tests/test_dataset.py::test_cached_bgr_is_delivered_as_rgb` asserts it. timm's
+`default_cfg` normalisation assumes RGB; `normalisation_from_model` pulls mean/std from
+the model rather than the config or the data. Do not add mean/std to any YAML.
+
+`src/data/sampler.py` implements §2.1 and refuses a sampler over any split whose name
+contains "val" or "test". Arm F's pooled train+aptos_train is explicitly allowed.
 
 ## Open questions for the user
 
@@ -147,10 +148,10 @@ channel order once, and test it.
 
 ## Known-broken / not yet built
 
-- `src/data/{dataset,sampler}.py` — not written.
 - `src/models/`, `src/train/`, `src/eval/`, `src/xai/`, `src/inference/` — empty.
 - No Kaggle notebook has been run; **GPU quota fully unconsumed.**
 - `docs/EXPERIMENTS.md` does not exist (no runs).
-- torch/torchvision/timm not installed locally; pins still unverified against the Kaggle
-  image. The first Kaggle notebook must print its versions and the pins updated to match.
+- torch 2.9.1+cpu / torchvision 0.24.1+cpu / timm 1.0.28 are now installed locally, so the
+  data layer is testable here. The pins are still unverified against the Kaggle image —
+  the first notebook must print its versions and the pins be updated to match.
 - The CLAHE-on-green ablation path is implemented but has never been run.

@@ -212,7 +212,33 @@ in `val`; if preprocessing cannot rescue them, that is worth a note in the write
 
 **Acceptance:** val QWK clearly above 0; confusion matrix not collapsed to one class.
 
+Started **in parallel with the cache build**, not behind it — the data layer is testable
+against a synthetic cache, so none of this waits on Kaggle.
+
+- [x] torch 2.9.1+cpu / torchvision 0.24.1+cpu / timm 1.0.28 installed locally, so the
+      data layer is testable on this machine (the Kaggle pins still need confirming
+      against the image on the first notebook run)
+- [x] `src/data/dataset.py` — `DRDataset`, reads the flat cache, **BGR→RGB exactly once**,
+      returns `(image, label, index)` so predictions join back to manifest rows
+- [x] `src/data/sampler.py` — `WeightedRandomSampler` per §2.1, and `build_loaders`
+      **refuses a sampler on val or test** rather than trusting the caller
+- [x] `tests/test_dataset.py` — 24 tests. **Full suite: 99 green.**
+- [~] `leakage-auditor` review of the data layer — dispatched
+- [ ] `src/models/factory.py` — timm, full fine-tune, normalisation from `default_cfg`
+- [ ] `src/train/` — loop, AdamW, cosine+warmup, AMP, grad clip, early stopping on val QWK
+- [ ] `src/eval/metrics.py` — QWK first
 - [ ] ResNet18, arm A, short schedule — purpose is a *correct* pipeline, not a good score
+
+**Design notes worth not relitigating:**
+
+- **Augmentation is refused on val/test**, not silently ignored. A flip on the validation
+  set changes what early stopping measures and nothing in the log would show it.
+- **`num_samples = len(train)`** whether or not balancing is on, so two arms see the same
+  number of gradient steps per epoch. Arms that don't are not comparable, and the
+  comparison is the thesis chapter.
+- **`describe_balance` draws from a clone of the sampler.** Iterating the real one would
+  advance its generator, so merely logging the balance table would change the first
+  epoch — an R6 bug that would only appear when someone deleted the logging.
 
 ---
 
