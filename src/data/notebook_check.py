@@ -25,6 +25,10 @@ runs any work:
      `resolve_input(...)` — is bound against the real signature. Not every mistake is a
      subprocess, and a dropped argument there fails at the same point in the session as a
      bad argv, where argparse never sees it.
+  3. Every CLI module in `CLI_MODULES` exposes `build_parser()`, and every
+     `python -m <module> ...` example in its own docstring is accepted by that parser.
+     Docstring usage is what an operator copies, and it rots silently when a flag is
+     renamed.
 
 It runs in two places, and it needs both:
 
@@ -58,6 +62,7 @@ NOTEBOOK_DIR = REPO / "notebooks"
 # values, so a placeholder is enough — and using one keeps the check honest about what it
 # can and cannot see.
 PLACEHOLDER = "__RUNTIME_VALUE__"
+BACKSLASH = chr(92)
 
 
 class Invocation:
@@ -281,6 +286,103 @@ def validate_argv(argv: list) -> str | None:
     return check(inv)
 
 
+# ----------------------------------------------------------------------------------
+# CLI modules and their own docstring examples
+# ----------------------------------------------------------------------------------
+
+# Every module in the project with a command line. A CLI that is not in this list is not
+# checked, so adding one here is part of adding one at all.
+CLI_MODULES = (
+    "src.data.preprocess",
+    "src.data.reconcile_cache",
+    "src.data.archive_cache",
+    "src.data.fetch_run",
+    "src.data.notebook_check",
+    "src.train.train",
+    "src.train.smoke",
+)
+
+
+def usage_examples(module: str) -> list[list[str]]:
+    """`python -m <module> ...` invocations found in a module's own docstring.
+
+    Docstring usage is documentation, and documentation rots: `--expect-gb` gets renamed,
+    a subcommand is added, and the example that told the next person how to run the thing
+    silently becomes wrong. These are the examples an operator copies, so they are checked
+    against the same parser as everything else.
+
+    Continuation backslashes are joined; a leading `python` or `.venv/Scripts/python` is
+    normalised away.
+    """
+    mod = importlib.import_module(module)
+    doc = mod.__doc__ or ""
+
+    lines, buf = [], ""
+    for raw in doc.splitlines():
+        line = raw.strip()
+        if buf:
+            buf = buf[:-1].rstrip() + " " + line if buf.endswith(BACKSLASH) else buf
+            if not line.endswith(BACKSLASH):
+                lines.append(buf)
+                buf = ""
+            else:
+                buf = buf[:-1].rstrip() + " " if not buf.endswith(BACKSLASH) else buf
+            continue
+        if "-m " + module in line and line.endswith(BACKSLASH):
+            buf = line
+        elif "-m " + module in line:
+            lines.append(line)
+
+    out = []
+    for line in lines:
+        # A trailing comment is normal in a usage example and is not an argument.
+        if "#" in line:
+            line = line[:line.index("#")]
+        parts = line.replace(BACKSLASH, " ").split()
+        if "-m" not in parts:
+            continue
+        i = parts.index("-m")
+        if i + 1 >= len(parts) or parts[i + 1] != module:
+            continue
+        out.append(parts[i + 2:])
+    return out
+
+
+def check_cli_modules(modules=CLI_MODULES) -> list[tuple[str, str]]:
+    """(module, problem) for every CLI module that cannot be validated, plus every
+    docstring example its own parser rejects."""
+    problems = []
+    for module in modules:
+        try:
+            mod = importlib.import_module(module)
+        except Exception as exc:             # noqa: BLE001
+            problems.append((module, f"does not import: {exc!r}"))
+            continue
+
+        builder = getattr(mod, "build_parser", None)
+        if builder is None:
+            problems.append((module, "has no build_parser(); split the parser out of "
+                                     "main() so its command line can be validated"))
+            continue
+
+        for argv in usage_examples(module):
+            parser = builder()
+            buf = io.StringIO()
+            try:
+                with contextlib.redirect_stderr(buf), contextlib.redirect_stdout(buf):
+                    parser.parse_args(argv)
+            except SystemExit:
+                msg = buf.getvalue().strip().splitlines()
+                problems.append((
+                    module,
+                    f"docstring example is not accepted by its own parser: "
+                    f"`{' '.join(argv)}` -> {msg[-1] if msg else 'rejected'}",
+                ))
+            except Exception as exc:         # noqa: BLE001
+                problems.append((module, f"docstring example raised {type(exc).__name__}: {exc}"))
+    return problems
+
+
 def self_test() -> list[str]:
     """Actually run pack -> verify -> unpack on a throwaway tree.
 
@@ -351,6 +453,15 @@ def main() -> int:
         if why is not None:
             print(f"         -> {why}")
             failures.append((f"{module}.{symbol}", why))
+
+    cli_problems = check_cli_modules()
+    print(f"\nchecking {len(CLI_MODULES)} CLI module(s) and their docstring examples ...")
+    for module in CLI_MODULES:
+        bad = [w for m, w in cli_problems if m == module]
+        print(f"  [{'FAIL' if bad else 'ok  '}] {module}")
+        for w in bad:
+            print(f"         -> {w}")
+    failures += [(m, w) for m, w in cli_problems]
 
     if args.self_test:
         print("\nself-test: pack -> verify -> unpack on a 3-file directory ...")

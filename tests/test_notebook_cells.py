@@ -215,3 +215,39 @@ def test_cells_parse_as_python():
         mod = importlib.import_module(f"notebooks.{name}")
         for i, cell in enumerate(mod.CELLS, start=1):
             ast.parse(cell)     # raises SyntaxError with the cell's own line numbers
+
+
+# ----------------------------------------------------------------------------------
+# CLI modules and their docstring examples
+# ----------------------------------------------------------------------------------
+
+def test_every_cli_module_is_checkable_and_its_examples_parse():
+    """Docstring usage is what an operator copies, and it rots when a flag is renamed."""
+    from src.data.notebook_check import CLI_MODULES, check_cli_modules
+
+    problems = check_cli_modules()
+    assert problems == [], "\n".join(f"{m}: {w}" for m, w in problems)
+    assert len(CLI_MODULES) >= 7
+
+
+def test_a_module_without_build_parser_is_reported():
+    from src.data.notebook_check import check_cli_modules
+
+    problems = check_cli_modules(["src.data.manifest"])     # a library, not a CLI
+    assert problems and "build_parser" in problems[0][1]
+
+
+def test_usage_examples_are_actually_extracted():
+    """A checker that silently finds no examples would pass forever."""
+    from src.data.notebook_check import usage_examples
+
+    ex = usage_examples("src.data.archive_cache")
+    assert ex, "no usage examples found in archive_cache's docstring"
+    assert any("pack" in e for e in ex)
+
+
+def test_inline_comments_are_not_treated_as_arguments():
+    from src.data.notebook_check import usage_examples
+
+    for e in usage_examples("src.train.smoke"):
+        assert not any(a.startswith("#") for a in e), e

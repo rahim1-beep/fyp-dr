@@ -15,10 +15,18 @@ Recorded in `docs/EXPERIMENTS.md`.
 
 **Two things before Phase 4:**
 
-1. **Commit `runs/phase3_baseline_resnet18/`** from the Kaggle notebook output —
-   `config.yaml`, `metrics.json`, `train_log.csv` (not `best.pth`). EXPERIMENTS.md marks
-   the entry *pending artefact commit* until that lands, because R4 says every number
-   traces to a file.
+1. **Pull `runs/phase3_baseline_resnet18/`** with the new fetcher:
+
+       python -m src.data.fetch_run --kernel rah098/<notebook-slug>            --run-id phase3_baseline_resnet18
+
+   **BLOCKED ON CREDENTIALS.** The stored key in `~/.kaggle/kaggle.json` returns
+   `401 Unauthenticated` — it worked in session 2, so it has been rotated or expired.
+   Create a fresh token at kaggle.com/settings → API → Create New Token, replace that
+   file, and the command runs. The `--kernel` slug is the notebook URL's
+   `<username>/<kernel-slug>`.
+
+   EXPERIMENTS.md marks the entry *pending artefact commit* until that lands, because R4
+   says every number traces to a file.
 2. **Do not read 0.6138 as ResNet18's ceiling.** QWK was still at its maximum on the last
    two epochs of an 8-epoch schedule. Arms B–F must share an epoch budget or a longer
    schedule becomes a confound with the mechanism being tested.

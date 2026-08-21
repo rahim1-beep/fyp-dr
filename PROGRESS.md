@@ -320,7 +320,12 @@ against a synthetic cache, so none of this waits on Kaggle.
 - [x] **Phase 3 acceptance MET** — QWK CI far from zero, no fatal collapse. Grade 1 is
       never predicted; that is a WARNING, not a collapse, because grade 1 is below the
       referable threshold and changes no referral (DECISION-026)
-- [ ] Commit `runs/phase3_baseline_resnet18/` from the Kaggle output (R4)
+- [x] `src/data/fetch_run.py` + `tests/test_fetch_run.py` (26) — pull a committed
+      kernel's run artefacts, verify all three files and their agreement with each other,
+      then install; never copies `*.pth`, never overwrites a committed run without
+      `--force`
+- [ ] Run it for `phase3_baseline_resnet18` (R4) — **blocked**: the stored Kaggle API key
+      returns 401, so it needs a fresh token
 - [ ] `src/eval/thresholds.py` — arm E's cut points, optimised on validation only (R3)
 
 **What the audit found — worth reading before touching this layer:**
