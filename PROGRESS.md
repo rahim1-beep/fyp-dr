@@ -1,11 +1,11 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **Phase 4 — the A–F ablation.** Phase 3 is complete: the baseline ran,
-> val QWK 0.6138 [0.5859, 0.6421], acceptance met (DECISION-026).
+> **NEXT ACTION:** **Run Phase 4 stage 1** — `notebooks/phase4_ablation.py`, six arms in
+> one committed session, ~3.8 h. Cell 1 by hand, cells 2–5 by commit.
+> Re-upload the code bundle first.
 >
-> First, commit `runs/phase3_baseline_resnet18/` from the Kaggle output —
-> `config.yaml`, `metrics.json`, `train_log.csv`. `docs/EXPERIMENTS.md` records the run
-> as **pending artefact commit** until then (R4).
+> Before pasting: `python -m src.data.notebook_check --all --self-test` and
+> `python -m src.train.smoke --all-arms`.
 
 **Current phase:** Phase 4 — Ablation arms A–F. **Phases 1–3 complete.**
 **Last updated:** 2026-08-20
@@ -263,6 +263,37 @@ Only **21 of 35,126** files fall under 50 KB, against a median of ~1,100 KB — 
 almost certainly blank, very dark, or failed captures. Four of the 21 are in `test` and two
 in `val`; if preprocessing cannot rescue them, that is worth a note in the write-up, but
 **they are not to be dropped** without a DECISIONS.md entry.
+
+---
+
+## Phase 4 — Ablation arms A–F `[~]`
+
+**Acceptance:** six arms compared on validation QWK under one identical budget, with a
+seed repeat on the contenders. The test set stays closed (R3).
+
+**Plan approved 2026-08-22.** 30 epochs, patience 7, seed 42, identical across arms;
+order A→B→C→D→E→F by increasing implementation risk.
+
+| Stage | Runs | Budget |
+|---|---|---|
+| 1 · six arms, ResNet18, seed 42 | 6 | **3.7 h** (measured: 70.6 s/epoch) |
+| 2 · top 3 arms × seeds 43, 44 | 6 | **3.7 h** |
+| 3 · winner + arm A on EfficientNet-B0 | 2 | measured by cell 4's timing probe |
+| | **14** | **≈ 10 h of 30 h/week** |
+
+- [x] `notebooks/phase4_ablation.py` — five cells, arms isolated per subprocess
+- [ ] **← RUN STAGE 1**
+- [ ] Fetch with `src.data.fetch_run`, regenerate `docs/EXPERIMENTS.md`
+- [ ] Stage 2: seed repeats on the top three
+- [ ] Stage 3: EfficientNet-B0, budgeted from cell 4's measurement
+
+**Why arm A is re-run:** the Phase 3 baseline was 8 epochs with the cosine annealed to
+3.0e-06 by the end. It is the Phase 3 record and **not** a valid comparator for a
+30-epoch arm.
+
+**If an arm crashes** the loop records it and continues to the next; whatever epochs it
+finished survive in its `train_log.csv`, and `_phase4_status.json` is rewritten after
+every arm.
 
 ---
 

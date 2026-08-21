@@ -180,17 +180,24 @@ def check(inv: Invocation) -> str | None:
         return (f"module {module} has no build_parser(), so its command line cannot be "
                 "validated. Split the parser out of main().")
 
-    parser = builder()
-    buf = io.StringIO()
-    try:
-        with contextlib.redirect_stderr(buf), contextlib.redirect_stdout(buf):
-            parser.parse_args(inv.rest)
-    except SystemExit:
-        msg = buf.getvalue().strip().splitlines()
-        return msg[-1] if msg else "argparse rejected the arguments"
-    except Exception as exc:             # noqa: BLE001
-        return f"{type(exc).__name__}: {exc}"
-    return None
+    # A runtime value can land on a typed argument (`--epochs EPOCHS` where EPOCHS is an
+    # int). The string placeholder fails `type=int`, which is a fact about the
+    # PLACEHOLDER and not about the notebook. So retry with a token that satisfies int,
+    # float and str, and only report a failure if the shape is wrong under both.
+    for stand_in in (PLACEHOLDER, "1"):
+        argv = [stand_in if a is PLACEHOLDER else a for a in inv.rest]
+        parser = builder()
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stderr(buf), contextlib.redirect_stdout(buf):
+                parser.parse_args(argv)
+            return None
+        except SystemExit:
+            last = buf.getvalue().strip().splitlines()
+            why = last[-1] if last else "argparse rejected the arguments"
+        except Exception as exc:         # noqa: BLE001
+            why = f"{type(exc).__name__}: {exc}"
+    return why
 
 
 # ----------------------------------------------------------------------------------

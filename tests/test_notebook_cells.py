@@ -251,3 +251,20 @@ def test_inline_comments_are_not_treated_as_arguments():
 
     for e in usage_examples("src.train.smoke"):
         assert not any(a.startswith("#") for a in e), e
+
+
+def test_a_runtime_value_on_a_typed_argument_is_not_a_false_positive():
+    """`--epochs EPOCHS` where EPOCHS is an int variable. The string placeholder fails
+    argparse's type=int, which is a fact about the placeholder, not the notebook. A
+    checker that cries wolf on correct code gets ignored."""
+    inv = _one('run([sys.executable, "-m", "src.train.train", "--arm", "A", '
+               '"--cache-root", CACHE, "--run-id", RID, "--epochs", EPOCHS, '
+               '"--seed", SEED])')
+    assert inv.unresolved >= 4
+    assert check(inv) is None
+
+
+def test_a_genuinely_wrong_shape_still_fails_with_runtime_values():
+    """The retry must not turn the checker into a rubber stamp."""
+    inv = _one('run([sys.executable, "-m", "src.train.train", "--epochs", EPOCHS])')
+    assert check(inv) is not None        # --arm and --cache-root are required
