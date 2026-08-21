@@ -907,6 +907,86 @@ bytes that survive is a verification of something else.
 
 ---
 
+## DECISION-022 — No notebook command line runs before something has executed it
+
+- **Date:** 2026-08-21
+- **Status:** Accepted — forced by a third lost session
+- **Deviates from proposal:** No
+
+### What happened
+
+The Phase 2 rebuild ran for **8.1 hours** and died in cell 5 with:
+
+    archive_cache.py: error: argument cmd: invalid choice: '/kaggle/working/processed'
+
+A missing `pack` subcommand, rejected by argparse in 0.0 seconds — after the build was
+finished, after reconciliation had passed, after `READY TO ARCHIVE` had printed.
+`/kaggle/working` is wiped, so all of it went.
+
+**Three sessions, about 13 hours, none of it lost to the modelling.** DECISION-021 fixed
+the truncation and this failed one layer further out: the fix itself was invoked wrongly.
+Both copies in the repo — `notebooks/phase2_build_cache.py` and the runbook — contain
+`pack`, so what ran had drifted from what was written, and nothing anywhere would have
+noticed either way.
+
+### The actual defect
+
+**Notebook cells were the only executable code in this project that nothing imported,
+nothing type-checked, and no test ran.** `archive_cache.py` had 13 unit tests. Its CLI had
+never once been invoked the way the notebook invoked it. Every other layer here is
+defended by tests that run on every change; the cells are strings in a docstring, and they
+are simultaneously the code that runs **last**, **once**, **after hours of compute**, on a
+machine that then erases itself. That is the worst possible combination, and it was the
+least defended.
+
+### The rule
+
+**Every command line a notebook will run is validated against the real parser of the
+module it calls, and the packaging path is executed for real, before any long work
+starts.**
+
+Four parts, and each covers a hole the others do not:
+
+1. **`build_parser()` is split out of `main()`** in `preprocess`, `reconcile_cache`,
+   `archive_cache` and `train`. A parser that only exists inside `main()` cannot be
+   checked without running the program.
+2. **`src/data/notebook_check.py`** reads `CELLS` out of every `notebooks/*.py`, extracts
+   each `[sys.executable, "-m", ...]` list — including one assigned to a variable and run
+   from another cell — substitutes a placeholder for values only known at runtime, and
+   feeds the rest to the target module's parser. It also binds every direct call into
+   `src.*` (`unpack(...)`, `resolve_input(...)`) against the real signature, because not
+   every mistake is a subprocess and argparse never sees those.
+3. **`--self-test` runs pack → verify → unpack for real** on a three-file temporary
+   directory. This is the part that matters: an inspection proves the arguments are
+   shaped right; only an execution proves the path works. It takes about a second.
+4. **`tests/test_notebook_cells.py`** runs all of it on every test run, and includes the
+   8.1-hour failure verbatim as a negative case — a `src.data.archive_cache` invocation
+   with the subcommand removed, which `check()` must reject. A checker that cannot fail
+   proves nothing.
+
+### The paste is what runs, so the paste is what gets checked
+
+The repo's copy of a cell is not what executes on Kaggle — a **paste** is, and the paste
+is what drifted. Two things follow, and both are now in place:
+
+- **Cell 1 of every notebook runs `notebook_check --all --self-test`.** It costs seconds
+  and it happens before anything expensive.
+- **The archive command is built and validated in cell 1, as `PACK_CMD`, and cell 5 runs
+  only the variable.** The list that executes is the list that was checked, in the same
+  pasted notebook, in minute one. Retyping the command in cell 5 is exactly how the
+  subcommand went missing, so cell 5 no longer contains a command to retype.
+
+### The general rule, which outlives this bug
+
+Each of the last three failures was in the layer *around* the work rather than the work
+itself: output packaging, then mount layout, then an argument list. The pattern is that
+**the glue is the least-tested and most expensive part of the system**, because it runs
+once, at the end, where a failure costs everything before it. Anything that runs last
+gets tested first, and anything that cannot be tested cheaply gets executed cheaply on a
+toy input before it is trusted with a real one.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

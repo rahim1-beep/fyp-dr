@@ -148,6 +148,11 @@ def run(cmd):
     return rc
 
 
+# DECISION-022: every command line this notebook will run, checked against the real
+# parsers, plus a real pack/verify/unpack on a toy directory. Seconds, and it is the
+# check that three lost sessions paid for.
+assert run([sys.executable, "-m", "src.data.notebook_check", "--all", "--self-test"]) == 0
+
 # CLAUDE.md S7. src/train/train.py runs it again itself before it touches a weight.
 assert run([sys.executable, "-m", "pytest", "tests/test_no_leakage.py", "-q"]) == 0
 '''

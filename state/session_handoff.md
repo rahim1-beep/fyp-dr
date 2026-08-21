@@ -8,6 +8,17 @@
 
 ## FIRST ACTION NEXT SESSION
 
+**The Phase 2 cache has to be rebuilt — this is the THIRD attempt, and the two failures
+were both in the glue, not the work.** Session 2 lost the output to the 500-file cap
+(DECISION-021); session 3 ran 8.1 hours and died in cell 5 on a missing `pack` subcommand
+(DECISION-022). Roughly 13 hours, none of it lost to preprocessing or modelling.
+
+Before pasting anything into Kaggle, run `python -m src.data.notebook_check --all
+--self-test` locally. It validates every command line in every notebook cell against the
+real parsers and executes pack/verify/unpack on a toy directory.
+
+**Original note follows.**
+
 **The Phase 2 cache has to be rebuilt.** The 2026-08-21 build was correct — reconciliation
 passed, 38,788 images, 0.836 GB — but Kaggle's **500-file cap on notebook output** kept
 499 of them when the session was saved, silently, after every check had run.

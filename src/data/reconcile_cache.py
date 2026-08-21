@@ -172,7 +172,9 @@ def decode_check(paths: list[Path], size: int, sample: int, seed: int = 42) -> l
     return bad
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """The parser, separate from main(), so an invocation can be checked without
+    running it (DECISION-022)."""
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -185,7 +187,11 @@ def main() -> int:
     ap.add_argument("--decode-sample", type=int, default=400,
                     help="how many files to fully decode (0 = all)")
     ap.add_argument("--decode-all", action="store_true")
-    args = ap.parse_args()
+    return ap
+
+
+def main() -> int:
+    args = build_parser().parse_args()
 
     cfg = load_preprocess_config(args.config)
     splits = args.splits or (EYEPACS_SPLITS + APTOS_SPLITS)

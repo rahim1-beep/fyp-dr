@@ -1,13 +1,13 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **Rebuild the Phase 2 cache on Kaggle** — the first build was correct
-> but its OUTPUT was truncated to 499 of 38,788 files by Kaggle's 500-file cap, and
-> `/kaggle/working` is wiped, so `fyp-dr-eyepacs-224` does not exist (DECISION-021).
-> `notebooks/phase2_build_cache.py` now has a **cell 5** that packs the cache into one
-> archive, verifies it by reading the central directory back, and only then deletes the
-> loose tree. ~2.5 h, CPU, Accelerator None.
+> **NEXT ACTION:** **Rebuild the Phase 2 cache** — third attempt. The 8.1-hour run was
+> correct and died in cell 5 on a malformed command line (DECISION-022). Cell 1 now
+> validates every invocation this notebook will make and executes the pack path on a toy
+> directory before anything long starts; cell 5 runs a command built and checked in cell 1
+> rather than one retyped there.
 >
-> Then Phase 3: `notebooks/phase3_baseline.py`, GPU + Internet ON.
+> Before pasting anything: `.venv/Scripts/python -m src.data.notebook_check --all
+> --self-test` should print `NOTEBOOK CHECK PASSED`.
 
 **Current phase:** Phase 2 rebuild, then Phase 3. The Phase 2 *pipeline* is done and
 proven; the published artefact has to be produced again (DECISION-021).
@@ -96,7 +96,11 @@ Phase 7 · 224×224 headline (DECISION-005) · no Intel XPU/IPEX (DECISION-003)
       `fyp-dr-eyepacs-224` does not exist (DECISION-021)
 - [x] `src/data/archive_cache.py` + `tests/test_archive.py` (13) — pack to one file,
       verify the central directory, refuse a short source, re-count on extract
-- [ ] **← RE-RUN THE BUILD** with cell 5, then publish the single archive
+- [x] `src/data/notebook_check.py` + `tests/test_notebook_cells.py` (30) — every
+      notebook command line validated against its module's real parser, every direct call
+      bound against the real signature, and the pack path executed on a toy tree
+      (DECISION-022)
+- [ ] **← RE-RUN THE BUILD** (third attempt), then publish the single archive
 
 ### The publishing failure — worth reading before the rebuild
 

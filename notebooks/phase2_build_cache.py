@@ -27,7 +27,6 @@ from pathlib import Path
 
 WORK = Path("/kaggle/working")
 REPO = WORK / "fyp-dr"
-OUT  = WORK / "processed"
 
 print("inputs mounted:", sorted(p.name for p in Path("/kaggle/input").iterdir()))
 
@@ -88,6 +87,37 @@ def run(cmd):
     print(f"[exit {rc} in {(time.time() - t0) / 60:.1f} min]", flush=True)
     return rc
 
+
+# -- The commands the later cells will run, DEFINED AND VALIDATED HERE -------
+# DECISION-022. Three sessions were lost at the packaging step, the last after 8.1 hours,
+# to a command line nobody had ever executed: a missing `pack` subcommand that argparse
+# rejected in 0.0 seconds once every piece of real work was already finished.
+#
+# So the archive command is built HERE, checked HERE against the module's real parser,
+# and cell 5 only runs the variable. The command that executes is the command that was
+# validated, and it is validated in minute one.
+OUT = WORK / "processed"
+ARCHIVE = WORK / "fyp-dr-eyepacs-224.zip"
+
+PACK_CMD = [
+    sys.executable, "-m", "src.data.archive_cache", "pack",
+    "--cache-root", OUT,
+    "--out", ARCHIVE,
+    "--arcname", "processed",
+    "--expect-images", "38788",
+    "--expect-gb", "0.836",
+]
+
+from src.data.notebook_check import validate_argv
+
+why = validate_argv(PACK_CMD)
+if why:
+    raise SystemExit(f"PACK_CMD is not a valid invocation: {why}")
+print("\nPACK_CMD validated against src.data.archive_cache's own parser")
+
+# And the static + executed check over every cell in the repo's copy of this notebook,
+# including a real pack -> verify -> unpack on a three-file directory. Seconds.
+assert run([sys.executable, "-m", "src.data.notebook_check", "--all", "--self-test"]) == 0
 
 # CLAUDE.md S7  -  the leakage tests run before anything is written, every time.
 assert run([sys.executable, "-m", "pytest", "tests/test_no_leakage.py", "-q"]) == 0, \
@@ -167,16 +197,9 @@ CELL_5 = r'''
 # reconciliation had passed, at the boundary between the session and the output. Then
 # /kaggle/working is wiped. One archive is one file, and one file is under any
 # file-count cap.
-ARCHIVE = WORK / "fyp-dr-eyepacs-224.zip"
-
-rc_pack = run([
-    sys.executable, "-m", "src.data.archive_cache", "pack",
-    "--cache-root", OUT,
-    "--out", ARCHIVE,
-    "--arcname", "processed",
-    "--expect-images", "38788",
-    "--expect-gb", "0.836",
-])
+# PACK_CMD was built AND validated in cell 1 (DECISION-022). Do not retype it here:
+# retyping is exactly how the subcommand went missing and cost 8.1 hours.
+rc_pack = run(PACK_CMD)
 
 if rc_pack != 0:
     raise SystemExit(

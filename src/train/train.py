@@ -75,7 +75,9 @@ def leakage_gate(skip: bool = False) -> None:
         )
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """The parser, separate from main(), so an invocation can be checked without
+    running it (DECISION-022)."""
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -98,6 +100,11 @@ def main() -> int:
     ap.add_argument("--seed", type=int)
     ap.add_argument("--skip-gate", action="store_true")
     ap.add_argument("--log-every", type=int, default=0)
+    return ap
+
+
+def main() -> int:
+    ap = build_parser()
     args = ap.parse_args()
 
     arm = args.arm.upper()

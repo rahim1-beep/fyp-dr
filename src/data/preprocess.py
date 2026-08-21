@@ -848,7 +848,9 @@ def _git_sha() -> str:
         return "unknown"
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """The parser, separate from main(), so an invocation can be checked without
+    running it (DECISION-022)."""
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -866,6 +868,11 @@ def main() -> int:
     ap.add_argument("--limit", type=int, help="process only the first N rows")
     ap.add_argument("--workers", type=int, default=1,
                     help="process pool size; use os.cpu_count() on Kaggle (4)")
+    return ap
+
+
+def main() -> int:
+    ap = build_parser()
     args = ap.parse_args()
 
     if bool(args.manifest) == bool(args.split):

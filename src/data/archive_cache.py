@@ -205,7 +205,10 @@ def unpack(archive: Path, dest: Path, *, expect_images: int | None = None) -> Pa
     return out
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """The parser, separate from main(), so an invocation can be checked without
+    running it. `src/data/notebook_check.py` and `tests/test_notebook_cells.py` both
+    parse notebook command lines against this."""
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -232,7 +235,11 @@ def main() -> int:
     u.add_argument("--dest", type=Path, required=True)
     u.add_argument("--expect-images", type=int, default=38788)
 
-    args = ap.parse_args()
+    return ap
+
+
+def main() -> int:
+    args = build_parser().parse_args()
 
     if args.cmd == "unpack":
         out = unpack(args.archive, args.dest, expect_images=args.expect_images)
