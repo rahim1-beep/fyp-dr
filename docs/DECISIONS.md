@@ -1106,6 +1106,83 @@ it is cheapest to run it deliberately on synthetic data first.
 
 ---
 
+## DECISION-025 — `train.main()` runs end to end locally before any session starts
+
+- **Date:** 2026-08-22
+- **Status:** Accepted — forced by the third consecutive failure inside `main()`
+- **Deviates from proposal:** No
+
+### What happened
+
+Three Kaggle sessions in a row died inside `src/train/train.py`, each one step further in:
+
+    1. describe_balance   AttributeError: 'RandomSampler' object has no attribute 'weights'
+    2. yaml.safe_dump     RepresenterError: cannot represent an object '2.10.0+cu128'
+
+`torch.__version__` is a `TorchVersion`, a `str` **subclass**, and `yaml.SafeDumper`
+dispatches on **exact type**, not `isinstance` — so it refuses. Same for torchvision's.
+
+The fix is not to special-case torch. **Nothing reaches `safe_dump` unless it is a
+primitive**: `to_primitive` recursively coerces the whole run config, because the next
+exotic type will be a numpy scalar from a YAML file, a `Path`, or an enum from a library
+nobody has added yet.
+
+### The actual defect, again
+
+Every one of these was in `main()`, past where the unit tests reach. `fit`, `evaluate`,
+`build_loaders`, `build_loss`, `describe_balance`, the metrics — all green, all along.
+**`main()` itself had never once executed start to finish.** It was the only substantial
+function in the project with no test, and it was the function every session ran first.
+
+That is the same shape as DECISION-022, where notebook cells were the untested glue. The
+common thread across five failures now: **the least-tested code is whatever runs last and
+costs most, because it is the code that is hardest to run cheaply — which is exactly why
+it has to be made cheap to run.**
+
+### The rule
+
+`python -m src.train.smoke` builds a throwaway 90-image cache and a patient-disjoint split
+trio with real provenance headers, then calls **the real `main()` through its real argv**
+and checks that `config.yaml` and `metrics.json` come out well-formed. About 20 seconds
+per arm on CPU, no network, no GPU, no real data.
+
+Three flags on `train.py` make it possible, and all three are recorded in the run config
+so a smoke run can never be mistaken for a result:
+
+| flag | why |
+|---|---|
+| `--splits-root` | point the real `main()` at a synthetic partition; `train.py` prints a loud warning and `config.yaml` records the path |
+| `--no-pretrained` | no network in the test; it changes what a run measures, so it sets `is_smoke_run` |
+| `--limit-train` | already existed; same treatment |
+
+`config.yaml` gains `is_smoke_run` and `metrics.json` gains `is_smoke_test`, both true if
+any of the three was used.
+
+**It runs in three places**: `tests/test_train_smoke.py` (arms A and F, ~1 min, the
+slowest tests in the suite and worth it), cell 1 of the Phase 3 notebook before anything
+is spent, and `--all-arms` by hand before a real session.
+
+**Arm A and arm F are the pair that matters.** A has no sampler and one origin; F has a
+weighted sampler and two. Between them they touch every branch in `main()`. Arms B–E are
+covered at unit level and by `--all-arms`.
+
+### What building the fixture immediately caught
+
+Arm F could not run at all: the fixture had no APTOS splits. Arm F is the last arm in the
+ablation, so the real first execution of that path would have come after five other arms'
+worth of GPU time. The fixture now writes `aptos_{train,val,test}` too, with hash-like ids
+and one image per patient per DECISION-004, and the arm-F smoke shows the `p_aptos` column
+DECISION-007 requires.
+
+### What it deliberately does not do
+
+It asserts **nothing about the score**. Twelve images per class cannot produce a meaningful
+QWK, and asserting one would make this a flaky test instead of a wiring check. It asserts
+the pipeline runs and its artefacts are readable. The collapse detector fires on every
+smoke run, correctly, and that is expected rather than a failure.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

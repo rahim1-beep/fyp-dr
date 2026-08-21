@@ -144,6 +144,13 @@ def run(cmd):
 # check that three lost sessions paid for.
 assert run([sys.executable, "-m", "src.data.notebook_check", "--all", "--self-test"]) == 0
 
+# DECISION-025: run the REAL train.main() end to end on a synthetic 90-image fixture,
+# on CPU, before spending anything. Two sessions died inside main() on code no unit test
+# reaches -- a sampler attribute and a yaml dump -- and both would have failed here in
+# under a minute. Arm A and arm F between them touch every branch in main().
+assert run([sys.executable, "-m", "src.train.smoke", "--arm", "A"]) == 0
+assert run([sys.executable, "-m", "src.train.smoke", "--arm", "F"]) == 0
+
 # CLAUDE.md S7. src/train/train.py runs it again itself before it touches a weight.
 assert run([sys.executable, "-m", "pytest", "tests/test_no_leakage.py", "-q"]) == 0
 '''

@@ -1,12 +1,13 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **Run the Phase 3 baseline** — `notebooks/phase3_baseline.py`.
-> GPU T4, **Internet ON**, two inputs (`fyp-dr-eyepacs-224`, `fyp-dr-code`).
-> Cells 1–2 by hand (setup + a 5-minute smoke run), then `RUN_SMOKE = False` and
-> Save & Run All for the 8-epoch baseline.
+> **NEXT ACTION:** **Re-run the Phase 3 smoke, then the baseline.**
+> `notebooks/phase3_baseline.py` — GPU T4, Internet ON, two inputs. Re-upload the code
+> bundle first.
 >
-> Acceptance is a *correct* pipeline, not a good score: a val QWK whose CI excludes zero
-> and a confusion matrix that has not collapsed. Cell 4 checks both and says which.
+> Before pasting: `python -m src.data.notebook_check --all --self-test` and
+> `python -m src.train.smoke --all-arms`. The second runs the real `train.main()` on a
+> synthetic fixture in about two minutes and would have caught all three of the failures
+> that have hit this phase.
 
 **Current phase:** Phase 3 — Baseline. **Phase 2 is done**: built, verified, published.
 **Last updated:** 2026-08-20
@@ -310,6 +311,11 @@ against a synthetic cache, so none of this waits on Kaggle.
       training path — `RandomSampler` has no `.weights` (DECISION-024). Fixed, plus
       end-to-end tests for the four config branches that no arm had ever run
 - [x] GPU image versions recorded: same as CPU, `+cu128` builds (DECISION-019)
+- [x] Second smoke failure: `yaml.safe_dump` refused `torch.__version__`, a `str`
+      subclass. Whole run config is now coerced to primitives (DECISION-025)
+- [x] `src/train/smoke.py` + `tests/test_train_smoke.py` (14) — the REAL `main()` end to
+      end on a synthetic 90-image fixture, ~20 s/arm on CPU. It immediately found that
+      arm F could not run at all for want of APTOS splits in the fixture
 - [ ] **← RE-RUN THE SMOKE TEST, then the baseline** — ResNet18, arm A, 8 epochs
 - [ ] `src/eval/thresholds.py` — arm E's cut points, optimised on validation only (R3)
 

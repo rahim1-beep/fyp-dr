@@ -13,6 +13,12 @@
 0 missing, 0 orphaned, 800 decoded with 0 bad, mean 22.6 KB/image. The same four
 `ok:no-retina` images as before (DECISION-018), all still in their splits.
 
+**Run `python -m src.train.smoke --all-arms` before any Kaggle session.** It executes the
+real `train.main()` on a synthetic 90-image fixture, about 20 seconds per arm on CPU, and
+it is the check that three failed sessions paid for (DECISION-025). Two of those three
+died inside `main()` on code no unit test reached — a sampler attribute and a YAML dump —
+and both fail in this smoke in under a minute.
+
 The arm A smoke run got as far as the balance table and died there:
 `'RandomSampler' object has no attribute 'weights'`. `DataLoader(shuffle=True)` substitutes
 a `RandomSampler`, so an unbalanced arm never sees the `None` that `build_sampler`

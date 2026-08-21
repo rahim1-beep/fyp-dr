@@ -35,19 +35,25 @@ ARM_F_SPLITS = {
 }
 
 
-def split_path(name: str) -> Path:
-    return SPLIT_DIR / f"{name}.csv"
+def split_path(name: str, splits_root: Path | None = None) -> Path:
+    return (Path(splits_root) if splits_root else SPLIT_DIR) / f"{name}.csv"
 
 
-def read_header(name: str) -> list[str]:
+def read_header(name: str, splits_root: Path | None = None) -> list[str]:
     """The provenance comment block, for logging into a run config (R6)."""
-    lines = split_path(name).read_text(encoding="utf-8").splitlines()
+    lines = split_path(name, splits_root).read_text(encoding="utf-8").splitlines()
     return [l for l in lines if l.startswith("#")]
 
 
-def load_split(name: str) -> pd.DataFrame:
-    """Load one split CSV. `name` is e.g. 'train', 'val', 'test', 'aptos_train'."""
-    path = split_path(name)
+def load_split(name: str, splits_root: Path | None = None) -> pd.DataFrame:
+    """Load one split CSV. `name` is e.g. 'train', 'val', 'test', 'aptos_train'.
+
+    `splits_root` defaults to the committed `data/splits/`. It exists so the end-to-end
+    smoke run can point the REAL `main()` at a synthetic partition (DECISION-025); any
+    run that uses it records the fact in its config, and `train.py` prints a warning,
+    because a run against uncommitted splits is not a result.
+    """
+    path = split_path(name, splits_root)
     if not path.exists():
         raise FileNotFoundError(
             f"{path} does not exist. Generate splits with:\n"
@@ -66,7 +72,8 @@ def load_split(name: str) -> pd.DataFrame:
     return df
 
 
-def load_arm_splits(arm: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def load_arm_splits(arm: str, splits_root: Path | None = None
+                    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Return (train, val, test) for an ablation arm.
 
     Arms A-E use EyePACS alone. Arm F pools APTOS into train and val only.
@@ -74,10 +81,11 @@ def load_arm_splits(arm: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]
     arm = arm.upper()
 
     if arm == "F":
-        parts = {k: pd.concat([load_split(n) for n in names], ignore_index=True)
+        parts = {k: pd.concat([load_split(n, splits_root) for n in names],
+                              ignore_index=True)
                  for k, names in ARM_F_SPLITS.items()}
     elif arm in set("ABCDE"):
-        parts = {k: load_split(k) for k in ("train", "val", "test")}
+        parts = {k: load_split(k, splits_root) for k in ("train", "val", "test")}
     else:
         raise ValueError(f"Unknown arm {arm!r}; expected one of A B C D E F")
 

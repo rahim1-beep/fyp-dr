@@ -59,6 +59,45 @@ def merge(base: dict, *overlays: dict) -> dict:
     return out
 
 
+def to_primitive(value):
+    """Recursively coerce a value to plain builtins, for `yaml.safe_dump`.
+
+    WHY THIS EXISTS (DECISION-025). `yaml.SafeDumper` dispatches on EXACT type, not
+    `isinstance`, so anything that merely subclasses a builtin is refused:
+
+        yaml.representer.RepresenterError: ('cannot represent an object', '2.10.0+cu128')
+
+    `torch.__version__` is a `TorchVersion`, a `str` subclass. So is torchvision's. The
+    fix is not to special-case torch: it is that **nothing reaches safe_dump unless it is
+    a primitive**, because the next exotic type will be a numpy scalar from a config, a
+    `Path`, or an enum from a library that has not been added yet.
+    """
+    import enum
+
+    if value is None or type(value) in (bool, int, float, str):
+        return value
+    if isinstance(value, enum.Enum):
+        return to_primitive(value.value)
+    if isinstance(value, dict):
+        return {to_primitive(k): to_primitive(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [to_primitive(v) for v in value]
+    if isinstance(value, bool):          # before int: bool is an int subclass
+        return bool(value)
+    if isinstance(value, int):
+        return int(value)
+    if isinstance(value, float):
+        return float(value)
+    if isinstance(value, str):           # str SUBCLASSES land here: TorchVersion, etc.
+        return str(value)
+    if hasattr(value, "item"):           # numpy / torch scalars
+        try:
+            return to_primitive(value.item())
+        except Exception:                # noqa: BLE001
+            pass
+    return str(value)                    # Path, dataclass, anything else: legible, dumpable
+
+
 def metrics_by_dataset(val_df, idx, y_true, y_pred, *, seed: int = 42,
                        bootstrap_n: int = 200) -> dict:
     """Per-origin metrics for a pooled arm, or {} when there is only one origin.
@@ -125,6 +164,12 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--device", default="auto")
     ap.add_argument("--seed", type=int)
     ap.add_argument("--skip-gate", action="store_true")
+    ap.add_argument("--splits-root", type=Path,
+                    help="read split CSVs from here instead of data/splits/. For the "
+                         "end-to-end smoke run only; recorded in the run config")
+    ap.add_argument("--no-pretrained", action="store_true",
+                    help="build the model without pretrained weights. Smoke runs only - "
+                         "it changes what the run measures, and it is recorded")
     ap.add_argument("--log-every", type=int, default=0)
     return ap
 
@@ -161,6 +206,8 @@ def main() -> int:
                                if k in ModelConfig.__dataclass_fields__})
     if args.arch:
         model_cfg = ModelConfig(**{**model_cfg.__dict__, "arch": args.arch})
+    if args.no_pretrained:
+        model_cfg = ModelConfig(**{**model_cfg.__dict__, "pretrained": False})
 
     run_dir = Path(args.runs_root) / args.run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -172,7 +219,11 @@ def main() -> int:
     leakage_gate(args.skip_gate)
 
     # ---- data --------------------------------------------------------------------
-    train_df, val_df, _test_df = load_arm_splits(arm)     # test deliberately unused (R3)
+    if args.splits_root:
+        print(f"\n!! --splits-root {args.splits_root}: NOT the committed partition. "
+              "This is a smoke run, not a result.")
+    # test frame deliberately unused (R3)
+    train_df, val_df, _test_df = load_arm_splits(arm, args.splits_root)
     if args.limit_train:
         train_df = train_df.head(args.limit_train).reset_index(drop=True)
         print(f"\n!! --limit-train {args.limit_train}: this is a SMOKE TEST, not a result")
@@ -241,6 +292,8 @@ def main() -> int:
         "cache_root": str(args.cache_root),
         "limit_train": args.limit_train,
         "skip_gate": args.skip_gate,
+        "splits_root": str(args.splits_root) if args.splits_root else None,
+        "is_smoke_run": bool(args.splits_root or args.no_pretrained or args.limit_train),
         "model": model_cfg.__dict__,
         "train": train_cfg,
         "imbalance": imbalance,
@@ -248,11 +301,14 @@ def main() -> int:
         "normalisation": {"mean": list(mean), "std": list(std), "source": "timm default_cfg"},
         "n_train": int(len(train_df)),
         "n_val": int(len(val_df)),
-        "split_provenance": {n: read_header(n) for n in ("train", "val")},
+        "split_provenance": {n: read_header(n, args.splits_root)
+                             for n in ("train", "val")},
         "versions": _versions(),
     }
+    # EVERYTHING is coerced, not just the versions. safe_dump refuses any type it does
+    # not know exactly, and the run config is assembled from a dozen sources.
     (run_dir / "config.yaml").write_text(
-        yaml.safe_dump(run_config, sort_keys=False), encoding="utf-8"
+        yaml.safe_dump(to_primitive(run_config), sort_keys=False), encoding="utf-8"
     )
     print(f"\nrun config -> {run_dir / 'config.yaml'}")
 
@@ -290,7 +346,7 @@ def main() -> int:
         "stop_reason": state.stop_reason,
         "epochs_run": len(state.history),
         "wall_clock_minutes": (time.time() - t_start) / 60,
-        "is_smoke_test": bool(args.limit_train),
+        "is_smoke_test": bool(args.limit_train or args.splits_root or args.no_pretrained),
     })
 
     # Arm F reports by source dataset — this is what the returned index is for.
