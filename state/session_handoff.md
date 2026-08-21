@@ -8,36 +8,24 @@
 
 ## FIRST ACTION NEXT SESSION
 
-**Phase 2 is DONE.** The cache is built, verified and published:
-`rah098/fyp-dr-eyepacs-224` v1, private, 918.08 MB — 38,788 images, 21,225 patients,
-0 missing, 0 orphaned, 800 decoded with 0 bad, mean 22.6 KB/image. The same four
-`ok:no-retina` images as before (DECISION-018), all still in their splits.
+**Phase 3 is complete.** Arm A baseline: val QWK **0.6138** [0.5859, 0.6421], accuracy
+0.7965 against a 0.7369 majority rate, balanced accuracy 0.4163, referable sensitivity
+0.5131 / specificity 0.9804. Best at epoch 6 of 8, QWK rising monotonically from 0.025.
+Recorded in `docs/EXPERIMENTS.md`.
 
-**Run `python -m src.train.smoke --all-arms` before any Kaggle session.** It executes the
-real `train.main()` on a synthetic 90-image fixture, about 20 seconds per arm on CPU, and
-it is the check that three failed sessions paid for (DECISION-025). Two of those three
-died inside `main()` on code no unit test reached — a sampler attribute and a YAML dump —
-and both fail in this smoke in under a minute.
+**Two things before Phase 4:**
 
-The arm A smoke run got as far as the balance table and died there:
-`'RandomSampler' object has no attribute 'weights'`. `DataLoader(shuffle=True)` substitutes
-a `RandomSampler`, so an unbalanced arm never sees the `None` that `build_sampler`
-returned. Fixed, and the audit it prompted found three more config branches that no arm
-had ever executed (DECISION-024). Re-run the smoke test first; it costs five minutes.
+1. **Commit `runs/phase3_baseline_resnet18/`** from the Kaggle notebook output —
+   `config.yaml`, `metrics.json`, `train_log.csv` (not `best.pth`). EXPERIMENTS.md marks
+   the entry *pending artefact commit* until that lands, because R4 says every number
+   traces to a file.
+2. **Do not read 0.6138 as ResNet18's ceiling.** QWK was still at its maximum on the last
+   two epochs of an 8-epoch schedule. Arms B–F must share an epoch budget or a longer
+   schedule becomes a confound with the mechanism being tested.
 
-**Run the Phase 3 baseline**: `notebooks/phase3_baseline.py`. GPU T4, Internet **ON**,
-two inputs only (`fyp-dr-eyepacs-224` and `fyp-dr-code`). Cells 1–2 interactively, then
-`RUN_SMOKE = False` and Save & Run All for cells 3–5.
-
-**Before pasting anything**, run `python -m src.data.notebook_check --all --self-test`
-locally. It validates every command line in every cell against the real parsers and
-executes pack/verify/unpack on a toy tree. Three sessions were lost to the glue around
-the work (DECISION-021/022/023); this check is what those paid for.
-
-**Kaggle auto-extracts published archives.** The dataset mounts as
-`fyp-dr-eyepacs-224/processed/...`, not as a `.zip`. Cell 1 calls
-`archive_cache.resolve_cache`, which handles either and verifies the image count
-regardless — do not replace it with a hardcoded path (DECISION-023).
+**The baseline is correct, not good.** Referable sensitivity 0.5131 means about half of
+referable cases are missed; that is the number the ablation exists to move, and it is the
+honest headline for the write-up.
 
 ## What was done this session
 

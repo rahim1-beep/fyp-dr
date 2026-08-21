@@ -16,7 +16,12 @@ BALANCED ACCURACY IS REPORTED ALONGSIDE ACCURACY, ALWAYS (R2). Val and test keep
 natural imbalanced distribution, so plain accuracy on them is dominated by grade 0.
 
 For grades 3 and 4, report bootstrap CIs, never bare point estimates: the test split
-holds 133 grade-3 and 98 grade-4 images (DECISION-006). A recall that moves by 0.01 per
+holds 133 grade-3 and 98 grade-4 images (DECISION-006).
+
+`detect_collapse` is SEVERITY-AWARE (DECISION-026): a never-predicted grade at or above
+the referable threshold is fatal, one below it is a warning. A model that cannot emit
+grade 4 cannot flag proliferative disease; a model that folds grade 1 into grade 0
+changes no referral decision and is what an unbalanced baseline looks like. A recall that moves by 0.01 per
 image is not a point estimate.
 
 Implemented on numpy rather than deferred to sklearn: QWK's weighting is three lines, and
@@ -159,42 +164,98 @@ def referable_metrics(y_true, y_pred, threshold: int = 2) -> dict[str, float]:
 
 @dataclass
 class CollapseReport:
+    """The verdict of the detection rule, at one of three levels.
+
+    `collapsed` means FATAL — stop and diagnose. `warnings` are real findings that are
+    not fatal, and they are reported rather than swallowed: a warning that nothing prints
+    is the same as no rule at all.
+    """
+
     collapsed: bool
     reasons: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
-    def __bool__(self) -> bool:          # `if detect_collapse(...):`
+    @property
+    def level(self) -> str:
+        if self.collapsed:
+            return "collapsed"
+        return "warning" if self.warnings else "none"
+
+    def __bool__(self) -> bool:          # `if detect_collapse(...):` means FATAL
         return self.collapsed
 
     def __str__(self) -> str:
-        return "; ".join(self.reasons) if self.reasons else "no collapse detected"
+        parts = list(self.reasons) + [f"[warning] {w}" for w in self.warnings]
+        return "; ".join(parts) if parts else "no collapse detected"
 
 
-def detect_collapse(y_true, y_pred, near_majority: float = 0.02) -> CollapseReport:
-    """CLAUDE.md §2: an all-zero confusion column, or accuracy near the majority rate.
+def detect_collapse(y_true, y_pred, near_majority: float = 0.02,
+                    referable_threshold: int = 2) -> CollapseReport:
+    """CLAUDE.md §2, made severity-aware. DECISION-026.
 
-    Both are the same underlying failure — the model predicting its way to a good-looking
-    number by ignoring the rare classes — and both are invisible in a loss curve, which
-    is why this is checked explicitly rather than eyeballed.
+    The rule exists to catch a model that has learned the PRIOR and nothing else — the
+    one that predicts the majority class everywhere and still posts a respectable
+    accuracy. Three things are fatal:
 
-    An all-zero COLUMN, for a grade that has support in y_true, means the model never
-    once predicted a grade that was really there — the fatal one: the system cannot flag
-    a proliferative case even in principle. An all-zero ROW just means that grade was
-    absent from this evaluation set, which is a property of the data, so a column that is
-    zero only because the row is zero is not reported.
+      1. Predictions concentrated in a single class. That is the degenerate case.
+      2. Accuracy within `near_majority` of the majority-class rate.
+      3. A grade AT OR ABOVE the referable threshold that is never predicted while it
+         has support.
+
+    (3) is the part that is not simply "an all-zero column". A never-predicted grade 4 is
+    catastrophic: proliferative disease is the thing this system exists to catch, and a
+    model that cannot emit that grade cannot flag it even in principle. A never-predicted
+    grade 1 is a different animal — mild DR is BELOW the referable threshold, so
+    absorbing it into grade 0 changes no referral decision, and QWK weights a 1-called-0
+    error at 1/16 of a 4-called-0 error. It is the expected behaviour of an unbalanced
+    baseline and it is the specific thing arms B–E exist to fix.
+
+    So a never-predicted grade below the referable threshold is a WARNING. It is still
+    reported, in the run log and in metrics.json, because it is the number that has to
+    improve — it is just not a reason to halt a pipeline that is demonstrably working.
+
+    An all-zero ROW means that grade was absent from this evaluation set, which is a
+    property of the data, so a column that is zero only because the row is zero is not
+    reported at all.
     """
     cm = confusion_matrix(y_true, y_pred)
-    reasons = []
-
-    # Only grades that ACTUALLY OCCUR in y_true can be "never predicted" in the damning
-    # sense. On an evaluation subset that happens to contain no grade-4 image, a model
-    # not predicting 4 says nothing about the model.
-    never_predicted = [int(c) for c in range(N_CLASSES)
-                       if cm[:, c].sum() == 0 and cm[c, :].sum() > 0]
-    if never_predicted:
-        names = ", ".join(f"{c} ({CLASS_NAMES[c]})" for c in never_predicted)
-        reasons.append(f"grade(s) never predicted: {names}")
+    reasons: list[str] = []
+    warnings: list[str] = []
 
     support = cm.sum(axis=1)
+    predicted = cm.sum(axis=0)
+
+    # (1) the degenerate case
+    used = [int(c) for c in range(N_CLASSES) if predicted[c] > 0]
+    if len(used) <= 1:
+        name = CLASS_NAMES[used[0]] if used else "nothing"
+        reasons.append(
+            f"every prediction is the same class: {used[0] if used else '-'} ({name}). "
+            "The model has learned the prior and nothing else."
+        )
+
+    # (3) never predicted, split by whether it changes a referral
+    never = [int(c) for c in range(N_CLASSES) if predicted[c] == 0 and support[c] > 0]
+    fatal = [c for c in never if c >= referable_threshold]
+    minor = [c for c in never if c < referable_threshold]
+
+    if fatal:
+        names = ", ".join(f"{c} ({CLASS_NAMES[c]})" for c in fatal)
+        reasons.append(
+            f"referable grade(s) never predicted: {names}. At or above the referable "
+            f"threshold ({referable_threshold}), so the system cannot flag these cases "
+            "even in principle."
+        )
+    if minor:
+        names = ", ".join(f"{c} ({CLASS_NAMES[c]})" for c in minor)
+        warnings.append(
+            f"grade(s) never predicted: {names}. Below the referable threshold "
+            f"({referable_threshold}), so no referral decision changes; this is the "
+            "characteristic weakness of an unbalanced baseline and what the imbalance "
+            "arms are measured against."
+        )
+
+    # (2) accuracy indistinguishable from predicting the majority class
     if support.sum():
         majority_rate = float(support.max() / support.sum())
         acc = accuracy(y_true, y_pred)
@@ -205,7 +266,7 @@ def detect_collapse(y_true, y_pred, near_majority: float = 0.02) -> CollapseRepo
                 "everything would score about the same"
             )
 
-    return CollapseReport(collapsed=bool(reasons), reasons=reasons)
+    return CollapseReport(collapsed=bool(reasons), reasons=reasons, warnings=warnings)
 
 
 # ----------------------------------------------------------------------------------
@@ -297,7 +358,7 @@ def compute_all(
     t = _as_int_array(y_true, "y_true")
     p = _as_int_array(y_pred, "y_pred")
     cm = confusion_matrix(t, p)
-    collapse = detect_collapse(t, p)
+    collapse = detect_collapse(t, p, referable_threshold=referable_threshold)
 
     out = {
         "split": split,
@@ -311,7 +372,8 @@ def compute_all(
         "predicted_counts": [int(v) for v in cm.sum(axis=0)],
         "confusion_matrix": cm.tolist(),
         "referable": referable_metrics(t, p, referable_threshold),
-        "collapse": {"collapsed": collapse.collapsed, "reasons": collapse.reasons},
+        "collapse": {"collapsed": collapse.collapsed, "level": collapse.level,
+                     "reasons": collapse.reasons, "warnings": collapse.warnings},
         "class_names": list(CLASS_NAMES),
     }
 

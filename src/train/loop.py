@@ -153,7 +153,7 @@ def train_one_epoch(
         ps.append(predictions_from(out.detach().float(), head).cpu().numpy())
 
         if log_every and step % log_every == 0:
-            print(f"    step {step:>5}/{len(loader)}  loss {float(loss):.4f}  "
+            print(f"    step {step:>5}/{len(loader)}  loss {float(loss.detach()):.4f}  "
                   f"lr {lr_of(optimizer):.2e}", flush=True)
 
     y, p = np.concatenate(ys), np.concatenate(ps)
@@ -229,7 +229,9 @@ def fit(
             "val_acc": accuracy(y_true, y_pred),
             "val_balanced_acc": balanced_accuracy(y_true, y_pred),
             "val_collapsed": collapse.collapsed,
+            "val_collapse_level": collapse.level,
             "val_collapse_reasons": "; ".join(collapse.reasons),
+            "val_collapse_warnings": "; ".join(collapse.warnings),
         }
         state.history.append(row)
 
@@ -249,7 +251,9 @@ def fit(
             f"val_bal {row['val_balanced_acc']:.4f}  lr {row['lr']:.2e}  "
             f"{tr['train_seconds'] / 60:.1f}m"
             + ("  <- best" if improved else "")
-            + (f"  COLLAPSE: {collapse}" if collapse.collapsed else ""),
+            + (f"  COLLAPSE: {collapse}" if collapse.collapsed
+               else f"  warn: {'; '.join(collapse.warnings)}" if collapse.warnings
+               else ""),
             flush=True,
         )
 

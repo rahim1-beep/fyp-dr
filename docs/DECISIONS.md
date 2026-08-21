@@ -1183,6 +1183,98 @@ smoke run, correctly, and that is expected rather than a failure.
 
 ---
 
+## DECISION-026 — The collapse rule is severity-aware; Phase 3 acceptance follows it
+
+- **Date:** 2026-08-22
+- **Status:** Accepted — user challenge to a blocking verdict, upheld
+- **Deviates from proposal:** No. CLAUDE.md §2 says "stop and diagnose", and this is the
+  diagnosis. The rule's *trigger* is refined; its purpose is unchanged.
+
+### What prompted it
+
+The Phase 3 baseline (arm A, ResNet18, 8 epochs, best at epoch 6) produced:
+
+| | |
+|---|---|
+| val QWK | **0.6138** [0.5859, 0.6421] |
+| accuracy | 0.7965 (majority rate 0.7369, so **+6.0 pp**) |
+| balanced accuracy | 0.4163 |
+| referable sensitivity / specificity | 0.5131 / 0.9804 |
+| per-class recall | 0.982 / **0.000** / 0.376 / 0.316 / 0.407 |
+| predicted counts | 4657 / **0** / 478 / 68 / 65 |
+| grade 3 recall | 0.316 [0.241, 0.396] |
+| grade 4 recall | 0.407 [0.324, 0.504] |
+
+QWK by epoch: 0.025, 0.511, 0.549, 0.546, 0.597, 0.595, 0.614, 0.614.
+
+The rule reported a collapse and Phase 3 acceptance failed, because grade 1 was never
+predicted.
+
+### The assessment
+
+**That is not a collapse, and the user was right to challenge it — but not quite for the
+reason given.** "Four of five grades are predicted" is not the principle. Consider the
+same shape with grade 4 unpredicted instead: also four of five, also a healthy QWK, and
+**catastrophic**, because proliferative disease is the thing this system exists to catch
+and a model that cannot emit that grade cannot flag it even in principle.
+
+The principle is **whether the missing grade changes a referral**:
+
+- The referable threshold is **grade ≥ 2** (`configs/base.yaml`). Grade 1 is Mild DR,
+  **below** it. Folding grade 1 into grade 0 moves 357 val images (6.8%) between two
+  labels that are *both non-referable*, so the clinical decision the deployed system
+  makes is **unchanged**.
+- QWK weights a 1-called-0 error at **1/16** of a 4-called-0 error, so the primary metric
+  already prices this correctly.
+- The degenerate failure the rule exists for — learning the prior and nothing else —
+  scores 0.7369 accuracy and **0.0 QWK**. This run scores 0.6138 with a CI nowhere near
+  zero, and its per-epoch curve rose monotonically from 0.025. It learned the ordering.
+
+Absorbing a rare middle grade under plain cross-entropy at 6.8% prevalence is the
+**expected behaviour of an unbalanced baseline**, and it is the specific deficiency arms
+B–E exist to fix. Blocking the phase on it would block the pipeline for demonstrating the
+problem the thesis is about.
+
+### The rule, restated
+
+`detect_collapse` now returns one of three levels. **Fatal**, meaning stop and diagnose:
+
+1. Predictions concentrated in a **single class** — the degenerate case.
+2. Accuracy within 0.02 of the **majority-class rate**.
+3. A grade **at or above the referable threshold** never predicted while it has support.
+
+**Warning**, reported everywhere but not blocking:
+
+4. A grade **below** the referable threshold never predicted.
+
+The threshold comes from `eval.referable_threshold` rather than being hardcoded, so a
+project that moved the referral line would move this rule with it. An all-zero *row* is
+still not reported at all: that is a property of the evaluation set, not the model.
+
+Warnings reach `metrics.json` (`collapse.level`, `collapse.warnings`), `train_log.csv`
+(`val_collapse_level`, `val_collapse_warnings`) and the per-epoch console line. A warning
+that nothing records is the same as no rule at all.
+
+### Phase 3 acceptance
+
+Was: *val QWK CI excludes zero, and every grade predicted.*
+Now: **val QWK CI excludes zero, and no FATAL collapse** — i.e. not single-class, not at
+the majority rate, and every referable grade reachable.
+
+### What this run does not excuse
+
+The baseline is **correct**, not good, and the write-up must not blur those:
+
+- **Referable sensitivity is 0.5131.** Roughly half of referable cases are missed. That is
+  the number arms B–F have to move, and it is the clinically meaningful headline.
+- **Balanced accuracy 0.4163** against accuracy 0.7965 is the imbalance, stated plainly.
+- Grade 3 recall 0.316 [0.241, 0.396] and grade 4 recall 0.407 [0.324, 0.504] — wide
+  intervals on thin support, exactly as DECISION-006 anticipated.
+- QWK was still rising at epoch 7 (0.614 for two epochs, best at 6). Eight epochs is a
+  short schedule; Phase 4 should not read this as converged.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

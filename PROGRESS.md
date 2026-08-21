@@ -1,15 +1,13 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **Re-run the Phase 3 smoke, then the baseline.**
-> `notebooks/phase3_baseline.py` — GPU T4, Internet ON, two inputs. Re-upload the code
-> bundle first.
+> **NEXT ACTION:** **Phase 4 — the A–F ablation.** Phase 3 is complete: the baseline ran,
+> val QWK 0.6138 [0.5859, 0.6421], acceptance met (DECISION-026).
 >
-> Before pasting: `python -m src.data.notebook_check --all --self-test` and
-> `python -m src.train.smoke --all-arms`. The second runs the real `train.main()` on a
-> synthetic fixture in about two minutes and would have caught all three of the failures
-> that have hit this phase.
+> First, commit `runs/phase3_baseline_resnet18/` from the Kaggle output —
+> `config.yaml`, `metrics.json`, `train_log.csv`. `docs/EXPERIMENTS.md` records the run
+> as **pending artefact commit** until then (R4).
 
-**Current phase:** Phase 3 — Baseline. **Phase 2 is done**: built, verified, published.
+**Current phase:** Phase 4 — Ablation arms A–F. **Phases 1–3 complete.**
 **Last updated:** 2026-08-20
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done
@@ -268,7 +266,7 @@ in `val`; if preprocessing cannot rescue them, that is worth a note in the write
 
 ---
 
-## Phase 3 — Baseline `[ ]`
+## Phase 3 — Baseline `[x]`
 
 **Acceptance:** val QWK clearly above 0; confusion matrix not collapsed to one class.
 
@@ -316,7 +314,13 @@ against a synthetic cache, so none of this waits on Kaggle.
 - [x] `src/train/smoke.py` + `tests/test_train_smoke.py` (14) — the REAL `main()` end to
       end on a synthetic 90-image fixture, ~20 s/arm on CPU. It immediately found that
       arm F could not run at all for want of APTOS splits in the fixture
-- [ ] **← RE-RUN THE SMOKE TEST, then the baseline** — ResNet18, arm A, 8 epochs
+- [x] **Baseline run 2026-08-22** — arm A, ResNet18, 8 epochs, best at epoch 6.
+      **val QWK 0.6138 [0.5859, 0.6421]**, acc 0.7965 (majority 0.7369), balanced acc
+      0.4163, referable sens 0.5131 / spec 0.9804. Recorded in `docs/EXPERIMENTS.md`
+- [x] **Phase 3 acceptance MET** — QWK CI far from zero, no fatal collapse. Grade 1 is
+      never predicted; that is a WARNING, not a collapse, because grade 1 is below the
+      referable threshold and changes no referral (DECISION-026)
+- [ ] Commit `runs/phase3_baseline_resnet18/` from the Kaggle output (R4)
 - [ ] `src/eval/thresholds.py` — arm E's cut points, optimised on validation only (R3)
 
 **What the audit found — worth reading before touching this layer:**

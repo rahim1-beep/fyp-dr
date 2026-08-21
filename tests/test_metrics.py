@@ -286,3 +286,106 @@ def test_compute_all_records_a_collapse_rather_than_only_printing_it():
     out = compute_all(t, np.zeros_like(t), split="test", bootstrap_n=50)
     assert out["collapse"]["collapsed"] is True
     assert out["predicted_counts"][4] == 0
+
+
+# ----------------------------------------------------------------------------------
+# Severity-aware collapse — DECISION-026
+# ----------------------------------------------------------------------------------
+#
+# The Phase 3 baseline (arm A, ResNet18, 8 epochs) posted val QWK 0.6138 with a CI far
+# from zero, accuracy 6pp above the majority rate, and four of five grades predicted --
+# and never predicted grade 1. The old rule called that a collapse and blocked the phase.
+#
+# It is not a collapse. Grade 1 is BELOW the referable threshold, so folding it into
+# grade 0 changes no referral decision, and QWK weights a 1-called-0 error at 1/16 of a
+# 4-called-0 one. A never-predicted grade 4 is a completely different matter.
+
+VAL_SUPPORT = [3882, 357, 788, 133, 108]      # the real committed val split
+
+
+def _from_recall(support, recall, spill=0):
+    """A y_true/y_pred pair with the given per-class recall, errors pushed to `spill`."""
+    y_true, y_pred = [], []
+    for g, (s, r) in enumerate(zip(support, recall)):
+        hit = int(round(r * s))
+        y_true += [g] * s
+        y_pred += [g] * hit + [spill] * (s - hit)
+    return np.array(y_true), np.array(y_pred)
+
+
+def test_a_never_predicted_mild_grade_is_a_warning_not_a_collapse():
+    """The Phase 3 baseline's actual shape."""
+    y_true, y_pred = _from_recall(VAL_SUPPORT, [0.982, 0.0, 0.376, 0.316, 0.407])
+    rep = detect_collapse(y_true, y_pred, referable_threshold=2)
+
+    assert rep.collapsed is False
+    assert rep.level == "warning"
+    assert rep.warnings and "1 (Mild)" in rep.warnings[0]
+    assert "below the referable threshold" in rep.warnings[0].lower()
+
+
+def test_a_never_predicted_referable_grade_is_still_fatal():
+    """Grade 4 is what the system exists to catch. Same shape, different grade."""
+    y_true, y_pred = _from_recall(VAL_SUPPORT, [0.982, 0.30, 0.376, 0.316, 0.0])
+    rep = detect_collapse(y_true, y_pred, referable_threshold=2)
+
+    assert rep.collapsed is True
+    assert any("4 (Proliferative)" in r for r in rep.reasons)
+    assert any("cannot flag these cases" in r for r in rep.reasons)
+
+
+@pytest.mark.parametrize("grade,fatal", [(0, True), (1, False), (2, True), (3, True),
+                                         (4, True)])
+def test_fatality_follows_the_referable_threshold(grade, fatal):
+    recall = [0.9] * 5
+    recall[grade] = 0.0
+    y_true, y_pred = _from_recall(VAL_SUPPORT, recall, spill=1 if grade == 0 else 0)
+    rep = detect_collapse(y_true, y_pred, referable_threshold=2)
+    assert rep.collapsed is fatal, f"grade {grade}: {rep}"
+
+
+def test_the_threshold_is_configurable_not_hardcoded():
+    """`eval.referable_threshold` is config; the rule must follow it."""
+    recall = [0.9, 0.9, 0.0, 0.9, 0.9]
+    y_true, y_pred = _from_recall(VAL_SUPPORT, recall)
+    assert detect_collapse(y_true, y_pred, referable_threshold=2).collapsed is True
+    assert detect_collapse(y_true, y_pred, referable_threshold=3).collapsed is False
+
+
+def test_predicting_only_one_class_is_still_the_degenerate_case():
+    y_true = np.array([0] * 900 + [1] * 50 + [4] * 50)
+    rep = detect_collapse(y_true, np.zeros_like(y_true))
+    assert rep.collapsed
+    assert any("every prediction is the same class" in r for r in rep.reasons)
+
+
+def test_a_healthy_run_has_no_warnings_either():
+    rng = np.random.default_rng(1)
+    t = rng.choice([0, 1, 2, 3, 4], size=2000, p=[.4, .15, .2, .15, .1])
+    p = t.copy()
+    flip = rng.random(2000) < 0.15
+    p[flip] = np.clip(t[flip] + rng.choice([-1, 1], flip.sum()), 0, 4)
+
+    rep = detect_collapse(t, p)
+    assert rep.level == "none" and not rep.warnings
+
+
+def test_warnings_reach_metrics_json():
+    """A warning nothing records is the same as no rule at all."""
+    y_true, y_pred = _from_recall(VAL_SUPPORT, [0.982, 0.0, 0.376, 0.316, 0.407])
+    out = compute_all(y_true, y_pred, split="val", bootstrap_n=50)
+
+    assert out["collapse"]["collapsed"] is False
+    assert out["collapse"]["level"] == "warning"
+    assert out["collapse"]["warnings"]
+
+
+def test_compute_all_passes_the_configured_threshold_through():
+    recall = [0.9, 0.9, 0.0, 0.9, 0.9]
+    y_true, y_pred = _from_recall(VAL_SUPPORT, recall)
+    strict = compute_all(y_true, y_pred, split="val", referable_threshold=2,
+                         bootstrap_n=20)
+    loose = compute_all(y_true, y_pred, split="val", referable_threshold=3,
+                        bootstrap_n=20)
+    assert strict["collapse"]["collapsed"] is True
+    assert loose["collapse"]["collapsed"] is False

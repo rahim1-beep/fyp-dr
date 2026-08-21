@@ -228,17 +228,28 @@ print("\nrare-class recall with intervals (DECISION-006 - never a bare point est
 for g, ci in m["rare_class_ci"].items():
     print(f"  grade {g}: {ci['point']:.3f}  [{ci['lo']:.3f}, {ci['hi']:.3f}]")
 
-# Phase 3 acceptance, as a check rather than a vibe.
+# Phase 3 acceptance, as a check rather than a vibe (DECISION-026).
+# FATAL collapse only: single-class predictions, accuracy at the majority rate, or a
+# REFERABLE grade (>= 2) never predicted. A never-predicted grade 1 is a warning - it
+# changes no referral and is what an unbalanced baseline looks like.
 qwk_ok = m["qwk_ci"]["lo"] > 0.0
 not_collapsed = not m["collapse"]["collapsed"]
 print("\n" + "=" * 72)
-print(f"val QWK CI excludes zero       : {qwk_ok}")
-print(f"confusion matrix not collapsed : {not_collapsed}")
-for r in m["collapse"]["reasons"]:
-    print(f"    {r}")
+print(f"val QWK CI excludes zero       : {qwk_ok}  "
+      f"({m['qwk']:.4f} [{m['qwk_ci']['lo']:.4f}, {m['qwk_ci']['hi']:.4f}])")
+print(f"no fatal collapse              : {not_collapsed}")
+for r in m["collapse"].get("reasons", []):
+    print(f"    FATAL  : {r}")
+for w in m["collapse"].get("warnings", []):
+    print(f"    warning: {w}")
 print("PHASE 3 ACCEPTANCE MET" if (qwk_ok and not_collapsed)
       else "NOT MET - stop and diagnose before Phase 4 (CLAUDE.md S2)")
 print("=" * 72)
+
+# The clinically meaningful number, stated separately so a passing acceptance is never
+# mistaken for a good model.
+print(f"\nreferable sensitivity {m['referable']['sensitivity']:.4f} - this is what "
+      f"arms B-F have to move.")
 '''
 
 CELL_5 = r'''
