@@ -377,12 +377,28 @@ def main() -> int:
 
 
 def _git_sha() -> str:
+    """The commit that produced this run (R6).
+
+    On Kaggle the code arrives as an unzipped Dataset, not a git checkout, so
+    `git rev-parse` fails and the Phase 3 baseline recorded `git: unknown`. The bundle
+    carries its SHA in BUNDLE.txt precisely so the run can still name its own code —
+    fall back to that before giving up.
+    """
     try:
         r = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=REPO,
                            capture_output=True, text=True, check=True)
-        return r.stdout.strip()
-    except Exception:
-        return "unknown"
+        sha = r.stdout.strip()
+        if sha:
+            return sha
+    except Exception:                    # noqa: BLE001 - not a git checkout
+        pass
+
+    bundle = REPO / "BUNDLE.txt"
+    if bundle.exists():
+        for line in bundle.read_text(encoding="utf-8").splitlines():
+            if line.startswith("git:"):
+                return line.split(":", 1)[1].strip() + " (from BUNDLE.txt)"
+    return "unknown"
 
 
 def _versions() -> dict:

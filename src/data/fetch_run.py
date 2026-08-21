@@ -28,6 +28,8 @@ mean something was mixed up between sessions, and no per-file check would see it
 
     python -m src.data.fetch_run --kernel rah098/fyp-dr-phase3-baseline \\
         --run-id phase3_baseline_resnet18
+
+Auth, and the version that works, are in `AUTH_HELP` below and DECISION-027.
 """
 
 from __future__ import annotations
@@ -60,41 +62,80 @@ class FetchError(RuntimeError):
     """Raised with everything known about why the fetch is not trustworthy."""
 
 
-def download_kernel_output(kernel: str, dest: Path) -> Path:
-    """`kaggle kernels output <kernel> -p <dest>`, through the Python API.
+AUTH_HELP = """
+Kaggle auth, in the order that actually worked here (DECISION-027):
 
-    The API rather than the console script because the console script's location varies
-    with how the venv was made, and an ImportError here is clearer than a PATH miss.
+  1. `kaggle auth login`  — the OAuth flow. This is the current mechanism.
+  2. Move any legacy `~/.kaggle/kaggle.json` OUT OF THE WAY. A stale API-token file
+     SHADOWS the newer OAuth credentials, and the symptom is a flat
+     `401 Unauthenticated` with no hint that a second credential source exists.
+  3. The `kaggle` package must be recent: 2.2.4 works, 1.7.4.5 does not expose the
+     import path this module used to rely on.
+"""
+
+
+def kaggle_cli() -> list[str] | None:
+    """The kaggle console script, if one is on PATH or beside this interpreter."""
+    import shutil
+
+    found = shutil.which("kaggle")
+    if found:
+        return [found]
+
+    beside = Path(sys.executable).parent / ("kaggle.exe" if sys.platform == "win32"
+                                            else "kaggle")
+    return [str(beside)] if beside.exists() else None
+
+
+def download_kernel_output(kernel: str, dest: Path, prefer: str = "cli") -> Path:
+    """`kaggle kernels output <kernel> -p <dest>`.
+
+    THE CLI FIRST, the library second (DECISION-027). The import path proved to be the
+    fragile part: `kaggle` 1.7.4.5 and 2.2.4 do not agree about where `KaggleApi` lives,
+    and the console script is also what knows how to use `kaggle auth login`'s OAuth
+    credentials. The library remains as a fallback for an environment with no console
+    script, and both failures are reported together rather than the first one hiding the
+    second.
     """
+    import subprocess
+
     dest.mkdir(parents=True, exist_ok=True)
-    try:
-        from kaggle.api.kaggle_api_extended import KaggleApi
-    except ImportError as exc:                      # noqa: BLE001
-        raise FetchError(
-            f"the kaggle package is not importable: {exc}. "
-            "pip install kaggle==1.7.4.5"
-        ) from exc
+    attempts: list[str] = []
 
-    api = KaggleApi()
-    try:
-        api.authenticate()
-    except Exception as exc:                        # noqa: BLE001
-        raise FetchError(
-            f"kaggle authentication failed: {exc}. Check ~/.kaggle/kaggle.json, or set "
-            "KAGGLE_USERNAME and KAGGLE_KEY. A key that used to work can be rotated or "
-            "expired — create a new token at kaggle.com/settings."
-        ) from exc
+    order = ["cli", "lib"] if prefer == "cli" else ["lib", "cli"]
+    for how in order:
+        if how == "cli":
+            argv = kaggle_cli()
+            if argv is None:
+                attempts.append("cli: no `kaggle` executable on PATH or beside python")
+                continue
+            cmd = argv + ["kernels", "output", kernel, "-p", str(dest)]
+            print("  $ " + " ".join(cmd), flush=True)
+            proc = subprocess.run(cmd, capture_output=True, text=True)
+            if proc.returncode == 0:
+                return dest
+            attempts.append(
+                f"cli: exit {proc.returncode}: "
+                f"{(proc.stderr or proc.stdout).strip().splitlines()[-1:] or ['no output']}"
+            )
+        else:
+            try:
+                from kaggle.api.kaggle_api_extended import KaggleApi
 
-    try:
-        api.kernels_output(kernel, path=str(dest))
-    except Exception as exc:                        # noqa: BLE001
-        raise FetchError(
-            f"could not fetch output for kernel {kernel!r}: {exc}. The slug is "
-            "'<username>/<kernel-slug>' as it appears in the notebook URL, and the "
-            "notebook must have been COMMITTED (Save & Run All) — an interactive session "
-            "has no saved output."
-        ) from exc
-    return dest
+                api = KaggleApi()
+                api.authenticate()
+                api.kernels_output(kernel, path=str(dest))
+                return dest
+            except Exception as exc:                # noqa: BLE001
+                attempts.append(f"library: {type(exc).__name__}: {exc}")
+
+    raise FetchError(
+        f"could not fetch output for kernel {kernel!r}. Tried:\n  - "
+        + "\n  - ".join(attempts)
+        + "\n\nThe slug is '<username>/<kernel-slug>' from the notebook URL, and the "
+        "notebook must have been COMMITTED (Save & Run All) — an interactive session has "
+        "no saved output.\n" + AUTH_HELP
+    )
 
 
 def find_run_dir(root: Path, run_id: str) -> Path:
@@ -274,6 +315,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="replace an existing runs/<run_id>/")
     ap.add_argument("--keep-download", type=Path,
                     help="also leave the raw download here")
+    ap.add_argument("--prefer", choices=("cli", "lib"), default="cli",
+                    help="transport to try first; the CLI is the default because the "
+                         "library import path is the part that has broken (DECISION-027)")
     return ap
 
 
@@ -289,7 +333,7 @@ def main() -> int:
             tmp = tempfile.TemporaryDirectory()
             root = Path(tmp.name)
             print(f"fetching output of kernel {args.kernel} ...", flush=True)
-            download_kernel_output(args.kernel, root)
+            download_kernel_output(args.kernel, root, prefer=args.prefer)
             n = sum(1 for _ in root.rglob("*") if _.is_file())
             print(f"  downloaded {n} file(s)")
 

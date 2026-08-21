@@ -1275,6 +1275,48 @@ The baseline is **correct**, not good, and the write-up must not blur those:
 
 ---
 
+## DECISION-027 — Kaggle transport: the CLI first, and the auth trap that cost an hour
+
+- **Date:** 2026-08-22
+- **Status:** Accepted
+- **Deviates from proposal:** No
+
+Fetching the Phase 3 artefacts needed three things fixed, none of them obvious from the
+error:
+
+1. **The `kaggle` package had to go 1.7.4.5 → 2.2.4.** The older pin does not expose
+   `KaggleApi` where `fetch_run` imported it from. `requirements.txt` now pins 2.2.4.
+2. **`kaggle auth login`** is the current mechanism — the OAuth flow, not an API token.
+3. **A legacy `~/.kaggle/kaggle.json` SHADOWS the newer OAuth credentials.** This is the
+   trap. The symptom is a flat `401 Unauthenticated` with no indication that a second
+   credential source exists or that the one being used is the stale one. Renaming that
+   file out of the way is what fixed it.
+
+**`fetch_run` now shells out to the CLI first and falls back to the library**, on the
+user's observation that the import path is the fragile part — and it is: the import
+broke across a minor version bump, while `kaggle kernels output` did not change. The CLI
+is also what knows how to use `kaggle auth login`'s credentials. Both transports are
+tried, and **both failures are reported together** rather than the first hiding the
+second, which is precisely what made this hour expensive.
+
+The verification layer is unchanged and transport-independent — what makes a fetched run
+trustworthy is that the three artefacts parse and agree with each other, not how the
+bytes arrived.
+
+**Kernel slug for the Phase 3 baseline: `rah098/fyp-dr-phase3-baseline`.**
+
+### A provenance gap the fetched artefact revealed
+
+`runs/phase3_baseline_resnet18/config.yaml` records `git: unknown`. On Kaggle the code
+arrives as an unzipped Dataset, not a git checkout, so `git rev-parse` fails — and the
+run cannot name the commit that produced it, which is an R6 weakness.
+
+`make_bundle` already writes the SHA into `BUNDLE.txt` for exactly this reason.
+`_git_sha()` now falls back to reading it, so every Phase 4 run records its code version.
+The baseline's `unknown` stands: it is what that run recorded.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

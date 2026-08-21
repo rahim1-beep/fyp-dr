@@ -68,7 +68,7 @@ grad-cam==1.5.5
 pytest==8.4.2
 
 # --- Data acquisition (inspection only; EyePACS is never downloaded locally) ---
-kaggle==1.7.4.5
+kaggle==2.2.4                # 1.7.4.5 does not expose KaggleApi where fetch_run looked
 
 # --- Backend (Phase 7; see DECISION-001) ---
 fastapi==0.120.4
