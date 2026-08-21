@@ -306,7 +306,11 @@ against a synthetic cache, so none of this waits on Kaggle.
 - [x] `tests/test_train.py` — 37 tests, the loop exercised end to end through the real
       `DRDataset`. **Full suite: 221 green.**
 - [x] `notebooks/phase3_baseline.py` — smoke run then baseline, with an acceptance check
-- [ ] **← RUN IT** — ResNet18, arm A, 8 epochs
+- [x] Arm A smoke run reached the training loop; failed in the balance PRINT, not the
+      training path — `RandomSampler` has no `.weights` (DECISION-024). Fixed, plus
+      end-to-end tests for the four config branches that no arm had ever run
+- [x] GPU image versions recorded: same as CPU, `+cu128` builds (DECISION-019)
+- [ ] **← RE-RUN THE SMOKE TEST, then the baseline** — ResNet18, arm A, 8 epochs
 - [ ] `src/eval/thresholds.py` — arm E's cut points, optimised on validation only (R3)
 
 **What the audit found — worth reading before touching this layer:**

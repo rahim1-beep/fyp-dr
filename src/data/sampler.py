@@ -144,6 +144,10 @@ def describe_balance(train_df: pd.DataFrame, sampler: WeightedRandomSampler | No
     Printed at the top of every training run: an arm whose sampler silently did nothing
     would otherwise look identical to arm A in every log it produces.
 
+    `sampler` is whatever the DataLoader ended up with, which for an unbalanced arm is a
+    `RandomSampler` rather than `None` -- so this tests for the ABILITY to reweight
+    (a `.weights` attribute), not for `None`.
+
     On a POOLED frame (arm F) the table gains a `p_<dataset>` column: the share of each
     grade's rows that come from the minority dataset. That number is the arm's central
     risk and it is not small. On the committed splits P(aptos | grade) runs 0.065 at
@@ -155,7 +159,14 @@ def describe_balance(train_df: pd.DataFrame, sampler: WeightedRandomSampler | No
     counts = class_counts(train_df)
     natural = counts / counts.sum()
 
-    if sampler is None:
+    # Duck-typed on `.weights`, NOT on `sampler is None`. `DataLoader(shuffle=True)`
+    # substitutes a `RandomSampler`, so an unbalanced arm arrives here with a sampler
+    # object that has no weights at all -- and arm A is the one arm that never gets a
+    # weighted sampler, which is why every earlier test missed it. Anything that cannot
+    # reweight draws the natural distribution by definition.
+    weighted = getattr(sampler, "weights", None) is not None
+
+    if not weighted:
         drawn = natural
     else:
         # Draw from a CLONE of the sampler, not from `sampler` itself. Iterating the real
@@ -180,6 +191,14 @@ def describe_balance(train_df: pd.DataFrame, sampler: WeightedRandomSampler | No
         "drawn": drawn.round(4),
         "ratio": (drawn / natural.replace(0, pd.NA)).round(2),
     })
+
+    # State it, rather than leaving two identical columns to be interpreted. An arm whose
+    # sampler silently did nothing and an arm that correctly draws naturally produce the
+    # same table; only this says which one happened.
+    table.attrs["sampler"] = type(sampler).__name__ if sampler is not None else "none"
+    table.attrs["weighted"] = weighted
+    if not weighted:
+        table["note"] = ["drawn == natural (no reweighting)"] * len(table)
 
     if "dataset" in train_df.columns and train_df["dataset"].nunique() > 1:
         counts_by = train_df["dataset"].value_counts()

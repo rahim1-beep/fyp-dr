@@ -17,7 +17,7 @@ import torch.nn as nn
 import yaml
 
 from src.data.dataset import AugmentConfig
-from src.data.sampler import build_loaders
+from src.data.sampler import build_loaders, describe_balance
 from src.models.factory import ModelConfig, build_model
 from src.train.losses import (
     FocalLoss,
@@ -439,3 +439,169 @@ def test_config_merge_is_per_block_so_an_arm_only_states_what_it_changes():
     out = merge(base, arm)
     assert out["train"]["epochs"] == 30
     assert out["model"] == {"arch": "resnet18", "head": "softmax", "num_outputs": 5}
+
+
+# ----------------------------------------------------------------------------------
+# Per-arm paths that only arms B/D had ever exercised
+# ----------------------------------------------------------------------------------
+#
+# The arm A smoke run died in describe_balance with
+#     AttributeError: 'RandomSampler' object has no attribute 'weights'
+# because DataLoader(shuffle=True) substitutes a RandomSampler, so an unbalanced arm
+# arrives with a sampler OBJECT rather than the None that build_sampler returned. Arm A
+# is the one arm that never gets a weighted sampler, and every earlier test built the
+# sampler directly instead of going through build_loaders.
+#
+# So these run each arm's real configuration through the real call chain.
+
+import yaml as _yaml
+
+ARM_SAMPLERS = {"a": "none", "b": "weighted_random", "c": "none",
+                "d": "weighted_random", "e": "none", "f": "weighted_random"}
+
+
+@pytest.mark.parametrize("arm", list("abcdef"))
+def test_every_arms_sampler_kind_survives_build_loaders_and_describe_balance(arm, tmp_path):
+    """The exact chain train.py runs: build_loaders -> loader.sampler -> describe_balance."""
+    cfg = _yaml.safe_load((REPO / f"configs/arm_{arm}.yaml").read_text(encoding="utf-8"))
+    kind = cfg["imbalance"].get("sampler", "none")
+    assert kind == ARM_SAMPLERS[arm], "arm config changed; update this test deliberately"
+
+    root = tmp_path / "cache"
+    labels = [0] * 120 + [1] * 30 + [2] * 40 + [3] * 12 + [4] * 8
+    train = _write_split(root, n=len(labels), labels=labels, split="train")
+    val = _write_split(root, n=40, split="val", first_patient=10_000)
+
+    loaders = build_loaders(train, val, None, root, sampler_kind=kind, batch_size=16,
+                            augment=AugmentConfig(enabled=False))
+
+    table = describe_balance(train, loaders["train"].sampler, draws=4_000)
+    assert list(table["n"]) == [120, 30, 40, 12, 8]
+    assert table["drawn"].sum() == pytest.approx(1.0, abs=0.01)
+
+    if kind == "none":
+        assert table.attrs["weighted"] is False
+        assert (table["drawn"] == table["natural"]).all()
+        assert "note" in table.columns
+    else:
+        assert table.attrs["weighted"] is True
+        assert table["drawn"].min() > 0.10, "a weighted arm must actually rebalance"
+
+
+def test_describe_balance_accepts_the_loaders_random_sampler(tmp_path):
+    """The regression, stated at its narrowest."""
+    from torch.utils.data import RandomSampler
+
+    root = tmp_path / "cache"
+    train = _write_split(root, n=50, labels=[i % 5 for i in range(50)], split="train")
+    val = _write_split(root, n=20, split="val", first_patient=10_000)
+
+    loaders = build_loaders(train, val, None, root, sampler_kind="none", batch_size=8)
+    assert isinstance(loaders["train"].sampler, RandomSampler)
+    assert not hasattr(loaders["train"].sampler, "weights")
+
+    table = describe_balance(train, loaders["train"].sampler)   # must not raise
+    assert table.attrs["sampler"] == "RandomSampler"
+
+
+def test_arm_e_trains_end_to_end_with_the_ordinal_head(tmp_path):
+    """Arm E is the other arm whose path differs: one continuous output, thresholded.
+    `fit` and `evaluate` both branch on `head`, and only the softmax branch had ever run
+    inside a loop."""
+    from src.train.losses import OrdinalRegressionLoss
+
+    root = tmp_path / "cache"
+    train = _write_split(root, n=40, labels=[i % 5 for i in range(40)], split="train")
+    val = _write_split(root, n=20, labels=[i % 5 for i in range(20)], split="val",
+                       first_patient=10_000)
+
+    loaders = build_loaders(train, val, None, root, batch_size=8,
+                            augment=AugmentConfig(enabled=False))
+    model = _Tiny(n_out=1)
+    opt = build_optimizer(model, "adamw", lr=1e-3)
+    sched = cosine_with_warmup(opt, len(loaders["train"]), epochs=2, warmup_epochs=0)
+
+    state = fit(model, loaders["train"], loaders["val"], OrdinalRegressionLoss(), opt,
+                sched, epochs=2, run_dir=tmp_path / "run", device="cpu", amp=False,
+                head="ordinal_regression", patience=99)
+
+    assert len(state.history) == 2
+    y, p, _ = evaluate(model, loaders["val"], torch.device("cpu"),
+                       head="ordinal_regression")
+    assert set(p.tolist()) <= {0, 1, 2, 3, 4}, "ordinal output must map into 0-4"
+
+
+def test_arm_c_trains_end_to_end_with_a_weighted_loss(tmp_path):
+    """Arm C's weights come from the train split and go into the LOSS rather than the
+    sampler. build_loss was unit-tested; the weighted CE had never run inside `fit`."""
+    root = tmp_path / "cache"
+    labels = [0] * 30 + [1] * 4 + [2] * 8 + [3] * 4 + [4] * 4
+    train = _write_split(root, n=len(labels), labels=labels, split="train")
+    val = _write_split(root, n=20, split="val", first_patient=10_000)
+
+    cfg = _yaml.safe_load((REPO / "configs/arm_c.yaml").read_text(encoding="utf-8"))
+    criterion = build_loss(cfg["imbalance"], train)
+    assert criterion.weight is not None
+
+    loaders = build_loaders(train, val, None, root, sampler_kind="none", batch_size=8,
+                            augment=AugmentConfig(enabled=False))
+    model = _Tiny()
+    opt = build_optimizer(model, "adamw", lr=1e-3)
+    sched = cosine_with_warmup(opt, len(loaders["train"]), epochs=1, warmup_epochs=0)
+
+    state = fit(model, loaders["train"], loaders["val"], criterion, opt, sched, epochs=1,
+                run_dir=tmp_path / "run", device="cpu", amp=False)
+    assert len(state.history) == 1
+
+
+def test_arm_f_per_dataset_metrics(tmp_path):
+    """Arm F is the LAST arm to run, so this block would otherwise first execute at the
+    end of the whole ablation."""
+    from src.train.train import metrics_by_dataset
+
+    root = tmp_path / "cache"
+    eye = _write_split(root, n=30, labels=[i % 5 for i in range(30)], split="val")
+    ap = _write_split(root, n=20, labels=[i % 5 for i in range(20)], split="aptos_val",
+                      first_patient=90_000, dataset="aptos")
+    pooled = pd.concat([eye, ap], ignore_index=True)
+
+    idx = np.arange(len(pooled))
+    y_true = pooled["label"].to_numpy()
+    y_pred = y_true.copy()
+
+    out = metrics_by_dataset(pooled, idx, y_true, y_pred, bootstrap_n=20)
+    assert set(out) == {"eyepacs", "aptos"}
+    assert out["eyepacs"]["n"] == 30 and out["aptos"]["n"] == 20
+    assert out["eyepacs"]["split"] == "val[eyepacs]"
+
+
+def test_per_dataset_metrics_are_empty_for_a_single_origin_arm(tmp_path):
+    """Arms A-E are EyePACS only; the block must not appear in their metrics.json."""
+    from src.train.train import metrics_by_dataset
+
+    root = tmp_path / "cache"
+    eye = _write_split(root, n=20, labels=[i % 5 for i in range(20)], split="val")
+    idx = np.arange(len(eye))
+    y = eye["label"].to_numpy()
+    assert metrics_by_dataset(eye, idx, y, y.copy()) == {}
+
+
+def test_per_dataset_metrics_join_positionally_not_by_label(tmp_path):
+    """`DRDataset.__getitem__` returns a POSITIONAL index; joining it with `.loc` would
+    silently mix the two origins' rows."""
+    from src.train.train import metrics_by_dataset
+
+    root = tmp_path / "cache"
+    eye = _write_split(root, n=10, labels=[0] * 10, split="val")
+    ap = _write_split(root, n=10, labels=[4] * 10, split="aptos_val",
+                      first_patient=90_000, dataset="aptos")
+    pooled = pd.concat([eye, ap], ignore_index=True)
+
+    # a shuffled evaluation order, exactly what a DataLoader could produce
+    idx = np.array([15, 3, 11, 7, 19, 1])
+    y_true = pooled["label"].to_numpy()[idx]
+
+    out = metrics_by_dataset(pooled, idx, y_true, y_true.copy(), bootstrap_n=10)
+    assert out["aptos"]["n"] == 3 and out["eyepacs"]["n"] == 3
+    assert out["aptos"]["support"][4] == 3, "aptos rows are the grade-4 ones"
+    assert out["eyepacs"]["support"][0] == 3

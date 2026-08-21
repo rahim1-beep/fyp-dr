@@ -59,6 +59,32 @@ def merge(base: dict, *overlays: dict) -> dict:
     return out
 
 
+def metrics_by_dataset(val_df, idx, y_true, y_pred, *, seed: int = 42,
+                       bootstrap_n: int = 200) -> dict:
+    """Per-origin metrics for a pooled arm, or {} when there is only one origin.
+
+    DECISION-007: arm F's gain has to survive being split by source, because
+    P(aptos | grade) runs 0.065 at grade 0 to 0.291 at grade 4 and "APTOS camera implies
+    severe" is a shortcut worth taking. This is the only consumer of the index that
+    `DRDataset.__getitem__` returns, and it is joined with `.iloc` — positional, per that
+    method's contract.
+
+    Split out of main() so it can be tested. Arm F is the last arm to run, so this would
+    otherwise first execute at the end of the ablation.
+    """
+    rows = val_df.iloc[idx]
+    origins = sorted(rows["dataset"].unique())
+    if len(origins) < 2:
+        return {}
+
+    out = {}
+    for ds in origins:
+        mask = (rows["dataset"] == ds).to_numpy()
+        out[str(ds)] = compute_all(y_true[mask], y_pred[mask], split=f"val[{ds}]",
+                                   bootstrap_n=bootstrap_n, seed=seed)
+    return out
+
+
 def leakage_gate(skip: bool = False) -> None:
     """CLAUDE.md §7 — the leakage tests run before any training run, every time."""
     if skip:
@@ -268,13 +294,9 @@ def main() -> int:
     })
 
     # Arm F reports by source dataset — this is what the returned index is for.
-    if train_df["dataset"].nunique() > 1 or val_df["dataset"].nunique() > 1:
-        rows = loaders["val"].dataset.df.iloc[idx]
-        metrics["by_dataset"] = {
-            str(ds): compute_all(y_true[m.to_numpy()], y_pred[m.to_numpy()],
-                                 split=f"val[{ds}]", bootstrap_n=200, seed=seed)
-            for ds, m in ((d, rows["dataset"] == d) for d in sorted(rows["dataset"].unique()))
-        }
+    by_ds = metrics_by_dataset(loaders["val"].dataset.df, idx, y_true, y_pred, seed=seed)
+    if by_ds:
+        metrics["by_dataset"] = by_ds
 
     (run_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
 

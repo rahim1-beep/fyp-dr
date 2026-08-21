@@ -13,6 +13,12 @@
 0 missing, 0 orphaned, 800 decoded with 0 bad, mean 22.6 KB/image. The same four
 `ok:no-retina` images as before (DECISION-018), all still in their splits.
 
+The arm A smoke run got as far as the balance table and died there:
+`'RandomSampler' object has no attribute 'weights'`. `DataLoader(shuffle=True)` substitutes
+a `RandomSampler`, so an unbalanced arm never sees the `None` that `build_sampler`
+returned. Fixed, and the audit it prompted found three more config branches that no arm
+had ever executed (DECISION-024). Re-run the smoke test first; it costs five minutes.
+
 **Run the Phase 3 baseline**: `notebooks/phase3_baseline.py`. GPU T4, Internet **ON**,
 two inputs only (`fyp-dr-eyepacs-224` and `fyp-dr-code`). Cells 1–2 interactively, then
 `RUN_SMOKE = False` and Save & Run All for cells 3–5.

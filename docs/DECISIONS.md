@@ -773,13 +773,19 @@ example for the write-up rather than a defect.
 The first real Kaggle run measured the CPU image and it does not match what
 `requirements.txt` pinned:
 
-| package | was pinned | Kaggle CPU image (2026-08-21) | now pinned |
-|---|---|---|---|
-| numpy | 2.2.6 | **2.0.2** | 2.0.2 |
-| opencv | 4.12.0.88 | **4.13.0** | 4.13.0.92 |
-| torch | 2.9.1 | **2.10.0+cpu** | 2.10.0 |
-| torchvision | 0.24.1 | **0.25.0** | 0.25.0 |
-| timm | 1.0.28 | **1.0.26** | 1.0.26 |
+| package | was pinned | Kaggle CPU image (2026-08-21) | Kaggle **GPU** image (2026-08-22) | now pinned |
+|---|---|---|---|---|
+| numpy | 2.2.6 | **2.0.2** | 2.0.2 | 2.0.2 |
+| pandas | 2.3.3 | 2.3.3 | 2.3.3 | 2.3.3 |
+| opencv | 4.12.0.88 | **4.13.0** | 4.13.0 | 4.13.0.92 |
+| torch | 2.9.1 | **2.10.0+cpu** | **2.10.0+cu128** | 2.10.0 |
+| torchvision | 0.24.1 | **0.25.0** | **0.25.0+cu128** | 0.25.0 |
+| timm | 1.0.28 | **1.0.26** | 1.0.26 | 1.0.26 |
+
+**The GPU image measured 2026-08-22 matches the CPU image version for version**, differing
+only in the CUDA build tags (`+cu128`). That is the good case and it means one set of pins
+describes both environments; it was not safe to assume in advance, which is why every
+notebook prints its versions.
 
 **The Kaggle image wins.** Never `pip install` torch over the preinstalled build — it is
 built against that image's CUDA and replacing it is the fastest way to lose a session to
@@ -791,9 +797,9 @@ The cache was built under the image's versions, not under the old pins. That is 
 does not require a rebuild: the preprocessing output is deterministic per image and the
 provenance sidecar records the config, which is the thing that governs the pixels.
 
-**The GPU image may differ from the CPU image**, and Phase 4 runs on GPU. Cell 1 of every
-notebook prints the versions it actually has; if the GPU image differs, this table gains a
-column rather than the pins being changed again. What must not happen is a pin being
+**The GPU image was measured on 2026-08-22 and did not differ** — see the column above.
+Cell 1 of every notebook still prints its versions, and if a future image differs this
+table gains a column rather than the pins being edited from memory. What must not happen is a pin being
 edited from memory instead of from a printed version report.
 
 `timm` 1.0.26 vs 1.0.28 is the one worth watching: `normalisation()` reads
@@ -1038,6 +1044,65 @@ complete" from a shell, without a notebook.
 actually published, plus a nested copy (shallowest wins), a half-extracted tree with the
 right directory names and no images, and a short cache that must be refused rather than
 returned.
+
+---
+
+## DECISION-024 — Every arm's real path is exercised, not just its components
+
+- **Date:** 2026-08-22
+- **Status:** Accepted
+- **Deviates from proposal:** No
+
+The arm A smoke run failed twelve seconds in:
+
+    AttributeError: 'RandomSampler' object has no attribute 'weights'
+        src/data/sampler.py:168 in describe_balance, from src/train/train.py:187
+
+`describe_balance` tested `if sampler is None` to decide whether to model a weighted draw.
+That is the wrong question. `build_sampler` returns `None` for an unbalanced arm, but
+`build_loaders` then passes `shuffle=True` and **`DataLoader` substitutes a
+`RandomSampler`** — so what reaches `describe_balance` is a sampler object with no
+weights, not `None`.
+
+**Arm A is the only arm that never gets a weighted sampler.** Every existing test called
+`build_sampler` directly and passed its return value straight to `describe_balance`, so
+the `None` branch was well covered and the branch that actually runs under arm A had never
+executed. The diagnostic print was the only thing broken; everything before it was correct
+— 11.18M parameters 100% trainable, timm normalisation, sane class counts, leakage gate
+green.
+
+`describe_balance` now duck-types on `.weights`: anything that cannot reweight draws the
+natural distribution by definition. The table also states which sampler it saw and notes
+`drawn == natural` explicitly, because an arm whose sampler silently did nothing and an
+arm that correctly draws naturally otherwise produce identical tables.
+
+**The audit that followed.** Every branch on arm configuration in the train/eval path,
+and whether it had ever run:
+
+| Branch | Arms | Was it exercised? |
+|---|---|---|
+| `describe_balance` weighted vs natural | A/C/E vs B/D/F | **No** — the bug |
+| `predictions_from` softmax vs ordinal | A-D,F vs **E** | Unit-tested, never inside `fit`/`evaluate` |
+| `build_loss` weighted CE | **C** | Unit-tested, never inside `fit` |
+| `metrics_by_dataset` pooled origins | **F** | Never — and arm F runs last, so it would have first executed at the end of the whole ablation |
+| `build_loaders` `shuffle=(sampler is None)` | all | Yes |
+| `build_loss` weights+sampler refusal | all | Yes |
+
+Four of six branches were reachable only by an arm that had not been run. All four now
+have end-to-end tests through the real call chain — `build_loaders` → `loader.sampler` →
+`describe_balance`, and `fit`/`evaluate` with the ordinal head and with a weighted loss.
+`metrics_by_dataset` was extracted out of `main()` to make it testable at all, and its
+test includes a shuffled evaluation order, because that index is positional and joining it
+with `.loc` would silently mix the two origins.
+
+**The rule.** A component tested in isolation is not the same thing as an arm's path
+tested end to end. Where behaviour branches on configuration, the test parametrises over
+the real configs rather than over hand-built arguments — `tests/test_train.py` reads
+`configs/arm_*.yaml` and asserts the sampler kind it finds, so a config change that
+invalidates the test fails loudly instead of quietly bypassing it.
+
+This is the same shape as DECISION-022: the least-run path is the most expensive one, and
+it is cheapest to run it deliberately on synthetic data first.
 
 ---
 
