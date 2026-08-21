@@ -8,28 +8,24 @@
 
 ## FIRST ACTION NEXT SESSION
 
-**The Phase 2 cache has to be rebuilt — this is the THIRD attempt, and the two failures
-were both in the glue, not the work.** Session 2 lost the output to the 500-file cap
-(DECISION-021); session 3 ran 8.1 hours and died in cell 5 on a missing `pack` subcommand
-(DECISION-022). Roughly 13 hours, none of it lost to preprocessing or modelling.
+**Phase 2 is DONE.** The cache is built, verified and published:
+`rah098/fyp-dr-eyepacs-224` v1, private, 918.08 MB — 38,788 images, 21,225 patients,
+0 missing, 0 orphaned, 800 decoded with 0 bad, mean 22.6 KB/image. The same four
+`ok:no-retina` images as before (DECISION-018), all still in their splits.
 
-Before pasting anything into Kaggle, run `python -m src.data.notebook_check --all
---self-test` locally. It validates every command line in every notebook cell against the
-real parsers and executes pack/verify/unpack on a toy directory.
+**Run the Phase 3 baseline**: `notebooks/phase3_baseline.py`. GPU T4, Internet **ON**,
+two inputs only (`fyp-dr-eyepacs-224` and `fyp-dr-code`). Cells 1–2 interactively, then
+`RUN_SMOKE = False` and Save & Run All for cells 3–5.
 
-**Original note follows.**
+**Before pasting anything**, run `python -m src.data.notebook_check --all --self-test`
+locally. It validates every command line in every cell against the real parsers and
+executes pack/verify/unpack on a toy tree. Three sessions were lost to the glue around
+the work (DECISION-021/022/023); this check is what those paid for.
 
-**The Phase 2 cache has to be rebuilt.** The 2026-08-21 build was correct — reconciliation
-passed, 38,788 images, 0.836 GB — but Kaggle's **500-file cap on notebook output** kept
-499 of them when the session was saved, silently, after every check had run.
-`/kaggle/working` is wiped, so `fyp-dr-eyepacs-224` was never created.
-
-Nothing about the pipeline is suspect. Re-run `notebooks/phase2_build_cache.py`, which now
-has a **cell 5**: pack to one archive, verify it by reading the central directory back,
-and only then delete the loose tree (DECISION-021). ~2.5 h, Accelerator **None**.
-
-Then Phase 3 (`notebooks/phase3_baseline.py`) — GPU, Internet **ON**, and cell 1 extracts
-the archive and re-counts to 38,788 before training.
+**Kaggle auto-extracts published archives.** The dataset mounts as
+`fyp-dr-eyepacs-224/processed/...`, not as a `.zip`. Cell 1 calls
+`archive_cache.resolve_cache`, which handles either and verifies the image count
+regardless — do not replace it with a hardcoded path (DECISION-023).
 
 ## What was done this session
 

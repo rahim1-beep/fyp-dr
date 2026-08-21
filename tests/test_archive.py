@@ -184,3 +184,110 @@ def test_collect_separates_images_from_sidecars(tmp_path):
     images, others = collect(root)
     assert len(images) == 7
     assert {p.name for p in others} >= set(SIDECARS)
+
+
+# ----------------------------------------------------------------------------------
+# Finding the cache root — DECISION-023
+# ----------------------------------------------------------------------------------
+#
+# The same artefact has now appeared in three shapes, because the hosting platform
+# reshaped it: as a loose `processed/` tree, as a single `.zip`, and — after Kaggle
+# auto-extracted the zip on publish — as a folder named after the dataset with the stats
+# CSVs beside it. Each of these tests is one of those shapes.
+
+from src.data.archive_cache import find_cache_root, looks_like_cache_root, resolve_cache
+
+
+def _tree(root: Path, n: int = 6) -> Path:
+    """A minimal cache tree: eyepacs/ and aptos/ with images in them."""
+    (root / "eyepacs").mkdir(parents=True, exist_ok=True)
+    (root / "aptos").mkdir(parents=True, exist_ok=True)
+    for i in range(n):
+        sub = "eyepacs" if i % 3 else "aptos"
+        (root / sub / f"{i}_left.jpg").write_bytes(b"\xff\xd8\xff" + bytes(100))
+    return root
+
+
+def test_finds_a_cache_root_that_is_the_mount_itself(tmp_path):
+    _tree(tmp_path)
+    assert find_cache_root(tmp_path, expect_images=6) == tmp_path
+
+
+def test_finds_processed_one_level_down(tmp_path):
+    """The layout the notebook used to assume."""
+    _tree(tmp_path / "processed")
+    assert find_cache_root(tmp_path, expect_images=6) == tmp_path / "processed"
+
+
+def test_finds_the_layout_kaggle_actually_published(tmp_path):
+    """Kaggle auto-extracted the archive and named the folder after the dataset, with the
+    stats CSVs left beside it — neither MOUNT/*.zip nor MOUNT/processed."""
+    _tree(tmp_path / "fyp-dr-eyepacs-224" / "processed")
+    (tmp_path / "aptos_stats.csv").write_text("a,b\n", encoding="utf-8")
+    (tmp_path / "processed_stats.csv").write_text("a,b\n", encoding="utf-8")
+
+    got = find_cache_root(tmp_path, expect_images=6)
+    assert got == tmp_path / "fyp-dr-eyepacs-224" / "processed"
+
+
+def test_finds_a_root_nested_without_a_processed_level(tmp_path):
+    """And the variant where the extract dropped the arcname entirely."""
+    _tree(tmp_path / "fyp-dr-eyepacs-224")
+    assert find_cache_root(tmp_path, expect_images=6) == tmp_path / "fyp-dr-eyepacs-224"
+
+
+def test_the_shallowest_match_wins(tmp_path):
+    """If a nested copy exists, the published outer one is the one to use."""
+    _tree(tmp_path / "processed")
+    _tree(tmp_path / "processed" / "backup" / "processed")
+    assert find_cache_root(tmp_path) == tmp_path / "processed"
+
+
+def test_an_empty_eyepacs_directory_is_not_a_cache_root(tmp_path):
+    """A half-extracted tree has the right names and none of the data."""
+    (tmp_path / "eyepacs").mkdir()
+    (tmp_path / "aptos").mkdir()
+    with pytest.raises(FileNotFoundError, match="no cache root"):
+        find_cache_root(tmp_path)
+
+
+def test_a_short_cache_is_refused_rather_than_returned(tmp_path):
+    """Finding it and it being complete are different claims."""
+    _tree(tmp_path / "processed", n=5)
+    with pytest.raises(RuntimeError, match="expected 38788|holds 5 images"):
+        find_cache_root(tmp_path, expect_images=38788)
+
+
+def test_the_error_names_what_is_actually_mounted(tmp_path):
+    (tmp_path / "something_else").mkdir()
+    with pytest.raises(FileNotFoundError, match="what is actually there"):
+        find_cache_root(tmp_path)
+
+
+def test_looks_like_cache_root_needs_images_not_just_names(tmp_path):
+    (tmp_path / "eyepacs").mkdir()
+    assert not looks_like_cache_root(tmp_path)
+    (tmp_path / "eyepacs" / "1_left.jpg").write_bytes(b"\xff\xd8\xff")
+    assert looks_like_cache_root(tmp_path)
+
+
+def test_resolve_cache_handles_the_extracted_layout(tmp_path):
+    mount = tmp_path / "mount"
+    _tree(mount / "fyp-dr-eyepacs-224" / "processed")
+    got = resolve_cache(mount, tmp_path / "work", expect_images=6)
+    assert got == mount / "fyp-dr-eyepacs-224" / "processed"
+    assert not (tmp_path / "work").exists(), "nothing needed extracting"
+
+
+def test_resolve_cache_still_handles_a_zip(tmp_path):
+    """If a future publish leaves the archive intact, the same call must work."""
+    src = _tree(tmp_path / "processed")
+    for s in SIDECARS:
+        (src / s).write_text("{}", encoding="utf-8")
+    mount = tmp_path / "mount"
+    mount.mkdir()
+    pack(src, mount / "cache.zip", expect_images=6, progress_every=0)
+
+    got = resolve_cache(mount, tmp_path / "work", expect_images=6)
+    assert sum(1 for _ in got.rglob("*.jpg")) == 6
+    assert (tmp_path / "work").exists(), "the zip should have been extracted"

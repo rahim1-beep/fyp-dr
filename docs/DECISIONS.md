@@ -987,6 +987,60 @@ toy input before it is trusted with a real one.
 
 ---
 
+## DECISION-023 — The cache root is found by shape, never by path
+
+- **Date:** 2026-08-21
+- **Status:** Accepted
+- **Deviates from proposal:** No
+
+### What happened
+
+The Phase 2 rebuild worked. `ARCHIVE VERIFIED`, 38,797 entries, 0.852 GB, reconciliation
+clean, published as `rah098/fyp-dr-eyepacs-224` v1 at 918.08 MB.
+
+**Kaggle then auto-extracted the archive when it created the dataset.** The single
+verified `.zip` that DECISION-021 exists to produce is not a `.zip` once it is mounted:
+the dataset shows a `fyp-dr-eyepacs-224/` folder holding 38.8k files, with
+`aptos_stats.csv` and `processed_stats.csv` beside it. Phase 3's cell 1 looked for
+`MOUNT/*.zip` and then fell back to `MOUNT/processed`, and the real tree is neither.
+
+That would have failed at the top of the training notebook rather than after hours of
+work, so it was cheap this time. It is the same class of mistake as the last three.
+
+### The rule
+
+**Three layouts have now been observed for one artefact**, because the platform reshaped
+it each time:
+
+| | layout |
+|---|---|
+| The build writes | `/kaggle/working/processed/{eyepacs,aptos,splits}` |
+| The archive holds | `processed/...` inside one `.zip` |
+| The published dataset mounts | `fyp-dr-eyepacs-224/processed/...`, zip gone, CSVs beside it |
+
+Predicting the fourth is a bet with a session on it, so the code stops predicting.
+`find_cache_root` searches for the **shape** — a directory with `eyepacs/` and `aptos/`
+under it that actually contain images — breadth-first from the mount, shallowest match
+wins, and raises with the real directory listing when nothing matches. `resolve_cache`
+wraps it: extract if there is a zip, otherwise locate in place, and **verify the image
+count either way** before returning a path.
+
+This is the same principle as DECISION-020's mount resolver, one level further in. Both
+exist because a hosting platform's directory conventions are not a stable interface, and
+`cache_relpath` is: it writes `eyepacs/<stem>.jpg` and `aptos/aptos_<stem>.jpg`, so the
+cache root is definitionally the directory those sit under. That fact survives any
+renaming or re-nesting done around it.
+
+`python -m src.data.archive_cache locate --mount <path>` answers "where is it, and is it
+complete" from a shell, without a notebook.
+
+`tests/test_archive.py` covers every observed layout by name, including the one Kaggle
+actually published, plus a nested copy (shallowest wins), a half-extracted tree with the
+right directory names and no images, and a short cache that must be refused rather than
+returned.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

@@ -205,6 +205,112 @@ def unpack(archive: Path, dest: Path, *, expect_images: int | None = None) -> Pa
     return out
 
 
+# ----------------------------------------------------------------------------------
+# Finding a cache tree, by SHAPE rather than by name
+# ----------------------------------------------------------------------------------
+
+# The directories `cache_relpath` writes into. A cache root is the directory that has
+# these under it, wherever it happens to sit.
+CACHE_SUBDIRS = ("eyepacs", "aptos")
+
+
+def looks_like_cache_root(d: Path) -> bool:
+    """True if `d` is a directory a `DRDataset` could be pointed at.
+
+    `cache_relpath` produces `eyepacs/<stem>.jpg` and `aptos/aptos_<stem>.jpg`, so the
+    cache root is whatever directory those two live directly under. That is a structural
+    fact about the artefact and it does not change when a hosting platform renames or
+    re-nests the folder around it.
+    """
+    if not d.is_dir():
+        return False
+    subs = [d / s for s in CACHE_SUBDIRS]
+    present = [s for s in subs if s.is_dir()]
+    if not present:
+        return False
+    # At least one of them has to actually hold images; an empty `eyepacs/` is a
+    # half-extracted tree, not a cache.
+    return any(next(s.glob(f"*{IMAGE_SUFFIX}"), None) is not None for s in present)
+
+
+def find_cache_root(mount: Path, *, expect_images: int | None = None,
+                    max_depth: int = 4) -> Path:
+    """Locate the cache root under `mount`, whatever the hosting layout did to it.
+
+    WHY THIS IS A SEARCH AND NOT A PATH (DECISION-023). Kaggle **auto-extracts** an
+    uploaded archive when it publishes a dataset, so the single verified `.zip` that
+    DECISION-021 produces does not stay a zip. The published dataset came back as a
+    `fyp-dr-eyepacs-224/` folder holding 38.8k files with two stats CSVs beside it —
+    neither `MOUNT/*.zip` nor `MOUNT/processed`, which is what the notebook expected.
+
+    Three layouts have now been observed for the same artefact across two platform
+    behaviours, and predicting the fourth is a bet with a session on it. So this looks for
+    the SHAPE — a directory with `eyepacs/` and `aptos/` under it containing images —
+    breadth-first, and raises with the real listing when it finds nothing.
+    """
+    mount = Path(mount)
+    if not mount.exists():
+        raise FileNotFoundError(f"{mount} does not exist")
+
+    # Breadth-first so the shallowest match wins: if a tree somehow contains a nested
+    # copy, the outer one is the one that was published.
+    level = [mount]
+    for _ in range(max_depth + 1):
+        for d in level:
+            if looks_like_cache_root(d):
+                if expect_images is not None:
+                    n = sum(1 for _ in d.rglob(f"*{IMAGE_SUFFIX}"))
+                    if n != expect_images:
+                        raise RuntimeError(
+                            f"{d} looks like a cache root but holds {n} images, expected "
+                            f"{expect_images}. Do not train on a partial cache - a short "
+                            "epoch is invisible in the loss curve."
+                        )
+                return d
+        nxt = []
+        for d in level:
+            try:
+                nxt += [q for q in sorted(d.iterdir()) if q.is_dir()]
+            except (PermissionError, OSError):
+                continue
+        if not nxt:
+            break
+        level = nxt
+
+    listing = []
+    for d in [mount] + [q for q in sorted(mount.iterdir()) if q.is_dir()][:10]:
+        try:
+            listing.append(f"  {d}: {sorted(q.name for q in d.iterdir())[:12]}")
+        except (PermissionError, OSError):
+            pass
+    raise FileNotFoundError(
+        f"no cache root under {mount} - looked for a directory containing "
+        f"{list(CACHE_SUBDIRS)} with {IMAGE_SUFFIX} files in it, to depth {max_depth}."
+        + ("\nwhat is actually there:\n" + "\n".join(listing) if listing else "")
+    )
+
+
+def resolve_cache(mount: Path, work: Path, *, expect_images: int | None = None) -> Path:
+    """The one call a training notebook makes: give me a usable cache root.
+
+    Handles both shapes the published dataset has taken. If the archive survived as a
+    `.zip` it is extracted to `work` and the extracted tree is checked; if the platform
+    already extracted it, the tree is located in place and checked. Either way the count
+    is verified before the path is returned, because "it is mounted" and "it is complete"
+    are different claims.
+    """
+    mount, work = Path(mount), Path(work)
+
+    zips = sorted(mount.rglob("*.zip"))
+    if zips:
+        print(f"extracting {zips[0].name} "
+              f"({zips[0].stat().st_size / 1024 ** 3:.3f} GB) - about a minute ...")
+        extracted = unpack(zips[0], work, expect_images=expect_images)
+        return find_cache_root(extracted, expect_images=expect_images)
+
+    return find_cache_root(mount, expect_images=expect_images)
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The parser, separate from main(), so an invocation can be checked without
     running it. `src/data/notebook_check.py` and `tests/test_notebook_cells.py` both
@@ -219,16 +325,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--arcname", default="processed")
     p.add_argument("--expect-images", type=int, default=38788)
-    p.add_argument("--expect-gb", type=float, default=0.836)
+    p.add_argument("--expect-gb", type=float, default=0.852)  # MEASURED 2026-08-21
     p.add_argument("--gb-tolerance", type=float, default=0.10)
     p.add_argument("--deep", action="store_true", help="CRC-check every entry (slow)")
 
     v = sub.add_parser("verify", help="check an existing archive")
     v.add_argument("--archive", type=Path, required=True)
     v.add_argument("--expect-images", type=int, default=38788)
-    v.add_argument("--expect-gb", type=float, default=0.836)
+    v.add_argument("--expect-gb", type=float, default=0.852)
     v.add_argument("--gb-tolerance", type=float, default=0.10)
     v.add_argument("--deep", action="store_true")
+
+    lo = sub.add_parser("locate", help="find the cache root under a mount and check it")
+    lo.add_argument("--mount", type=Path, required=True)
+    lo.add_argument("--expect-images", type=int, default=38788)
 
     u = sub.add_parser("unpack", help="extract an archive for training")
     u.add_argument("--archive", type=Path, required=True)
@@ -240,6 +350,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
+
+    if args.cmd == "locate":
+        root = find_cache_root(args.mount, expect_images=args.expect_images)
+        print(f"cache root: {root}")
+        print(f"images    : {sum(1 for _ in root.rglob(IMAGE_SUFFIX.join(['*', ''])))}")
+        return 0
 
     if args.cmd == "unpack":
         out = unpack(args.archive, args.dest, expect_images=args.expect_images)

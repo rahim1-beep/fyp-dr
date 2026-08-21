@@ -28,9 +28,11 @@ DECISION-020: Kaggle mounts inputs at /kaggle/input/datasets/{owner}/{slug}/ now
 /kaggle/input is read-only. Both cell 1 lookups go through src.data.kaggle_paths, which
 tries the known layouts and raises with the real directory listing if none matches.
 
-DECISION-021: the cache dataset holds ONE zip, because Kaggle caps notebook output at 500
-files and a loose tree was silently truncated to 499. Cell 1 extracts it to
-/kaggle/working and then re-counts the extracted images. Budget about a minute for it.
+DECISION-021 / DECISION-023: the cache is published as ONE verified zip, because Kaggle
+caps notebook output at 500 files and a loose tree was silently truncated to 499 - but
+Kaggle then AUTO-EXTRACTS that zip when the dataset is created, so what mounts is a folder
+tree, not an archive. Cell 1 calls resolve_cache, which handles both and verifies the
+image count whichever it finds.
 """
 
 import sys
@@ -76,39 +78,28 @@ shutil.copytree(CODE, REPO)
 os.chdir(REPO)
 sys.path.insert(0, str(REPO))
 
-# --- the preprocessed cache: RESOLVED, never assumed (DECISION-020) -----------
-# The dataset holds ONE archive, not 38,788 loose files (DECISION-021), so it is
-# extracted to /kaggle/working first. /kaggle/input is read-only in any case.
-from src.data.archive_cache import unpack
+# --- the preprocessed cache: FOUND BY SHAPE, never by path (DECISION-023) -----
+# Kaggle AUTO-EXTRACTS an uploaded archive when it publishes a dataset, so the single
+# verified .zip from DECISION-021 is not a .zip by the time it is mounted. The published
+# dataset came back as a `fyp-dr-eyepacs-224/` folder holding 38.8k files with the stats
+# CSVs beside it - neither MOUNT/*.zip nor MOUNT/processed, which is what this cell used
+# to look for.
+#
+# Three layouts for one artefact across two platform behaviours. resolve_cache stops
+# predicting: it takes the zip path if a zip is there, otherwise it searches for the
+# SHAPE - a directory with eyepacs/ and aptos/ holding images - and verifies the count
+# either way.
+from src.data.archive_cache import resolve_cache
 from src.data.kaggle_paths import resolve_input
 
 MOUNT = resolve_input("fyp-dr-eyepacs-224", owner="rah098")
 print("dataset:", MOUNT)
 print("        ", sorted(q.name for q in MOUNT.iterdir())[:10])
 
-zips = sorted(MOUNT.rglob("*.zip"))
-if zips:
-    print(f"\nextracting {zips[0].name} "
-          f"({zips[0].stat().st_size / 1024**3:.3f} GB) - about a minute ...")
-    CACHE = unpack(zips[0], WORK / "cache", expect_images=38788)
-else:
-    # A dataset that was published as a loose tree (or one Kaggle auto-extracted).
-    CACHE = MOUNT / "processed" if (MOUNT / "processed").is_dir() else MOUNT
-
-print("cache:", CACHE)
+CACHE = resolve_cache(MOUNT, WORK / "cache", expect_images=38788)
+print("\ncache:", CACHE)
 print("      ", sorted(q.name for q in CACHE.iterdir())[:10])
-
-# Kept from before, and it now guards the EXTRACTION as well as the download. "The
-# archive was complete" and "the extraction completed" are different claims, and this is
-# the one training depends on.
-n_cached = sum(1 for _ in CACHE.rglob("*.jpg"))
-print(f"       {n_cached} cached images")
-if n_cached != 38788:
-    raise SystemExit(
-        f"cache holds {n_cached} images, expected 38788. Attach the right version of "
-        "fyp-dr-eyepacs-224, or re-run src.data.reconcile_cache against it. Do NOT "
-        "train on a partial cache - a short epoch is invisible in the loss curve."
-    )
+print(f"       {sum(1 for _ in CACHE.rglob('*.jpg'))} images, verified")
 
 # --- versions: the GPU image may differ from the CPU image (DECISION-019) -----
 import cv2, numpy, pandas, timm, torch, torchvision

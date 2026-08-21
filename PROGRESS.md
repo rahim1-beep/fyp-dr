@@ -1,16 +1,14 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **Rebuild the Phase 2 cache** — third attempt. The 8.1-hour run was
-> correct and died in cell 5 on a malformed command line (DECISION-022). Cell 1 now
-> validates every invocation this notebook will make and executes the pack path on a toy
-> directory before anything long starts; cell 5 runs a command built and checked in cell 1
-> rather than one retyped there.
+> **NEXT ACTION:** **Run the Phase 3 baseline** — `notebooks/phase3_baseline.py`.
+> GPU T4, **Internet ON**, two inputs (`fyp-dr-eyepacs-224`, `fyp-dr-code`).
+> Cells 1–2 by hand (setup + a 5-minute smoke run), then `RUN_SMOKE = False` and
+> Save & Run All for the 8-epoch baseline.
 >
-> Before pasting anything: `.venv/Scripts/python -m src.data.notebook_check --all
-> --self-test` should print `NOTEBOOK CHECK PASSED`.
+> Acceptance is a *correct* pipeline, not a good score: a val QWK whose CI excludes zero
+> and a confusion matrix that has not collapsed. Cell 4 checks both and says which.
 
-**Current phase:** Phase 2 rebuild, then Phase 3. The Phase 2 *pipeline* is done and
-proven; the published artefact has to be produced again (DECISION-021).
+**Current phase:** Phase 3 — Baseline. **Phase 2 is done**: built, verified, published.
 **Last updated:** 2026-08-20
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done
@@ -91,16 +89,33 @@ Phase 7 · 224×224 headline (DECISION-005) · no Intel XPU/IPEX (DECISION-003)
       distinct cache paths, **0 claimed by more than one split**
 - [x] **Kaggle build run 2026-08-21** — `RECONCILIATION PASSED`, leakage tests green
 - [x] Cached all 35,126 EyePACS + 3,662 APTOS images — the build was **correct**
-- [~] **Publishing FAILED silently** — Kaggle caps notebook output at 500 files and kept
-      **499 of 38,788**. `/kaggle/working` is wiped, so the cache is gone and
-      `fyp-dr-eyepacs-224` does not exist (DECISION-021)
-- [x] `src/data/archive_cache.py` + `tests/test_archive.py` (13) — pack to one file,
-      verify the central directory, refuse a short source, re-count on extract
+- [x] `src/data/archive_cache.py` + `tests/test_archive.py` (24) — pack to one file,
+      verify the central directory, refuse a short source, re-count on extract, and find
+      the cache root by shape (DECISION-021, DECISION-023)
+- [x] `src/data/notebook_check.py` + `tests/test_notebook_cells.py` (30) — every notebook
+      command line validated against its module's real parser (DECISION-022)
+- [x] **PUBLISHED 2026-08-21** — `rah098/fyp-dr-eyepacs-224` v1, private, 918.08 MB
 - [x] `src/data/notebook_check.py` + `tests/test_notebook_cells.py` (30) — every
       notebook command line validated against its module's real parser, every direct call
       bound against the real signature, and the pack path executed on a toy tree
       (DECISION-022)
-- [ ] **← RE-RUN THE BUILD** (third attempt), then publish the single archive
+- [x] Third build: `ARCHIVE VERIFIED` — 38,797 entries (38,788 images + 9 sidecars),
+      0.852 GB; reconciliation clean; same 4 `ok:no-retina` images, all still in place
+
+### What it took: three attempts, and none of the losses were in the work
+
+| Attempt | Outcome |
+|---|---|
+| 1 | Built correctly. Output truncated to **499 of 38,788** by Kaggle's 500-file cap, silently, after every check passed. `/kaggle/working` wiped (DECISION-021). |
+| 2 | Built correctly, ran **8.1 h**, printed `READY TO ARCHIVE`, died in cell 5 on a missing `pack` subcommand — rejected by argparse in 0.0 s (DECISION-022). |
+| 3 | **Built, verified, published.** 38,797 entries, 0.852 GB, `rah098/fyp-dr-eyepacs-224` v1. |
+
+Then Kaggle **auto-extracted** the archive on publish, so the mounted dataset is a folder
+tree rather than the zip the training notebook expected (DECISION-023).
+
+Every one of these was in the glue around the work: output packaging, an argument list,
+a directory layout. The preprocessing itself was right on the first attempt and produced
+byte-identical results on all three.
 
 ### The publishing failure — worth reading before the rebuild
 
