@@ -268,3 +268,85 @@ def test_a_genuinely_wrong_shape_still_fails_with_runtime_values():
     """The retry must not turn the checker into a rubber stamp."""
     inv = _one('run([sys.executable, "-m", "src.train.train", "--epochs", EPOCHS])')
     assert check(inv) is not None        # --arm and --cache-root are required
+
+
+# ----------------------------------------------------------------------------------
+# Import hygiene — DECISION-028
+# ----------------------------------------------------------------------------------
+#
+# Cell 1 of the Phase 4 ablation died on Kaggle because notebook_check imports every
+# module under notebooks/ to collect its cells, and gen_experiments.py read
+# runs/phase3_baseline_resnet18/metrics.json at MODULE LEVEL. runs/ is not in the code
+# bundle, so the import raised and the gate exited before checking anything — on the GPU
+# session the gate exists to protect.
+
+def test_every_notebook_module_imports_with_no_runs_directory(tmp_path, monkeypatch):
+    """The Kaggle condition: the code bundle, and nothing else.
+
+    Imports each module fresh from a working directory with no `runs/`, no `data/`, and
+    no `docs/`. A module that reads a file at import time fails here.
+    """
+    import importlib
+    import sys
+
+    monkeypatch.chdir(tmp_path)
+    assert not (tmp_path / "runs").exists()
+
+    names = [p.stem for p in sorted((REPO / "notebooks").glob("*.py"))
+             if p.stem != "__init__"]
+    assert len(names) >= 4, f"only found {names} — the glob is wrong"
+
+    failures = []
+    for name in names:
+        mod = f"notebooks.{name}"
+        sys.modules.pop(mod, None)          # force a real re-execution
+        try:
+            importlib.import_module(mod)
+        except Exception as exc:            # noqa: BLE001
+            failures.append(f"{name}: {type(exc).__name__}: {exc}")
+
+    assert failures == [], (
+        "these modules touch the filesystem at import time:\n  " + "\n  ".join(failures)
+    )
+
+
+def test_the_gate_survives_a_module_that_cannot_import(tmp_path, monkeypatch):
+    """One bad module must not blind the whole gate. It is reported as a failure against
+    that module, and every other notebook is still checked."""
+    from src.data import notebook_check as nc
+
+    broken = REPO / "notebooks" / "_test_broken_import.py"
+    broken.write_text(
+        '"""Deliberately broken, for tests/test_notebook_cells.py."""\n'
+        'raise RuntimeError("import-time explosion")\n'
+        "CELLS = []\n",
+        encoding="utf-8",
+    )
+    try:
+        errors = nc.notebook_import_errors()
+        assert any(n == "_test_broken_import" for n, _ in errors)
+        assert any("import-time explosion" in why for _, why in errors)
+
+        # and the real notebooks are still collected
+        invs = nc.collect_invocations()
+        assert len(invs) >= 8
+        assert {i.notebook for i in invs} >= {"phase2_build_cache", "phase3_baseline",
+                                              "phase4_ablation"}
+    finally:
+        broken.unlink()
+
+
+def test_import_errors_are_empty_for_the_real_notebooks():
+    from src.data.notebook_check import notebook_import_errors
+
+    assert notebook_import_errors() == []
+
+
+def test_gen_experiments_exposes_a_parser_and_does_no_work_on_import():
+    """It is invoked as `python -m notebooks.gen_experiments`, so it is a CLI too."""
+    from notebooks.gen_experiments import build_parser, render
+
+    p = build_parser()
+    args = p.parse_args([])
+    assert args.run and args.runs_root.name == "runs"
+    assert callable(render)

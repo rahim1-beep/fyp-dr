@@ -29,6 +29,10 @@ runs any work:
      `python -m <module> ...` example in its own docstring is accepted by that parser.
      Docstring usage is what an operator copies, and it rots silently when a flag is
      renamed.
+  4. Every module under `notebooks/` imports at all. A module with an import-time side
+     effect — reading a file that is not in the code bundle, say — is reported as a
+     failure against that module and the rest are still checked (DECISION-028). Nothing
+     under `notebooks/` should touch the filesystem at import time.
 
 It runs in two places, and it needs both:
 
@@ -135,16 +139,53 @@ def invocations_in(source: str, notebook: str, cell_no: int) -> list[Invocation]
     return found
 
 
-def collect_invocations(notebook_names: list[str] | None = None) -> list[Invocation]:
-    """Read `CELLS` out of each notebook module and extract every invocation."""
-    names = notebook_names or [
+def notebook_names(explicit: list[str] | None = None) -> list[str]:
+    return explicit or [
         p.stem for p in sorted(NOTEBOOK_DIR.glob("*.py"))
         if p.stem not in {"__init__", "make_bundle"}
     ]
 
+
+def import_notebook(name: str):
+    """(module, error). Never raises.
+
+    A module that fails to import is a FINDING, not a crash (DECISION-028). One module
+    with an import-time side effect used to bring the whole gate down before it checked
+    anything — on the GPU session the gate exists to protect. A gate that dies on the
+    first bad input is a gate that tells you nothing about the other inputs.
+    """
+    try:
+        return importlib.import_module(f"notebooks.{name}"), None
+    except Exception as exc:                 # noqa: BLE001 - reported, not hidden
+        return None, f"{type(exc).__name__}: {exc}"
+
+
+def notebook_import_errors(explicit: list[str] | None = None) -> list[tuple[str, str]]:
+    """(notebook, why) for every module under notebooks/ that will not import.
+
+    Reported separately because the consequence is specific: that notebook's cells are
+    UNCHECKED, which is worse than any single bad command line.
+    """
+    out = []
+    for name in notebook_names(explicit):
+        _mod, err = import_notebook(name)
+        if err:
+            out.append((name, err))
+    return out
+
+
+def collect_invocations(explicit: list[str] | None = None) -> list[Invocation]:
+    """Read `CELLS` out of each notebook module and extract every invocation.
+
+    Modules that will not import are skipped here and reported by
+    `notebook_import_errors`, so one bad module cannot hide every other notebook's
+    command lines.
+    """
     out: list[Invocation] = []
-    for name in names:
-        mod = importlib.import_module(f"notebooks.{name}")
+    for name in notebook_names(explicit):
+        mod, err = import_notebook(name)
+        if err:
+            continue
         cells = getattr(mod, "CELLS", None)
         if not cells:
             continue
@@ -229,14 +270,12 @@ def api_calls_in(source: str, notebook: str, cell_no: int) -> list[tuple]:
     return out
 
 
-def collect_api_calls(notebook_names: list[str] | None = None) -> list[tuple]:
-    names = notebook_names or [
-        q.stem for q in sorted(NOTEBOOK_DIR.glob("*.py"))
-        if q.stem not in {"__init__", "make_bundle"}
-    ]
+def collect_api_calls(explicit: list[str] | None = None) -> list[tuple]:
     out = []
-    for name in names:
-        mod = importlib.import_module(f"notebooks.{name}")
+    for name in notebook_names(explicit):
+        mod, err = import_notebook(name)
+        if err:
+            continue
         for i, cell in enumerate(getattr(mod, "CELLS", []) or [], start=1):
             out += api_calls_in(cell, name, i)
     return out
@@ -436,11 +475,23 @@ def main() -> int:
     if not args.all and not args.notebook:
         args.all = True
 
-    invs = collect_invocations(None if args.all else args.notebook)
+    wanted = None if args.all else args.notebook
+    failures = []
+
+    # Import failures first. A notebook that will not import has NONE of its cells
+    # checked, so this is the most serious thing the gate can report - and it must not
+    # stop the gate from checking everything else (DECISION-028).
+    import_errors = notebook_import_errors(wanted)
+    for name, why in import_errors:
+        print(f"  [FAIL] notebooks/{name}.py does not import - its cells are UNCHECKED")
+        print(f"         -> {why}")
+        failures.append((name, why))
+    if import_errors:
+        print()
+
+    invs = collect_invocations(wanted)
     print(f"checking {len(invs)} command line(s) from "
           f"{len(set(i.notebook for i in invs))} notebook(s)\n")
-
-    failures = []
     for inv in invs:
         why = check(inv)
         mark = "ok  " if why is None else "FAIL"

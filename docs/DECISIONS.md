@@ -1317,6 +1317,58 @@ The baseline's `unknown` stands: it is what that run recorded.
 
 ---
 
+## DECISION-028 — Nothing under `notebooks/` runs at import time, and the gate survives one that does
+
+- **Date:** 2026-08-22
+- **Status:** Accepted
+- **Deviates from proposal:** No
+
+Phase 4 cell 1 died on Kaggle before any GPU time, in the gate itself:
+
+    FileNotFoundError: 'runs/phase3_baseline_resnet18/metrics.json'
+      gen_experiments.py line 15, during importlib.import_module("notebooks.gen_experiments")
+
+`notebook_check` imports every module under `notebooks/` to collect the command lines its
+cells will run. `gen_experiments.py` read the Phase 3 artefacts at **module level** — it
+had been lifted out of a throwaway script without moving its body into `main()`. `runs/`
+is not in the code bundle, so the import raised, and `notebook_check` exited 1 **before
+checking anything**.
+
+Two separate defects, and both are worth fixing.
+
+**1. A module under `notebooks/` must not touch the filesystem at import time.** Those
+modules exist to be imported by tooling — that is the whole mechanism `notebook_check`
+relies on. `gen_experiments` now does all its work inside `main()`, exposes
+`build_parser()`, and derives its root from `__file__` rather than `Path(".")`; the
+cwd-dependence was a second latent bug in the same six lines.
+
+**2. The gate must not be brought down by one module.** A checker that dies on the first
+bad input tells you nothing about the other inputs — and it failed *closed* in the worst
+possible way here, reporting a single import error while 21 command lines across three
+notebooks went unexamined. `notebook_import_errors()` now reports a failing module as a
+finding, and `collect_invocations` / `collect_api_calls` skip it and carry on. The failure
+is reported **first and loudest**, because the consequence is specific and severe: that
+notebook's cells are **UNCHECKED**, which is worse than any single bad command line.
+
+`tests/test_notebook_cells.py` pins both halves. One test imports every module under
+`notebooks/` fresh from a working directory with **no `runs/`, no `data/`, no `docs/`** —
+the Kaggle condition, the code bundle and nothing else. Another plants a module that
+raises on import and asserts the gate names it *and* still collects every other
+notebook's invocations.
+
+### The pattern, for the fifth time
+
+Cell 1 exists because three sessions were lost to unvalidated glue. This failure was **in
+the validator**, which is the same shape one level up: the thing that runs first, once,
+protecting something expensive, was itself the least-exercised code. It is now exercised
+by tests that reproduce the environment it actually runs in rather than the one it was
+written in.
+
+Everything downstream of it had already passed on Kaggle before it fell over — cache
+38,788 verified, Tesla T4, bundle git `456444a`, pretrained weights OK.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and
