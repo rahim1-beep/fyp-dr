@@ -1537,6 +1537,91 @@ at seeds 43 and 44 before it is claimed.
 
 ---
 
+## DECISION-032 — The sensitivity floor is 80% at 95% specificity, from the UK screening standard
+
+- **Date:** 2026-08-22
+- **Status:** Accepted, **pending supervisor confirmation of the applicable standard**
+- **Deviates from proposal:** Extends it. Implements the floor DECISION-030 called for.
+
+### The proposed floor
+
+**Referable-DR sensitivity ≥ 0.80 at specificity ≥ 0.95**, on validation, at an operating
+point chosen on validation only (R3).
+
+Both halves are required and the pair is the standard, not either number alone.
+Sensitivity by itself is trivially satisfiable by referring every patient — the model that
+scores 1.00 sensitivity and 0.00 specificity is the one that refers everybody, and it is
+useless. `choose_operating_point` therefore reports the joint point, and separately what
+each constraint costs when the other binds.
+
+### The basis, with citations
+
+**Primary — the UK standard.** Diabetic retinopathy screening programmes in the UK are
+held to a minimum of **≥80% sensitivity, ≥95% specificity, and ≤5% technical failure
+rate**. The figures originate with the British Diabetic Association (now Diabetes UK) and
+are carried into NICE guidance and NHS Diabetic Eye Screening Programme standards.
+Verified 2026-08-22 against:
+
+- [Screening for diabetic retinopathy — GPnotebook](https://gpnotebook.com/pages/ophthalmology/screening-for-diabetic-retinopathy)
+- [Diabetic eye screening programme — PrimaryCareNotebook](https://primarycarenotebook.com/pages/ophthalmology/diabetic-eye-screening-programme)
+
+**Secondary — what a cleared autonomous AI device achieves.** The FDA-authorised IDx-DR
+system reported **87.2% sensitivity and 90.7% specificity** (with 96.1% imageability) for
+more-than-mild DR in its pivotal trial, exceeding all pre-specified superiority endpoints:
+
+- Abràmoff MD, Lavin PT, Birch M, Shah N, Folk JC. *Pivotal trial of an autonomous
+  AI-based diagnostic system for detection of diabetic retinopathy in primary care
+  offices.* **npj Digital Medicine** 2018;1:39.
+  [nature.com/articles/s41746-018-0040-6](https://www.nature.com/articles/s41746-018-0040-6)
+  · summary confirmed via [PMC8120059](https://pmc.ncbi.nlm.nih.gov/articles/PMC8120059/)
+
+### What is NOT verified, and must be before it is written up
+
+Three things were **not** confirmed and must not be stated as fact in the thesis:
+
+1. **The exact numeric values of IDx-DR's pre-specified endpoints.** The trial "exceeded
+   all pre-specified superiority endpoints" is confirmed; the specific thresholds
+   (commonly quoted as 85% sensitivity / 82.5% specificity) were **not** verifiable — the
+   FDA De Novo document DEN180001 returned 404 and the Nature article is behind an
+   authentication redirect. Cite the achieved figures, not the endpoints, unless the
+   primary source is obtained.
+2. **The precise NICE guideline number and clause.** The 80/95 figures are corroborated
+   by multiple secondary sources, but the primary NICE/NHS DESP document was not read
+   directly. **Obtain the primary source before it goes in the thesis.**
+3. **Whether mtmDR maps exactly onto this project's referable definition.** "More than
+   mild DR" is ETDRS-based; this project's referable line is `grade >= 2` on the
+   EyePACS/ICDR-like 0–4 scale. They are closely aligned in intent — grade 2 is Moderate
+   NPDR — but they are not the same instrument, and UK DESP referable criteria also
+   include maculopathy, which these labels do not encode at all.
+
+**This is a benchmark, not a like-for-like requirement**, and the write-up should say so.
+The value is that it anchors the number to a named external standard instead of leaving
+"sensitivity 0.64" floating without a reference point.
+
+### Where this project stands against it
+
+| arm | referable sensitivity | specificity |
+|---|---:|---:|
+| standard | **≥ 0.80** | **≥ 0.95** |
+| IDx-DR (cleared device) | 0.872 | 0.907 |
+| A | 0.6404 | 0.9804 |
+| B | 0.6725 | — |
+| D | 0.6307 | — |
+| E | 0.5598 | — |
+| F | 0.6917 | — |
+
+**No arm meets the standard.** That is the honest headline and it belongs in the write-up.
+
+But note what arm A's pair says: **0.98 specificity against a 0.95 floor, and 0.64
+sensitivity against a 0.80 floor.** It has roughly three points of specificity in surplus
+and sixteen points of sensitivity missing. The operating point is sitting far too
+conservative, and surplus specificity is spendable — which is exactly what
+`src/eval/thresholds.py` now measures, per arm, without retraining anything. How much of
+the gap that closes is an empirical question that the tool answers and this decision does
+not prejudge.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

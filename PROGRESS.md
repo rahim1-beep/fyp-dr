@@ -293,7 +293,14 @@ order A→B→C→D→E→F by increasing implementation risk.
 - [x] DECISION-031 — pooling APTOS is a **null result** against the correct comparator
       (F vs B, not F vs A): −0.022 QWK, inside B's interval
 - [ ] Re-run arm C alone (~36 min), then regenerate `docs/EXPERIMENTS.md` from artefacts
-- [ ] Build `src/eval/thresholds.py`; optimise arm E on validation (R3)
+- [x] `src/eval/thresholds.py` + `src/eval/predict.py` + 22 tests — QWK-optimal cut
+      points AND an operating point against the screening standard, reported separately
+      so the trade-off stays visible (DECISION-030, DECISION-032)
+- [x] `train.py` now saves `val_outputs.npz` for every run, so threshold work is a local
+      GPU-free step forever
+- [ ] One Kaggle notebook: re-run arm C (~36 min) + backfill `val_outputs.npz` for the
+      five arms that already ran (~5 min from their checkpoints)
+- [ ] Then thresholds locally for all six arms, then stage 2
 - [ ] Stage 2: seed repeats on E, A, F
 - [ ] Fetch with `src.data.fetch_run`, regenerate `docs/EXPERIMENTS.md`
 - [ ] Stage 2: seed repeats on the top three

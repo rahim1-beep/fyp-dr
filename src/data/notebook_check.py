@@ -346,6 +346,8 @@ CLI_MODULES = (
     "src.data.notebook_check",
     "src.train.train",
     "src.train.smoke",
+    "src.eval.predict",
+    "src.eval.thresholds",
 )
 
 

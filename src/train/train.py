@@ -329,7 +329,17 @@ def main() -> int:
     # ---- final validation metrics (R4) --------------------------------------------
     dev = torch.device("cuda" if torch.cuda.is_available() and args.device != "cpu"
                        else "cpu")
-    y_true, y_pred, idx = evaluate(model, loaders["val"], dev, head=model_cfg.head)
+
+    # Raw outputs alongside the grades. metrics.json stores integer predictions only, so
+    # without this no operating point or cut point can ever be recovered from a finished
+    # run without reloading its checkpoint (DECISION-030). `fit` has already restored the
+    # BEST checkpoint, so these describe the model that was selected.
+    from src.eval.predict import evaluate_with_raw, save_val_outputs
+
+    y_true, y_pred, idx, raw = evaluate_with_raw(model, loaders["val"], dev,
+                                                 head=model_cfg.head)
+    save_val_outputs(run_dir, raw, y_true, idx, model_cfg.head)
+    print(f"val outputs -> {run_dir / 'val_outputs.npz'}")
     metrics = compute_all(
         y_true, y_pred, split="val",
         referable_threshold=int(cfg.get("eval", {}).get("referable_threshold", 2)),
