@@ -669,3 +669,33 @@ def test_the_other_arms_criteria_carry_no_tensors():
 
     cfg_c = _y.safe_load((REPO / "configs/arm_c.yaml").read_text(encoding="utf-8"))
     assert build_loss(cfg_c["imbalance"], df).weight is not None, "arm C must be weighted"
+
+
+def test_arm_c2_uses_effective_number_weighting():
+    """DECISION-034: the arm C result is specific to INVERSE-FREQUENCY weighting, so the
+    gentler scheme has to actually exist and be gentler."""
+    import yaml as _y
+
+    from src.data.manifest import load_split
+    from src.train.losses import class_weights_from
+
+    cfg = _y.safe_load((REPO / "configs/arm_c2.yaml").read_text(encoding="utf-8"))
+    assert cfg["imbalance"]["class_weight_scheme"] == "effective_number"
+    assert cfg["imbalance"]["sampler"] == "none"      # weighting, not resampling
+
+    train = load_split("train")
+    inv = class_weights_from(train, "inverse_frequency")
+    eff = class_weights_from(train, "effective_number")
+    assert (eff[4] / eff[0]) < (inv[4] / inv[0]) / 1.5, (
+        "effective-number weighting must be materially gentler than inverse frequency, "
+        f"got {float(eff[4]/eff[0]):.1f}x vs {float(inv[4]/inv[0]):.1f}x"
+    )
+
+
+def test_an_unknown_arm_names_the_configs_that_exist():
+    """The arm set used to be hardcoded as 'ABCDE', which made any new variant
+    unrunnable and reported letters rather than the missing file."""
+    from src.data.manifest import load_arm_splits
+
+    with pytest.raises(ValueError, match="configs/ defines"):
+        load_arm_splits("Z9")

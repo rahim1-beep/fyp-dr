@@ -303,7 +303,16 @@ order A→B→C→D→E→F by increasing implementation risk.
 - [ ] **← RUN IT** (needs the ablation notebook's OUTPUT mounted, for the checkpoints)
 - [ ] Operating-point table for all six arms — **this decides whether arm E's ranking
       survives**, and it comes before stage 2
-- [ ] Stage 2: seed repeats, on whichever arms the table leaves in contention
+- [x] Matched-decision-rule comparison (DECISION-033/035): ranking becomes
+      A > E > F > D > B > C, and **A vs E is a tie** (+0.007 [-0.020, +0.029])
+- [x] `configs/arm_c2.yaml` — effective-number weighting, 17.1:1 against inverse
+      frequency's 36:1, so the arm C result stops resting on one scheme (DECISION-034)
+- [x] `notebooks/phase4_stage3.py` — the capacity hypothesis as a falsifiable test,
+      **pre-registered in EXPERIMENTS.md before the run**, plus arm C2
+- [ ] **← RUN STAGE 3** (~2.6 h: A/E/B on EfficientNet-B0, then C2 on ResNet18)
+- [ ] Stage 2, reduced scope: seeds on A, E, F to establish stability — it cannot break
+      a tie this small
+- [ ] Then decide the resolution/regularisation route (handoff)
 - [ ] **Supervisor:** confirm the screening standard (DECISION-032). Until then the floor
       is PROVISIONAL and stays out of the write-up
 - [ ] Stage 2: seed repeats on E, A, F

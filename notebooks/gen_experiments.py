@@ -90,6 +90,50 @@ def render(run: str, runs_root: Path) -> tuple[str, str]:
 
     ---
 
+    ## PRE-REGISTERED - the stage 3 capacity hypothesis
+
+    **Written 2026-08-22, before the stage 3 runs.** Recorded here so the prediction is on
+    record whichever way it goes.
+
+    ### What stage 1 showed
+
+    The `train - val` QWK gap at each arm's best epoch, from the committed `train_log.csv`
+    files:
+
+    | arm | train QWK | val QWK | gap |
+    |---|---:|---:|---:|
+    | A | 0.7748 | 0.6831 | +0.092 |
+    | E | 0.7808 | 0.7081 | +0.073 |
+    | B | 0.8744 | 0.5846 | **+0.290** |
+    | D | 0.8547 | 0.5550 | **+0.300** |
+    | F | 0.9198 | 0.6190 | **+0.301** |
+    | C | 0.2604 | 0.4049 | -0.145 |
+
+    The three arms with the weighted sampler reach train QWK 0.87-0.92 and lose about 0.30
+    on validation. That is memorisation, not underfitting. Every arm early-stopped, so the
+    30-epoch budget was not binding either.
+
+    ### The prediction
+
+    **Capacity is not the binding constraint. EfficientNet-B0 will not close the 0.14
+    referable-sensitivity gap.**
+
+    1. **Arm B's train-val gap will stay at or above 0.25** on B0. A higher-capacity
+       backbone fits the duplicated rare images at least as well, so the gap does not close.
+    2. **Arms A and E will move by less than 0.03 QWK** in either direction.
+
+    ### What each outcome means
+
+    - **Prediction holds** - capacity is ruled out by evidence rather than argument, and
+      the route to the sensitivity gap is regularisation and input resolution.
+    - **Prediction fails**, B0 closes the gap - capacity mattered, the reasoning above is
+      wrong, and the resolution plan is re-costed before anything is spent on it.
+
+    Either way it is a result. `notebooks/phase4_stage3.py` cell 4 evaluates it directly
+    and prints AS PREDICTED or PREDICTION WRONG.
+
+    ---
+
     ## Comparison table
 
     | Run | Arm | Model | Epochs | val QWK [95% CI] | Acc | Bal acc | Ref. sens | Ref. spec |
@@ -217,6 +261,12 @@ def render(run: str, runs_root: Path) -> tuple[str, str]:
       interval is ±{(ci['hi'] - ci['lo']) / 2:.4f}, so an arm beating it by less than about
       0.03 QWK needs a seed repeat before anyone calls it a win.
     """
+    # The template above is indented with this function; Markdown would read that as a
+    # code block, so the emitted document is dedented. `textwrap.dedent` needs a common
+    # prefix, and blank lines in the template have none - hence the explicit pass over
+    # lines rather than a bare dedent().
+    text = "\n".join(line[4:] if line.startswith("    ") else line
+                     for line in text.splitlines()) + "\n"
     return text, verdict.level
 
 

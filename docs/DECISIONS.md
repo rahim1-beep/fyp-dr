@@ -1748,6 +1748,62 @@ Not "the sampler beats class weights". The defensible claims are:
 
 ---
 
+## DECISION-035 — Every ranking claim uses a matched decision rule. Permanently.
+
+- **Date:** 2026-08-22
+- **Status:** Accepted — **standing rule, applies to every comparison in the thesis**
+- **Deviates from proposal:** No. QWK is still the metric.
+
+**This is the single easiest way for the write-up to mislead**, and it already did once:
+the stage 1 table ranked arm E first on a QWK computed with four fitted cut points, above
+arms scored with a bare `argmax` and no fitted parameters at all. Two positions in the
+ranking moved when that was corrected, and the apparent winner became a statistical tie.
+
+### The rule
+
+**No ranking claim — in a table, a figure, a sentence, or the viva — may compare arms
+scored with different numbers of free parameters.**
+
+1. **Every arm gets the same degrees of freedom.** Four cut points, fitted on validation.
+2. **Softmax heads are scored on the expected grade** `sum(p_i * i)`, not `argmax`. The
+   expected grade is the continuous analogue of an ordinal output; `argmax` collapses
+   "spread across 2 and 3" and "confident 2" into the same answer, and those are not the
+   same evidence.
+3. **Fitting optimism is measured and reported**, by fitting on half the validation set
+   and scoring the other half. On this ablation it is 0.009–0.018 QWK. That number is a
+   result, not an assumption, and it is re-measured on every run of
+   `src/eval/compare_arms.py`.
+4. **Differences are reported with a paired bootstrap interval**, paired on the same
+   validation images. An interval spanning zero is a **tie** and is written up as one.
+5. **The as-run column stays** — it is what the run actually produced and dropping it
+   would hide the effect of the decision rule. It is **never** the basis of a ranking
+   claim.
+
+### Why the as-run column must stay but must not rank
+
+The gap between the two columns is itself a finding. Arm C gains **+0.192 QWK** from
+re-thresholding and arm E gains **+0.005**: that difference says something real about how
+badly inverse-frequency weighting displaces the decision boundary (DECISION-034). Deleting
+the as-run numbers would erase the evidence for that; ranking on them would attribute a
+decision-rule artefact to the imbalance mechanism.
+
+`src/eval/compare_arms.py` prints both columns side by side and, when the two rankings
+disagree, says so explicitly:
+
+    ranking on held-out fitted QWK: A > E > F > D > B > C
+    as-run ranking was          : E > A > F > B > D > C
+    ^ the decision rule, not the imbalance mechanism, moved these
+
+### Where it applies
+
+Every arm comparison, stage 2's seed repeats, stage 3's capacity test, the arm F pooled
+question (which additionally uses EyePACS-only scores, DECISION-007), and the final
+model-selection decision. The one number that is **not** subject to this is the test-set
+result, which is produced once, at a single operating point fixed on validation
+beforehand, and is not a ranking.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

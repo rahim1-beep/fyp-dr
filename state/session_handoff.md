@@ -14,6 +14,33 @@ five-checkpoint backfill (~5 min), one session. It needs the Phase 4 ablation no
 
 After it: the operating-point table for all six arms, then stage 2.
 
+## THE IDENTIFIED ROUTE TO THE SENSITIVITY GAP - a live decision after stage 3
+
+No arm reaches the screening floor; the best is **sens@spec 0.66 against 0.80 required**.
+Stage 1's traces say what is and is not limiting these runs, so this is not guesswork:
+
+- **Not the schedule.** All six arms early-stopped, best epochs 6-20 of 30.
+- **Not capacity** (pending stage 3's test). The sampler arms reach train QWK 0.87-0.92
+  and lose ~0.30 on validation - memorisation, not underfitting.
+- **Generalisation is the binding constraint.**
+
+**The two levers, in the order the evidence supports:**
+
+1. **Input resolution, 224 -> 384.** The strongest lever in the DR literature and the one
+   most likely to move rare-class sensitivity: microaneurysms are a few pixels across at
+   224, which is exactly the signal grades 1-2 depend on. **Cost ~2.9x compute**
+   ((384/224)^2 on the pixel count), so a 30-epoch ResNet18 arm goes from ~36 min to
+   ~1.7 h and a six-arm sweep from 3.7 h to ~11 h. It also needs the **cache rebuilt at
+   384**: another ~2.5 h and roughly 2.4 GB. Already scoped as an optional ablation in the
+   proposal (DECISION-005), so it is a deviation to approve rather than to invent.
+2. **Regularisation for the sampler arms.** Their failure is specifically memorisation of
+   repeated rare images. Stronger augmentation, mixup/cutmix, or a sampler that draws with
+   a softened weight rather than full inverse frequency all target that directly, and all
+   are far cheaper than a resolution change.
+
+**Decide after stage 3**, because its result changes which is worth doing: if capacity
+turns out to matter after all, both are premature.
+
 ## DO NOT WRITE UP — three unconfirmed items (DECISION-032)
 
 The screening floor of **sensitivity >= 0.80 at specificity >= 0.95** is implemented and

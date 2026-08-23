@@ -76,7 +76,12 @@ def load_arm_splits(arm: str, splits_root: Path | None = None
                     ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Return (train, val, test) for an ablation arm.
 
-    Arms A-E use EyePACS alone. Arm F pools APTOS into train and val only.
+    Arm F pools APTOS into train and val. Every other arm is EyePACS alone.
+
+    Which arms EXIST is decided by `configs/arm_*.yaml`, not by a hardcoded letter set:
+    the set used to be `"ABCDE"`, which silently made any new variant unrunnable and gave
+    an error naming letters rather than the missing file. Arm C2 (effective-number
+    weighting) is the first arm to need that.
     """
     arm = arm.upper()
 
@@ -84,10 +89,13 @@ def load_arm_splits(arm: str, splits_root: Path | None = None
         parts = {k: pd.concat([load_split(n, splits_root) for n in names],
                               ignore_index=True)
                  for k, names in ARM_F_SPLITS.items()}
-    elif arm in set("ABCDE"):
-        parts = {k: load_split(k, splits_root) for k in ("train", "val", "test")}
     else:
-        raise ValueError(f"Unknown arm {arm!r}; expected one of A B C D E F")
+        cfg = REPO / "configs" / f"arm_{arm.lower()}.yaml"
+        if not cfg.exists():
+            available = sorted(p.stem.removeprefix("arm_").upper()
+                               for p in (REPO / "configs").glob("arm_*.yaml"))
+            raise ValueError(f"Unknown arm {arm!r}; configs/ defines {available}")
+        parts = {k: load_split(k, splits_root) for k in ("train", "val", "test")}
 
     train, val, test = parts["train"], parts["val"], parts["test"]
 
