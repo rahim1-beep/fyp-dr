@@ -145,6 +145,16 @@ def train_one_epoch(
             optimizer.step()
 
         if scheduler is not None:
+            # AFTER optimizer.step(), which is the correct order. PyTorch may still warn
+            # "lr_scheduler.step() before optimizer.step()" under AMP: the GradScaler
+            # SKIPS the first optimiser step or two while it calibrates its scale factor,
+            # so the scheduler advances when the optimiser did not.
+            #
+            # MEASURED, and cosmetic. The skipped steps are the first ones, which sit at
+            # the bottom of warmup where the LR is 0.13% of peak by construction. Even 10
+            # skipped steps cost 0.0012% of the run's total learning-rate mass over
+            # 11,550 steps. Not changed mid-ablation: touching the loop would make arms
+            # trained before and after non-comparable, for no measurable gain.
             scheduler.step()          # per STEP, not per epoch — see schedulers.py
 
         total_loss += float(loss.detach())
@@ -188,6 +198,16 @@ def fit(
 
     dev = _device(device)
     model.to(dev)
+
+    # THE CRITERION TOO. `nn.CrossEntropyLoss(weight=...)` and `FocalLoss(alpha=...)`
+    # register their class weights as buffers, and those are built on CPU in train.py
+    # before `fit` chooses a device. Without this, arm C - the only arm with class
+    # weights - dies on its first forward with a cuda/cpu device mismatch, after
+    # config.yaml is written and before epoch 0 finishes. That is exactly how it failed.
+    #
+    # Provably inert for every other arm: A, B, D, E and F build criteria that carry no
+    # tensors at all, so `.to()` moves nothing. The arms already run are unaffected.
+    criterion.to(dev)
 
     use_amp = amp and dev.type == "cuda"
     scaler = torch.amp.GradScaler(enabled=use_amp) if use_amp else None

@@ -1,0 +1,126 @@
+{
+  "split": "val",
+  "n": 5268,
+  "qwk": 0.6435052394574956,
+  "accuracy": 0.8048595292331056,
+  "balanced_accuracy": 0.412478298343557,
+  "per_class_recall": [
+    0.9788768675940237,
+    0.0,
+    0.46446700507614214,
+    0.2857142857142857,
+    0.3333333333333333
+  ],
+  "support": [
+    3882,
+    357,
+    788,
+    133,
+    108
+  ],
+  "predicted_counts": [
+    4563,
+    0,
+    600,
+    59,
+    46
+  ],
+  "confusion_matrix": [
+    [
+      3800,
+      0,
+      82,
+      0,
+      0
+    ],
+    [
+      330,
+      0,
+      27,
+      0,
+      0
+    ],
+    [
+      402,
+      0,
+      366,
+      13,
+      7
+    ],
+    [
+      12,
+      0,
+      80,
+      38,
+      3
+    ],
+    [
+      19,
+      0,
+      45,
+      8,
+      36
+    ]
+  ],
+  "referable": {
+    "threshold": 2.0,
+    "sensitivity": 0.5792031098153547,
+    "specificity": 0.9742863882991272,
+    "ppv": 0.8453900709219858,
+    "npv": 0.9051062897216743,
+    "tp": 596.0,
+    "tn": 4130.0,
+    "fp": 109.0,
+    "fn": 433.0
+  },
+  "collapse": {
+    "collapsed": false,
+    "level": "warning",
+    "reasons": [],
+    "warnings": [
+      "grade(s) never predicted: 1 (Mild). Below the referable threshold (2), so no referral decision changes; this is the characteristic weakness of an unbalanced baseline and what the imbalance arms are measured against."
+    ]
+  },
+  "class_names": [
+    "No DR",
+    "Mild",
+    "Moderate",
+    "Severe",
+    "Proliferative"
+  ],
+  "qwk_ci": {
+    "point": 0.6435052394574956,
+    "lo": 0.6173093756041919,
+    "hi": 0.6698032093932085,
+    "n_boot": 1000.0,
+    "n_undefined": 0.0,
+    "ci": 0.95
+  },
+  "rare_class_ci": {
+    "3": {
+      "point": 0.2857142857142857,
+      "lo": 0.2071366995073892,
+      "hi": 0.36880265600456946,
+      "n_boot": 1000.0,
+      "n_undefined": 0.0,
+      "ci": 0.95
+    },
+    "4": {
+      "point": 0.3333333333333333,
+      "lo": 0.2523305583915809,
+      "hi": 0.4299922118380061,
+      "n_boot": 1000.0,
+      "n_undefined": 0.0,
+      "ci": 0.95
+    }
+  },
+  "run_id": "phase4_timing_efficientnet_b0",
+  "arm": "A",
+  "best_epoch": 2,
+  "best_val_qwk_during_training": 0.6412922978611402,
+  "stopped_early": false,
+  "stop_reason": "",
+  "epochs_run": 3,
+  "wall_clock_minutes": 5.221947328249613,
+  "is_smoke_test": false
+}

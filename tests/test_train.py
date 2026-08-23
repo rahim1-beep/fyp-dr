@@ -605,3 +605,67 @@ def test_per_dataset_metrics_join_positionally_not_by_label(tmp_path):
     assert out["aptos"]["n"] == 3 and out["eyepacs"]["n"] == 3
     assert out["aptos"]["support"][4] == 3, "aptos rows are the grade-4 ones"
     assert out["eyepacs"]["support"][0] == 3
+
+
+# ----------------------------------------------------------------------------------
+# Arm C: the criterion has to follow the model onto the device
+# ----------------------------------------------------------------------------------
+
+def test_a_weighted_criterion_is_moved_to_the_device(tmp_path):
+    """Arm C died on Kaggle before epoch 1 with only config.yaml written.
+
+    `nn.CrossEntropyLoss(weight=...)` registers the class weights as a buffer, built on
+    CPU in train.py before `fit` picks a device. `fit` moved the model and not the
+    criterion, so the first forward hit a cuda/cpu mismatch. Arm C is the only arm with
+    class weights, which is why exactly one arm failed.
+
+    Checked on the `meta` device because it works without a GPU: it proves the move
+    happens, which is the thing that was missing.
+    """
+    import torch.nn as nn
+
+    w = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0])
+    criterion = nn.CrossEntropyLoss(weight=w)
+    assert criterion.weight.device.type == "cpu"
+
+    criterion.to("meta")
+    assert criterion.weight.device.type == "meta", (
+        "a criterion carrying class weights must follow the model onto the device"
+    )
+
+
+def test_fit_moves_the_criterion(tmp_path):
+    """The regression, through the real fit()."""
+    import torch.nn as nn
+
+    train, val, root = _tiny_partition(tmp_path)
+    loaders = build_loaders(train, val, None, root, batch_size=8,
+                            augment=AugmentConfig(enabled=False))
+    criterion = nn.CrossEntropyLoss(weight=torch.ones(5))
+    model = _Tiny()
+    opt = build_optimizer(model, "adamw", lr=1e-3)
+    sched = cosine_with_warmup(opt, len(loaders["train"]), epochs=1, warmup_epochs=0)
+
+    fit(model, loaders["train"], loaders["val"], criterion, opt, sched, epochs=1,
+        run_dir=tmp_path / "run", device="cpu", amp=False)
+
+    # same device as the model, whatever that device is
+    assert criterion.weight.device == next(model.parameters()).device
+
+
+def test_the_other_arms_criteria_carry_no_tensors():
+    """Why the fix is provably inert for the five arms already run."""
+    import yaml as _y
+    import torch.nn as nn
+
+    df = _train_frame([0] * 40 + [1] * 10 + [2] * 20 + [3] * 5 + [4] * 5)
+    for arm in "abdef":
+        cfg = _y.safe_load((REPO / f"configs/arm_{arm}.yaml").read_text(encoding="utf-8"))
+        loss = build_loss(cfg["imbalance"], df)
+        weight = getattr(loss, "weight", None)
+        alpha = getattr(loss, "alpha", None)
+        assert weight is None, f"arm {arm} unexpectedly carries class weights"
+        assert alpha is None or alpha.numel() == 0, f"arm {arm} carries a non-empty alpha"
+
+    cfg_c = _y.safe_load((REPO / "configs/arm_c.yaml").read_text(encoding="utf-8"))
+    assert build_loss(cfg_c["imbalance"], df).weight is not None, "arm C must be weighted"

@@ -389,3 +389,72 @@ def test_compute_all_passes_the_configured_threshold_through():
                         bootstrap_n=20)
     assert strict["collapse"]["collapsed"] is True
     assert loose["collapse"]["collapsed"] is False
+
+
+def test_a_balanced_arm_below_the_majority_rate_is_not_a_collapse():
+    """DECISION-029. Arms B, D, E and F were all flagged `collapsed` in Phase 4 purely
+    because their accuracy sat below the majority rate — which is what a balanced sampler
+    DOES. Arm E was flagged while posting the ablation's highest QWK."""
+    rng = np.random.default_rng(0)
+    t = rng.choice([0, 1, 2, 3, 4], size=5000, p=[.737, .068, .150, .025, .020])
+    p = t.copy()
+    # a model that spreads predictions across grades: lower accuracy, real QWK
+    flip = rng.random(5000) < 0.35
+    p[flip] = np.clip(t[flip] + rng.choice([-1, 1, 2], flip.sum()), 0, 4)
+
+    rep = detect_collapse(t, p)
+    acc, qwk = accuracy(t, p), quadratic_weighted_kappa(t, p)
+    assert acc < 0.76, f"fixture must sit near/below the majority rate, got {acc}"
+    assert qwk > 0.2, f"fixture must have a real QWK, got {qwk}"
+    assert not rep.collapsed, str(rep)
+    assert any("what rebalancing looks like" in w for w in rep.warnings)
+
+
+def test_low_accuracy_AND_near_zero_qwk_is_still_a_collapse():
+    """Both halves are required. The genuine failure keeps firing."""
+    t = np.array([0] * 3700 + [1] * 340 + [2] * 750 + [3] * 130 + [4] * 100)
+    rng = np.random.default_rng(1)
+    p = rng.permutation(t)                 # destroys all agreement, keeps the marginals
+    rep = detect_collapse(t, p)
+    assert quadratic_weighted_kappa(t, p) < 0.10
+    assert rep.collapsed
+    assert any("majority class" in r for r in rep.reasons)
+
+
+def test_the_qwk_floor_is_configurable():
+    t = np.array([0] * 3700 + [1] * 340 + [2] * 750 + [3] * 130 + [4] * 100)
+    rng = np.random.default_rng(2)
+    p = t.copy()
+    flip = rng.random(len(t)) < 0.35
+    p[flip] = np.clip(t[flip] + rng.choice([-1, 1, 2], flip.sum()), 0, 4)
+
+    assert not detect_collapse(t, p, qwk_floor=0.10).collapsed
+    assert detect_collapse(t, p, qwk_floor=0.99).collapsed
+
+
+def test_the_phase4_arms_are_not_collapsed_under_the_fixed_rule():
+    """The five arms that ran, reconstructed from their reported accuracy and QWK."""
+    reported = {"A": (0.8050, 0.6823), "B": (0.6902, 0.5841), "D": (0.6327, 0.5538),
+                "E": (0.7272, 0.7081), "F": (0.6695, 0.5617)}
+    for arm, (acc, qwk) in reported.items():
+        # the accuracy half fires for B, D, E, F; the QWK half must veto it
+        assert acc <= 0.7369 + 0.02 or arm == "A"
+        assert qwk >= 0.10, f"arm {arm} would still be flagged"
+
+
+def test_never_predicting_the_majority_grade_is_fatal_for_its_own_reason():
+    """Grade 0 is below the referable threshold, so rule (3) alone would call it a
+    warning — but never predicting it on a 73.7%-grade-0 population means referring every
+    patient. It is fatal because specificity collapses, not as a side effect of the
+    accuracy heuristic (DECISION-029)."""
+    y_true, y_pred = _from_recall(VAL_SUPPORT, [0.0, 0.9, 0.9, 0.9, 0.9], spill=1)
+    rep = detect_collapse(y_true, y_pred, referable_threshold=2)
+    assert rep.collapsed
+    assert any("refers every patient" in r for r in rep.reasons)
+
+
+def test_a_minority_grade_below_the_threshold_stays_a_warning():
+    """The Phase 3 baseline's shape must not be caught by the new majority rule."""
+    y_true, y_pred = _from_recall(VAL_SUPPORT, [0.982, 0.0, 0.376, 0.316, 0.407])
+    rep = detect_collapse(y_true, y_pred, referable_threshold=2)
+    assert not rep.collapsed and rep.level == "warning"

@@ -1,0 +1,126 @@
+{
+  "split": "val",
+  "n": 5268,
+  "qwk": 0.5538332076713198,
+  "accuracy": 0.6326879271070615,
+  "balanced_accuracy": 0.4679576571770327,
+  "per_class_recall": [
+    0.7094281298299846,
+    0.31092436974789917,
+    0.4631979695431472,
+    0.42105263157894735,
+    0.4351851851851852
+  ],
+  "support": [
+    3882,
+    357,
+    788,
+    133,
+    108
+  ],
+  "predicted_counts": [
+    3228,
+    999,
+    820,
+    142,
+    79
+  ],
+  "confusion_matrix": [
+    [
+      2754,
+      780,
+      319,
+      16,
+      13
+    ],
+    [
+      202,
+      111,
+      44,
+      0,
+      0
+    ],
+    [
+      261,
+      96,
+      365,
+      52,
+      14
+    ],
+    [
+      4,
+      7,
+      61,
+      56,
+      5
+    ],
+    [
+      7,
+      5,
+      31,
+      18,
+      47
+    ]
+  ],
+  "referable": {
+    "threshold": 2.0,
+    "sensitivity": 0.630709426627794,
+    "specificity": 0.9075253597546591,
+    "ppv": 0.6234390009606148,
+    "npv": 0.9101017269931393,
+    "tp": 649.0,
+    "tn": 3847.0,
+    "fp": 392.0,
+    "fn": 380.0
+  },
+  "collapse": {
+    "collapsed": true,
+    "level": "collapsed",
+    "reasons": [
+      "accuracy 0.6327 is within 0.02 of the majority-class rate 0.7369 \u2014 predicting the majority class for everything would score about the same"
+    ],
+    "warnings": []
+  },
+  "class_names": [
+    "No DR",
+    "Mild",
+    "Moderate",
+    "Severe",
+    "Proliferative"
+  ],
+  "qwk_ci": {
+    "point": 0.5538332076713198,
+    "lo": 0.5261507238711937,
+    "hi": 0.5814130837757806,
+    "n_boot": 1000.0,
+    "n_undefined": 0.0,
+    "ci": 0.95
+  },
+  "rare_class_ci": {
+    "3": {
+      "point": 0.42105263157894735,
+      "lo": 0.33599694656488555,
+      "hi": 0.5103559910692136,
+      "n_boot": 1000.0,
+      "n_undefined": 0.0,
+      "ci": 0.95
+    },
+    "4": {
+      "point": 0.4351851851851852,
+      "lo": 0.34612068965517245,
+      "hi": 0.5263157894736842,
+      "n_boot": 1000.0,
+      "n_undefined": 0.0,
+      "ci": 0.95
+    }
+  },
+  "run_id": "phase4_arm_d_resnet18",
+  "arm": "D",
+  "best_epoch": 6,
+  "best_val_qwk_during_training": 0.5549878439381297,
+  "stopped_early": true,
+  "stop_reason": "val QWK did not improve for 7 epochs (best 0.5550 at epoch 6)",
+  "epochs_run": 14,
+  "wall_clock_minutes": 18.37139109770457,
+  "is_smoke_test": false
+}

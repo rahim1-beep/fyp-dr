@@ -1,11 +1,10 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **Run Phase 4 stage 1** — `notebooks/phase4_ablation.py`, six arms in
-> one committed session, ~3.8 h. Cell 1 by hand, cells 2–5 by commit.
-> Re-upload the code bundle first.
+> **NEXT ACTION:** **Re-run arm C alone** (~36 min) with the criterion-device fix, then
+> regenerate `docs/EXPERIMENTS.md` once all six sets of artefacts are committed.
 >
-> Before pasting: `python -m src.data.notebook_check --all --self-test` and
-> `python -m src.train.smoke --all-arms`.
+> Then `src/eval/thresholds.py` — arm E has the best QWK and the worst referable
+> sensitivity, and its cut points have never been optimised (DECISION-030).
 
 **Current phase:** Phase 4 — Ablation arms A–F. **Phases 1–3 complete.**
 **Last updated:** 2026-08-20
@@ -282,7 +281,20 @@ order A→B→C→D→E→F by increasing implementation risk.
 | | **14** | **≈ 10 h of 30 h/week** |
 
 - [x] `notebooks/phase4_ablation.py` — five cells, arms isolated per subprocess
-- [ ] **← RUN STAGE 1**
+- [x] **Stage 1 run 2026-08-22 — 5 of 6 arms.** Arm C died before epoch 1: `fit()` moved
+      the model to the GPU but not the criterion, and arm C is the only arm whose loss
+      carries class weights. Fixed and tested; provably inert for the five arms that ran
+- [x] DECISION-029 — the collapse rule's accuracy test flagged 4 of 5 arms, including the
+      one with the best QWK, because balancing puts accuracy below the majority rate **by
+      design**. Now requires low QWK as well
+- [x] DECISION-030 — QWK stays the ablation's selection metric; a referable-sensitivity
+      floor gates the deployed model. Arm E's cut points are untuned, so its sensitivity
+      is not yet a property of the arm
+- [x] DECISION-031 — pooling APTOS is a **null result** against the correct comparator
+      (F vs B, not F vs A): −0.022 QWK, inside B's interval
+- [ ] Re-run arm C alone (~36 min), then regenerate `docs/EXPERIMENTS.md` from artefacts
+- [ ] Build `src/eval/thresholds.py`; optimise arm E on validation (R3)
+- [ ] Stage 2: seed repeats on E, A, F
 - [ ] Fetch with `src.data.fetch_run`, regenerate `docs/EXPERIMENTS.md`
 - [ ] Stage 2: seed repeats on the top three
 - [ ] Stage 3: EfficientNet-B0, budgeted from cell 4's measurement

@@ -8,32 +8,35 @@
 
 ## FIRST ACTION NEXT SESSION
 
-**Phase 3 is complete.** Arm A baseline: val QWK **0.6138** [0.5859, 0.6421], accuracy
-0.7965 against a 0.7369 majority rate, balanced accuracy 0.4163, referable sensitivity
-0.5131 / specificity 0.9804. Best at epoch 6 of 8, QWK rising monotonically from 0.025.
-Recorded in `docs/EXPERIMENTS.md`.
+**Phase 4 stage 1 ran: 5 of 6 arms.** Arm C failed before epoch 1 — `fit()` moved the
+model to the GPU and not the criterion, and arm C is the only arm whose loss carries a
+tensor (class weights). Fixed in `src/train/loop.py`, tested, and **provably inert for the
+five arms already run** because their criteria carry no tensors at all. Re-run arm C
+alone, ~36 min.
 
-**Two things before Phase 4:**
+**Three findings from the table, all logged:**
 
-1. **Pull `runs/phase3_baseline_resnet18/`** with the new fetcher:
+1. **DECISION-029** — four of five arms were reported `collapsed` for a bad reason. The
+   accuracy heuristic fires whenever accuracy sits at or below the majority rate, which is
+   what a balanced sampler does deliberately. Arm E was flagged while posting the best
+   QWK in the ablation. The test now requires low QWK too. Reporting fix only; no model
+   is affected.
+2. **DECISION-030** — QWK and referable sensitivity rank the arms almost inversely. QWK
+   stays the ablation's metric (changing it after seeing results is criterion-shopping),
+   but the deployed model additionally has to clear a sensitivity floor at an operating
+   point chosen on validation. **Arm E's cut points are the untuned defaults**, so its
+   0.5598 sensitivity is a property of an arbitrary threshold, not of the arm —
+   `src/eval/thresholds.py` does not exist yet and is the next real piece of work.
+3. **DECISION-031** — pooling APTOS is a **null result**. F vs A is the wrong comparison
+   (it confounds pooling with the sampler); F vs B isolates it at −0.022 QWK, inside B's
+   confidence interval. The sampler, not the data, carries the large effect: B − A =
+   −0.098.
 
-       python -m src.data.fetch_run --kernel rah098/<notebook-slug>            --run-id phase3_baseline_resnet18
-
-   **BLOCKED ON CREDENTIALS.** The stored key in `~/.kaggle/kaggle.json` returns
-   `401 Unauthenticated` — it worked in session 2, so it has been rotated or expired.
-   Create a fresh token at kaggle.com/settings → API → Create New Token, replace that
-   file, and the command runs. The `--kernel` slug is the notebook URL's
-   `<username>/<kernel-slug>`.
-
-   EXPERIMENTS.md marks the entry *pending artefact commit* until that lands, because R4
-   says every number traces to a file.
-2. **Do not read 0.6138 as ResNet18's ceiling.** QWK was still at its maximum on the last
-   two epochs of an 8-epoch schedule. Arms B–F must share an epoch budget or a longer
-   schedule becomes a confound with the mechanism being tested.
-
-**The baseline is correct, not good.** Referable sensitivity 0.5131 means about half of
-referable cases are missed; that is the number the ablation exists to move, and it is the
-honest headline for the write-up.
+**The scheduler warning is cosmetic and was deliberately not changed.** `optimizer.step()`
+does precede `scheduler.step()`; the warning comes from AMP's GradScaler skipping the
+first optimiser step or two while calibrating. Those steps sit at the bottom of warmup at
+0.13% of peak LR — 10 skipped steps cost 0.0012% of the run's total LR mass. Changing the
+loop mid-ablation would make arms non-comparable for no measurable gain.
 
 ## What was done this session
 

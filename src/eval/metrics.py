@@ -190,7 +190,8 @@ class CollapseReport:
 
 
 def detect_collapse(y_true, y_pred, near_majority: float = 0.02,
-                    referable_threshold: int = 2) -> CollapseReport:
+                    referable_threshold: int = 2,
+                    qwk_floor: float = 0.10) -> CollapseReport:
     """CLAUDE.md §2, made severity-aware. DECISION-026.
 
     The rule exists to catch a model that has learned the PRIOR and nothing else — the
@@ -198,7 +199,10 @@ def detect_collapse(y_true, y_pred, near_majority: float = 0.02,
     accuracy. Three things are fatal:
 
       1. Predictions concentrated in a single class. That is the degenerate case.
-      2. Accuracy within `near_majority` of the majority-class rate.
+      2. Accuracy within `near_majority` of the majority-class rate **and** QWK below
+         `qwk_floor`. Both halves are required: a balanced arm sits below the majority
+         rate by design, and flagging that as collapse mislabels the thing the ablation
+         is measuring (DECISION-029).
       3. A grade AT OR ABOVE the referable threshold that is never predicted while it
          has support.
 
@@ -246,6 +250,20 @@ def detect_collapse(y_true, y_pred, near_majority: float = 0.02,
             f"threshold ({referable_threshold}), so the system cannot flag these cases "
             "even in principle."
         )
+    # A never-predicted MAJORITY grade is fatal on its own terms, whatever the referable
+    # threshold says. Never predicting grade 0 on a 73.7%-grade-0 population means
+    # referring every patient: specificity collapses to zero and the screen is useless,
+    # even though grade 0 is below the referral line. This used to be caught only as a
+    # side effect of the accuracy heuristic, which is not a reason (DECISION-029).
+    majority_grade = int(support.argmax())
+    if majority_grade in minor and support.sum() and             support[majority_grade] / support.sum() >= 0.5:
+        minor = [c for c in minor if c != majority_grade]
+        reasons.append(
+            f"the majority grade {majority_grade} ({CLASS_NAMES[majority_grade]}) is "
+            f"never predicted, and it is {100 * support[majority_grade] / support.sum():.1f}% "
+            "of this set — the model refers every patient and specificity collapses"
+        )
+
     if minor:
         names = ", ".join(f"{c} ({CLASS_NAMES[c]})" for c in minor)
         warnings.append(
@@ -255,15 +273,35 @@ def detect_collapse(y_true, y_pred, near_majority: float = 0.02,
             "arms are measured against."
         )
 
-    # (2) accuracy indistinguishable from predicting the majority class
+    # (2) accuracy indistinguishable from predicting the majority class - AND the model
+    # is not otherwise demonstrating that it has learned the ordering.
+    #
+    # DECISION-029. The accuracy half of this test alone is wrong for a BALANCED arm.
+    # Rebalancing deliberately trades accuracy for rare-class recall, so an arm with a
+    # weighted sampler sits at or below the majority rate BY DESIGN. On the Phase 4
+    # ablation the bare accuracy test fired for arms B, D, E and F - four of five - and
+    # arm E was flagged while posting the ablation's HIGHEST QWK of 0.7081.
+    #
+    # The failure this exists to catch is "respectable-looking accuracy, no actual
+    # learning", whose signature is accuracy near the majority rate AND QWK near zero. A
+    # model with a real QWK is by definition not predicting one class for everything -
+    # that case is already caught by (1).
     if support.sum():
         majority_rate = float(support.max() / support.sum())
         acc = accuracy(y_true, y_pred)
-        if acc <= majority_rate + near_majority:
+        qwk = quadratic_weighted_kappa(y_true, y_pred)
+        if acc <= majority_rate + near_majority and qwk < qwk_floor:
             reasons.append(
                 f"accuracy {acc:.4f} is within {near_majority} of the majority-class "
-                f"rate {majority_rate:.4f} — predicting the majority class for "
-                "everything would score about the same"
+                f"rate {majority_rate:.4f} AND QWK is only {qwk:.4f} — predicting the "
+                "majority class for everything would score about the same"
+            )
+        elif acc <= majority_rate + near_majority:
+            warnings.append(
+                f"accuracy {acc:.4f} is at or below the majority-class rate "
+                f"{majority_rate:.4f}, but QWK is {qwk:.4f} — this is what rebalancing "
+                "looks like, not a collapse: the model is trading accuracy for "
+                "rare-class recall on purpose"
             )
 
     return CollapseReport(collapsed=bool(reasons), reasons=reasons, warnings=warnings)

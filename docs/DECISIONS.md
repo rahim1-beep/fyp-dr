@@ -1369,6 +1369,174 @@ Everything downstream of it had already passed on Kaggle before it fell over —
 
 ---
 
+## DECISION-029 — The collapse rule's accuracy test needs both halves
+
+- **Date:** 2026-08-22
+- **Status:** Accepted
+- **Deviates from proposal:** No
+
+Phase 4 stage 1 reported `collapse: collapsed` for **four of the five arms that ran** —
+B, D, E and F — including arm E, which posted the ablation's **highest QWK, 0.7081**.
+That is a false positive, and its cause is arithmetic:
+
+| arm | accuracy | ≤ majority + 0.02 (0.7569)? | QWK |
+|---|---:|---|---:|
+| A | 0.8050 | no | 0.6823 |
+| B | 0.6902 | **yes** | 0.5841 |
+| D | 0.6327 | **yes** | 0.5538 |
+| E | 0.7272 | **yes** | 0.7081 |
+| F | 0.6695 | **yes** | 0.5617 |
+
+**Rebalancing deliberately trades accuracy for rare-class recall**, so an arm with a
+weighted sampler sits at or below the 0.7369 majority rate *by design*. The bare accuracy
+test therefore fires on exactly the thing the ablation exists to measure.
+
+The failure the test is for is "respectable-looking accuracy, no actual learning", and
+its signature is accuracy near the majority rate **and QWK near zero**. A model with a
+real QWK is by definition not predicting one class for everything — and that case is
+already caught by rule (1). So the test now requires **both halves**, with `qwk_floor`
+defaulting to 0.10. When accuracy is low but QWK is healthy it emits a *warning* saying
+so, because the observation is still worth printing.
+
+**A second, separate fix.** An existing test asserted that never predicting grade 0 is
+fatal, and it passed only because the accuracy heuristic happened to catch it. That is
+not a reason. Never predicting the **majority grade** is now fatal in its own right:
+on a 73.7%-grade-0 population it means referring every patient, so specificity collapses
+and the screen is useless — even though grade 0 sits below the referral line.
+
+**No model changes.** This is a reporting fix; nothing about any trained arm is affected,
+and the corrected verdicts are re-derived from the committed confusion matrices when
+`docs/EXPERIMENTS.md` is regenerated.
+
+---
+
+## DECISION-030 — QWK selects the mechanism; a sensitivity floor gates deployment
+
+- **Date:** 2026-08-22
+- **Status:** Accepted
+- **Deviates from proposal:** Extends it. The proposal names QWK as the primary metric
+  and that is unchanged; this adds a feasibility constraint on the *deployed* model.
+
+### The tension, in the measured numbers
+
+| arm | val QWK | referable sensitivity |
+|---|---:|---:|
+| E (ordinal) | **0.7081** (best) | **0.5598** (worst) |
+| A (baseline) | 0.6823 | 0.6404 |
+| B (sampler) | 0.5841 | 0.6725 |
+| D (focal+sampler) | 0.5538 | 0.6307 |
+| F (pooled) | 0.5617 (EyePACS-only) | **0.6917** (best) |
+
+The ranking by QWK is close to the **inverse** of the ranking by referable sensitivity.
+Spearman ρ = −0.40 across the five arms — with n=5 that is **not statistically
+significant** (p = 0.51) and must not be reported as a correlation. What is not in doubt
+is the concrete pair: the arm with the best QWK has the worst sensitivity, and the arm
+with the best sensitivity is near the bottom on QWK.
+
+That is not noise, it is a real trade-off. QWK rewards agreement across the whole ordinal
+scale; referable sensitivity rewards catching disease at the 2+ boundary and is
+indifferent to everything else. Optimising one does not optimise the other.
+
+### The decision
+
+**1. The ablation's selection metric stays validation QWK.** It is pre-registered in
+CLAUDE.md §5 and the proposal. Changing it *after seeing the results* would be
+criterion-shopping, and the comparison would no longer mean what it claims. This is not a
+close call.
+
+**2. QWK alone must not choose the deployed model.** A screening system is defined by its
+operating characteristic. The headline model must additionally meet a **referable
+sensitivity floor at an operating point chosen on validation** (R3), reported with its
+specificity. Selecting a grading mechanism and choosing an operating point are two
+different decisions and the project was conflating them.
+
+**3. Arm E cannot be compared on sensitivity yet, and this is the important caveat.**
+Arm E is an ordinal head whose grades come from cut points, and it is currently using the
+**untuned defaults `[0.5, 1.5, 2.5, 3.5]`**. `configs/arm_e.yaml` says those are to be
+optimised on validation; `src/eval/thresholds.py` does not exist yet. Its 0.5598 is a
+property of an arbitrary cut point, not of the arm. Moving the grade-2 threshold trades
+sensitivity for specificity directly — which is an **advantage** of the ordinal head, not
+a defect: it is the only arm whose operating point is a free dial. Comparing it against
+softmax arms on sensitivity before turning that dial is not a fair comparison in either
+direction.
+
+**4. None of these models is deployable as a screen.** Published DR screening standards
+ask for roughly **80%+ sensitivity for referable disease at ≥95% specificity**
+(figure from the literature, not measured here — the supervisor should confirm the
+standard that applies). Every arm sits at 0.56–0.69. That gap is an honest finding for
+the write-up, not something to be smoothed over, and it is what Phase 4's remaining work
+and Phase 5 exist to address.
+
+### What happens next, in order
+
+1. Build `src/eval/thresholds.py` and optimise arm E's cut points on **validation only**.
+2. Re-report every arm's sensitivity/specificity at a matched operating point.
+3. Apply the floor to the headline model, not to the ablation ranking.
+
+---
+
+## DECISION-031 — Pooling APTOS is a null result on the target domain
+
+- **Date:** 2026-08-22
+- **Status:** Accepted — this is the measured answer to the supervisor's suggestion
+- **Deviates from proposal:** No. DECISION-007 set this up as an empirical question.
+
+### The comparison that was nearly made, and why it is wrong
+
+Arm F's EyePACS-only QWK is **0.5617** against arm A's **0.6823** — an apparent loss of
+0.12 from pooling. **That comparison is invalid.** Arm F uses the weighted sampler and
+arm A does not, so F-vs-A confounds *pooling* with *sampling*.
+
+The comparison that isolates pooling is **F vs B**, which share the sampler and differ
+only in the training data:
+
+| | sampler | training data | EyePACS-only val QWK |
+|---|---|---|---:|
+| B | weighted | EyePACS | 0.5841 [0.5574, 0.6108] |
+| F | weighted | EyePACS + APTOS | **0.5617** |
+
+**−0.0224, and F's value sits inside B's 95% interval.** Pooling APTOS has **no
+detectable effect** on EyePACS grading. The large effect in the table belongs to the
+sampler, not the data: B − A = −0.098.
+
+### Is the domain artefact visible?
+
+Partly, and less conclusively than the raw numbers suggest.
+
+**Arm F scores 0.8609 on APTOS and 0.5617 on EyePACS.** That gap is *not* by itself
+evidence of a shortcut: APTOS is intrinsically easier — 49.3% grade 0 against EyePACS's
+73.5%, so QWK is mechanically higher on it — and its validation set is n=550 against
+5,268. A large APTOS/EyePACS gap is the expected result even for a model using no domain
+cue at all.
+
+What **is** demonstrated is the inflation DECISION-007 predicted: F's **pooled** QWK is
+0.6192 against 0.5617 EyePACS-only, so **+0.058 of arm F's headline number comes purely
+from including easier APTOS images**. That is exactly why DECISION-007 mandated
+EyePACS-only selection for this arm, and it is now measured rather than anticipated.
+
+Whether the model is *using* a camera cue as a severity proxy remains open. The
+`p_aptos` column shows the correlation is present in the training draw; establishing
+that the model exploits it needs the Phase 5 Grad-CAM comparison by origin, or an arm F
+run without the sampler. Neither has been done, and the claim should not be made until
+one of them has.
+
+### The answer to the supervisor
+
+The suggestion was that APTOS could relieve the class imbalance. The measured answer:
+**it does not improve grading on the target domain.** Against the correct comparator it
+is a null result within the confidence interval, while it adds a domain confound and
+inflates the arm's own headline metric.
+
+That is a real contribution rather than a disappointment — a reasonable idea, tested
+properly with the right comparator, and reported honestly. The write-up should state the
+F-vs-B comparison explicitly, because F-vs-A is the comparison a reader will reach for
+and it is the wrong one.
+
+**Caveat: one seed.** F is in the stage 2 top three, so the null result will be repeated
+at seeds 43 and 44 before it is claimed.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and
