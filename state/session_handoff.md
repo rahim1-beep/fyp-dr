@@ -8,35 +8,30 @@
 
 ## FIRST ACTION NEXT SESSION
 
-**Phase 4 stage 1 ran: 5 of 6 arms.** Arm C failed before epoch 1 — `fit()` moved the
-model to the GPU and not the criterion, and arm C is the only arm whose loss carries a
-tensor (class weights). Fixed in `src/train/loop.py`, tested, and **provably inert for the
-five arms already run** because their criteria carry no tensors at all. Re-run arm C
-alone, ~36 min.
+**Run `notebooks/phase4_armc_backfill.py`** — arm C's re-run (~36 min) plus the
+five-checkpoint backfill (~5 min), one session. It needs the Phase 4 ablation notebook's
+**output** mounted as a third input, for the checkpoints.
 
-**Three findings from the table, all logged:**
+After it: the operating-point table for all six arms, then stage 2.
 
-1. **DECISION-029** — four of five arms were reported `collapsed` for a bad reason. The
-   accuracy heuristic fires whenever accuracy sits at or below the majority rate, which is
-   what a balanced sampler does deliberately. Arm E was flagged while posting the best
-   QWK in the ablation. The test now requires low QWK too. Reporting fix only; no model
-   is affected.
-2. **DECISION-030** — QWK and referable sensitivity rank the arms almost inversely. QWK
-   stays the ablation's metric (changing it after seeing results is criterion-shopping),
-   but the deployed model additionally has to clear a sensitivity floor at an operating
-   point chosen on validation. **Arm E's cut points are the untuned defaults**, so its
-   0.5598 sensitivity is a property of an arbitrary threshold, not of the arm —
-   `src/eval/thresholds.py` does not exist yet and is the next real piece of work.
-3. **DECISION-031** — pooling APTOS is a **null result**. F vs A is the wrong comparison
-   (it confounds pooling with the sampler); F vs B isolates it at −0.022 QWK, inside B's
-   confidence interval. The sampler, not the data, carries the large effect: B − A =
-   −0.098.
+## DO NOT WRITE UP — three unconfirmed items (DECISION-032)
 
-**The scheduler warning is cosmetic and was deliberately not changed.** `optimizer.step()`
-does precede `scheduler.step()`; the warning comes from AMP's GradScaler skipping the
-first optimiser step or two while calibrating. Those steps sit at the bottom of warmup at
-0.13% of peak LR — 10 skipped steps cost 0.0012% of the run's total LR mass. Changing the
-loop mid-ablation would make arms non-comparable for no measurable gain.
+The screening floor of **sensitivity >= 0.80 at specificity >= 0.95** is implemented and
+printed, but it is marked PROVISIONAL everywhere it appears and **must not reach the
+thesis** until the supervisor confirms:
+
+1. **Whether UK DESP referable criteria map onto this project's `grade >= 2`.** DESP
+   referable includes **maculopathy**, which these labels do not encode at all. *This is
+   the one that matters most:* if they do not map, the benchmark is **indicative only**
+   and the write-up has to say so plainly rather than implying compliance.
+2. The precise NICE guideline number and clause — the 80/95 pair is corroborated by
+   secondary sources; the primary document was not read.
+3. IDx-DR's exact pre-specified endpoints. That it exceeded them is confirmed; the
+   numbers commonly quoted (85% / 82.5%) are **not** — FDA DEN180001 returned 404. Cite
+   the achieved 87.2 / 90.7 only.
+
+`docs/EXPERIMENTS.md` states none of these, and `src/eval/thresholds.py` prints
+`[PROVISIONAL]` beside the floor so it cannot be copied out as settled.
 
 ## What was done this session
 

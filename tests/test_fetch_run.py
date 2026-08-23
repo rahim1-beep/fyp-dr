@@ -336,3 +336,28 @@ def test_the_parser_is_exposed_for_notebook_check():
     p.parse_args(["--kernel", "rah098/x", "--run-id", "y"])
     with pytest.raises(SystemExit):
         p.parse_args(["--run-id", "y"])          # --kernel is required
+
+
+def test_optional_artefacts_are_copied_when_present(tmp_path):
+    """val_outputs.npz makes threshold analysis a local step (DECISION-030), so it has to
+    come back with the run."""
+    import numpy as np
+
+    d = _run(tmp_path)
+    np.savez_compressed(d / "val_outputs.npz", outputs=np.zeros((4, 5)),
+                        y_true=np.zeros(4, int), indices=np.arange(4), head=np.array("softmax"))
+    (d / "thresholds.json").write_text("{}", encoding="utf-8")
+
+    target = tmp_path / "repo" / "runs" / RUN_ID
+    copied = install(d, target)
+
+    assert "val_outputs.npz" in copied and "thresholds.json" in copied
+    assert (target / "val_outputs.npz").exists()
+    assert not (target / "best.pth").exists()
+
+
+def test_a_run_without_the_optional_artefacts_still_installs(tmp_path):
+    """Runs from before val_outputs.npz existed are still valid records."""
+    d = _run(tmp_path)
+    copied = install(d, tmp_path / "repo" / "runs" / RUN_ID)
+    assert sorted(copied) == ["config.yaml", "metrics.json", "train_log.csv"]

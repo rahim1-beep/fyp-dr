@@ -71,9 +71,15 @@ BACKSLASH = chr(92)
 
 class Invocation:
     def __init__(self, notebook: str, cell: int, line: int, argv: list[str],
-                 unresolved: int):
+                 unresolved: int, dynamic: bool = False):
         self.notebook, self.cell, self.line = notebook, cell, line
         self.argv, self.unresolved = argv, unresolved
+        # A `*args` splat expands to an unknown number of tokens, so the SHAPE of this
+        # command line is not knowable statically. Reported as skipped rather than
+        # failed: a false failure trains people to ignore the gate, and pretending the
+        # splat is one token produces exactly that. Such a call must be validated at
+        # runtime with `validate_argv` instead, which is what the cells do.
+        self.dynamic = dynamic
 
     @property
     def module(self) -> str | None:
@@ -110,12 +116,23 @@ def invocations_in(source: str, notebook: str, cell_no: int) -> list[Invocation]
     # another cell. Cell 5 does exactly this on purpose, so that the list that executes
     # is the list cell 1 validated -- which means the static checker has to see it too,
     # or the safest-written cell would be the only unchecked one.
+    # Names that are later extended with `cmd += [...]`. The assignment alone shows only
+    # the first fragment of such a command line, so judging it on that is judging half a
+    # sentence.
+    augmented = {n.target.id for n in ast.walk(tree)
+                 if isinstance(n, ast.AugAssign) and isinstance(n.target, ast.Name)}
+
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign) and isinstance(node.value, ast.List):
             argv = [_literal(e) for e in node.value.elts]
             if argv and argv[0] == "python":
-                found.append(Invocation(notebook, cell_no, node.lineno, argv,
-                                        sum(1 for a in argv if a is PLACEHOLDER)))
+                names = {t.id for t in node.targets if isinstance(t, ast.Name)}
+                found.append(Invocation(
+                    notebook, cell_no, node.lineno, argv,
+                    sum(1 for a in argv if a is PLACEHOLDER),
+                    dynamic=(any(isinstance(e, ast.Starred) for e in node.value.elts)
+                             or bool(names & augmented)),
+                ))
 
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -134,8 +151,11 @@ def invocations_in(source: str, notebook: str, cell_no: int) -> list[Invocation]
         argv = [_literal(e) for e in node.args[0].elts]
         if not argv or argv[0] != "python":
             continue
-        found.append(Invocation(notebook, cell_no, node.lineno, argv,
-                                sum(1 for a in argv if a is PLACEHOLDER)))
+        found.append(Invocation(
+            notebook, cell_no, node.lineno, argv,
+            sum(1 for a in argv if a is PLACEHOLDER),
+            dynamic=any(isinstance(e, ast.Starred) for e in node.args[0].elts),
+        ))
     return found
 
 
@@ -494,7 +514,14 @@ def main() -> int:
     invs = collect_invocations(wanted)
     print(f"checking {len(invs)} command line(s) from "
           f"{len(set(i.notebook for i in invs))} notebook(s)\n")
+    dynamic = 0
     for inv in invs:
+        if inv.dynamic:
+            dynamic += 1
+            print(f"  [skip] {inv}")
+            print("         -> contains a *splat; shape is not statically knowable. "
+                  "MUST be validated at runtime with validate_argv.")
+            continue
         why = check(inv)
         mark = "ok  " if why is None else "FAIL"
         note = f"  ({inv.unresolved} runtime value(s))" if inv.unresolved else ""
@@ -502,6 +529,9 @@ def main() -> int:
         if why is not None:
             print(f"         -> {why}")
             failures.append((inv, why))
+    if dynamic:
+        print(f"\n  {dynamic} invocation(s) skipped as dynamic - check the cell calls "
+              "validate_argv on them before running.")
 
     api = collect_api_calls(None if args.all else args.notebook)
     if api:

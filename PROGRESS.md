@@ -298,9 +298,14 @@ order A→B→C→D→E→F by increasing implementation risk.
       so the trade-off stays visible (DECISION-030, DECISION-032)
 - [x] `train.py` now saves `val_outputs.npz` for every run, so threshold work is a local
       GPU-free step forever
-- [ ] One Kaggle notebook: re-run arm C (~36 min) + backfill `val_outputs.npz` for the
-      five arms that already ran (~5 min from their checkpoints)
-- [ ] Then thresholds locally for all six arms, then stage 2
+- [x] `notebooks/phase4_armc_backfill.py` — arm C's re-run + the five-checkpoint
+      backfill in one session, with a reproducibility check on every backfilled run
+- [ ] **← RUN IT** (needs the ablation notebook's OUTPUT mounted, for the checkpoints)
+- [ ] Operating-point table for all six arms — **this decides whether arm E's ranking
+      survives**, and it comes before stage 2
+- [ ] Stage 2: seed repeats, on whichever arms the table leaves in contention
+- [ ] **Supervisor:** confirm the screening standard (DECISION-032). Until then the floor
+      is PROVISIONAL and stays out of the write-up
 - [ ] Stage 2: seed repeats on E, A, F
 - [ ] Fetch with `src.data.fetch_run`, regenerate `docs/EXPERIMENTS.md`
 - [ ] Stage 2: seed repeats on the top three

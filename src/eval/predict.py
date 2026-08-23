@@ -105,8 +105,10 @@ def predict_from_checkpoint(run_dir: Path, cache_root: Path, *, device: str = "a
     y_true, y_pred, idx, raw = evaluate_with_raw(model, loaders["val"], dev,
                                                  head=model_cfg.head)
     path = save_val_outputs(run_dir, raw, y_true, idx, model_cfg.head)
+    repro = verify_reproduces(run_dir, raw, y_true, model_cfg.head)
     return {"run_dir": str(run_dir), "n": int(len(y_true)), "head": model_cfg.head,
-            "path": str(path), "epoch": ckpt.get("epoch")}
+            "path": str(path), "epoch": ckpt.get("epoch"), "device": str(dev),
+            "reproduces": repro}
 
 
 @torch.no_grad()
@@ -130,6 +132,63 @@ def evaluate_with_raw(model, loader, device, head: str = "softmax"):
 
     return (np.concatenate(ys), np.concatenate(ps), np.concatenate(ix),
             np.concatenate(raws))
+
+
+def verify_reproduces(run_dir: Path, outputs: np.ndarray, y_true: np.ndarray,
+                     head: str) -> dict:
+    """Recompute the headline metrics from the raw outputs and compare to metrics.json.
+
+    THE BACKFILL MUST NOT CHANGE A REPORTED NUMBER. It re-runs validation from the same
+    checkpoint on the same images with the same normalisation, so it should reproduce the
+    committed metrics exactly — and if it does, that is a genuine reproducibility check
+    on the whole evaluation path, obtained for free.
+
+    Where it can legitimately differ: CPU and CUDA use different kernels and reduction
+    orders, so raw logits differ in the last few decimal places. That only changes a
+    GRADE where two classes were near-tied, so a handful of images can flip. Anything
+    larger than that is not floating-point noise and means the artefact and the
+    checkpoint disagree about what the model is.
+
+    `metrics.json` is never rewritten. It is the record of that run.
+    """
+    from src.eval.metrics import accuracy, confusion_matrix, quadratic_weighted_kappa
+    from src.train.losses import predictions_from
+    import torch as _torch
+
+    committed_path = Path(run_dir) / "metrics.json"
+    if not committed_path.exists():
+        return {"checked": False, "why": "no metrics.json to compare against"}
+
+    import json
+
+    committed = json.loads(committed_path.read_text(encoding="utf-8"))
+    preds = predictions_from(_torch.tensor(outputs).float(), head).numpy()
+
+    got = {
+        "qwk": quadratic_weighted_kappa(y_true, preds),
+        "accuracy": accuracy(y_true, preds),
+        "confusion_matrix": confusion_matrix(y_true, preds).tolist(),
+    }
+    want = {k: committed.get(k) for k in got}
+
+    d_qwk = abs(got["qwk"] - (want["qwk"] or 0.0))
+    d_acc = abs(got["accuracy"] - (want["accuracy"] or 0.0))
+    cm_same = got["confusion_matrix"] == want["confusion_matrix"]
+    n_diff = 0
+    if not cm_same and want["confusion_matrix"]:
+        a = np.array(got["confusion_matrix"])
+        b = np.array(want["confusion_matrix"])
+        n_diff = int(np.abs(a - b).sum() // 2)     # images whose grade moved
+
+    return {
+        "checked": True,
+        "exact": bool(cm_same),
+        "qwk_committed": want["qwk"], "qwk_recomputed": got["qwk"], "qwk_delta": d_qwk,
+        "accuracy_committed": want["accuracy"], "accuracy_recomputed": got["accuracy"],
+        "accuracy_delta": d_acc,
+        "images_with_a_different_grade": n_diff,
+        "n": int(len(y_true)),
+    }
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -157,6 +216,27 @@ def main() -> int:
                                            batch_size=args.batch_size,
                                            num_workers=args.num_workers)
             print(f"  wrote {info['path']}  ({info['n']} images, head {info['head']})")
+
+            r = info["reproduces"]
+            if not r.get("checked"):
+                print(f"  reproducibility: not checked - {r.get('why')}")
+            elif r["exact"]:
+                print(f"  reproducibility: EXACT - confusion matrix identical to "
+                      f"metrics.json, QWK {r['qwk_recomputed']:.6f}")
+            else:
+                print(f"  reproducibility: {r['images_with_a_different_grade']} of "
+                      f"{r['n']} images changed grade "
+                      f"({100 * r['images_with_a_different_grade'] / r['n']:.3f}%); "
+                      f"QWK {r['qwk_committed']:.6f} -> {r['qwk_recomputed']:.6f} "
+                      f"(delta {r['qwk_delta']:.6f})")
+                if r["qwk_delta"] > 0.001:
+                    print("  ^ LARGER THAN FLOATING-POINT NOISE. The checkpoint and the "
+                          "artefact disagree about what the model is - do not proceed "
+                          "until that is understood.")
+                    failures.append(run_dir.name + " (does not reproduce)")
+                else:
+                    print("  ^ consistent with CPU/CUDA kernel differences on near-ties")
+            print("  metrics.json NOT rewritten - it is the record of that run")
         except Exception as exc:                 # noqa: BLE001 - reported, not hidden
             print(f"  FAILED: {type(exc).__name__}: {exc}")
             failures.append(run_dir.name)

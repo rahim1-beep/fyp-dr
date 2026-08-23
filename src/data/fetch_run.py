@@ -4,8 +4,8 @@ Six arms in Phase 4, plus re-runs, means doing this a dozen times through the Ou
 otherwise — and the Output tab is where two of this project's three lost sessions ended
 up (DECISION-021).
 
-WHAT COMES BACK. `runs/<run_id>/config.yaml`, `metrics.json`, `train_log.csv`. **Never
-`*.pth`** — checkpoints are gitignored, they are hundreds of MB, and they are not the
+WHAT COMES BACK. `runs/<run_id>/config.yaml`, `metrics.json`, `train_log.csv`, plus
+`val_outputs.npz` and `thresholds.json` when the run has them. **Never `*.pth`** — checkpoints are gitignored, they are hundreds of MB, and they are not the
 record of a run. The three text files are (R4/R6).
 
 VERIFY BEFORE WRITING, NOT AFTER. The download lands in a temp directory and every check
@@ -44,6 +44,12 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 
 WANTED = ("config.yaml", "metrics.json", "train_log.csv")
+
+# Copied when present, not required. `val_outputs.npz` is ~150 KB of raw validation
+# outputs and is what makes threshold and operating-point analysis a local, GPU-free step
+# (DECISION-030); `thresholds.json` is its analysis. Runs from before those existed are
+# still perfectly valid and must not be rejected for lacking them.
+OPTIONAL = ("val_outputs.npz", "thresholds.json")
 NEVER_COPY_SUFFIXES = (".pth", ".pt", ".ckpt", ".onnx", ".safetensors")
 
 # Keys `src/eval/metrics.compute_all` writes plus what train.py adds. Checked because a
@@ -291,6 +297,10 @@ def install(run_dir: Path, target: Path, force: bool = False) -> list[str]:
     for name in WANTED:
         shutil.copy2(run_dir / name, target / name)
         copied.append(name)
+    for name in OPTIONAL:
+        if (run_dir / name).exists():
+            shutil.copy2(run_dir / name, target / name)
+            copied.append(name)
     return copied
 
 

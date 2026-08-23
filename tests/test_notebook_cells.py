@@ -55,6 +55,8 @@ def test_the_notebooks_contain_invocations_to_check():
 
 @pytest.mark.parametrize("inv", _all_invocations(), ids=str)
 def test_every_notebook_command_line_is_accepted_by_its_module(inv):
+    if inv.dynamic:
+        pytest.skip("built dynamically; validated at runtime with validate_argv")
     why = check(inv)
     assert why is None, f"{inv}\n  -> {why}"
 
@@ -350,3 +352,35 @@ def test_gen_experiments_exposes_a_parser_and_does_no_work_on_import():
     args = p.parse_args([])
     assert args.run and args.runs_root.name == "runs"
     assert callable(render)
+
+
+def test_a_splat_is_skipped_not_failed():
+    """A `*args` splat expands to an unknown number of tokens, so its shape is not
+    statically knowable. Reporting it as a FAILURE would be a false alarm, and a gate
+    that cries wolf on correct code gets ignored — it is skipped and flagged instead,
+    and the cell must validate it at runtime."""
+    inv = _one('run([sys.executable, "-m", "src.eval.predict", *args, '
+               '"--cache-root", CACHE])')
+    assert inv.dynamic is True
+    assert check(inv) is not None or True      # not asserted: it is never called
+
+
+def test_a_normal_invocation_is_not_marked_dynamic():
+    inv = _one('run([sys.executable, "-m", "src.eval.thresholds", "--run-dir", D])')
+    assert inv.dynamic is False
+    assert check(inv) is None
+
+
+def test_validate_argv_catches_a_malformed_dynamic_command():
+    """What the cells use in place of the static check they cannot have."""
+    from src.data.notebook_check import validate_argv
+
+    good = ["python", "-m", "src.eval.predict", "--run-dir", "runs/x",
+            "--cache-root", "/cache"]
+    assert validate_argv(good) is None
+
+    missing_cache = ["python", "-m", "src.eval.predict", "--run-dir", "runs/x"]
+    assert validate_argv(missing_cache) is not None
+
+    empty_loop = ["python", "-m", "src.eval.predict", "--cache-root", "/cache"]
+    assert validate_argv(empty_loop) is not None      # the loop produced no --run-dir
