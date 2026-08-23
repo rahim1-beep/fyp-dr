@@ -250,3 +250,65 @@ def test_agreement_holds_for_custom_cuts_too():
     theirs = predictions_from(torch.tensor(scores).reshape(-1, 1),
                               "ordinal_regression", cuts).numpy()
     assert np.array_equal(mine, theirs)
+
+
+# ----------------------------------------------------------------------------------
+# Matched-decision-rule comparison — DECISION-033
+# ----------------------------------------------------------------------------------
+
+def test_expected_grade_is_the_softmax_continuous_score():
+    """argmax collapses "spread over 2 and 3" and "confident 2" to the same answer.
+    The expected grade keeps them apart, which is what the cut points need."""
+    from src.eval.compare_arms import continuous_score
+
+    confident_2 = np.array([[0.0, 0.0, 20.0, 0.0, 0.0]])
+    spread_23 = np.array([[0.0, 0.0, 10.0, 10.0, 0.0]])
+    assert confident_2.argmax(1)[0] == spread_23.argmax(1)[0] == 2
+    assert continuous_score(spread_23)[0] > continuous_score(confident_2)[0] + 0.4
+
+
+def test_continuous_score_passes_an_ordinal_output_through():
+    from src.eval.compare_arms import continuous_score
+
+    assert continuous_score(np.array([[1.5], [3.2]])).tolist() == [1.5, 3.2]
+
+
+def test_split_half_reports_optimism_not_just_a_fitted_number():
+    """Fitting cut points on the same data used to select an arm is only honest if the
+    optimism is measured. A fitted number with no held-out check is a claim."""
+    from src.eval.compare_arms import split_half_qwk
+
+    rng = np.random.default_rng(0)
+    s, y = _ordinal_scores(rng, shift=0.7)
+    r = split_half_qwk(s, y, repeats=6)
+
+    assert set(r) == {"in_sample", "held_out", "optimism"}
+    assert r["optimism"] == pytest.approx(r["in_sample"] - r["held_out"])
+    assert r["in_sample"] >= r["held_out"] - 0.05      # fitting should not help held-out
+
+
+def test_paired_difference_calls_a_tie_a_tie():
+    """Two arms with the same underlying signal must come back NOT separable, or the
+    comparison would manufacture winners."""
+    from src.eval.compare_arms import paired_difference
+
+    rng = np.random.default_rng(1)
+    s, y = _ordinal_scores(rng)
+    other = s + rng.normal(0, 0.01, len(s))           # same model, trivial jitter
+
+    d = paired_difference(s, other, y, repeats=30)
+    assert d["separable"] is False
+    assert d["lo"] < 0 < d["hi"]
+
+
+def test_paired_difference_detects_a_real_gap():
+    """And it must still separate arms that genuinely differ."""
+    from src.eval.compare_arms import paired_difference
+
+    rng = np.random.default_rng(2)
+    good, y = _ordinal_scores(rng, noise=0.6)
+    bad = y + rng.normal(0, 2.5, len(y))              # much noisier ordering
+
+    d = paired_difference(good, bad, y, repeats=30)
+    assert d["separable"] is True
+    assert d["mean"] > 0

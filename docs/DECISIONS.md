@@ -1622,6 +1622,132 @@ not prejudge.
 
 ---
 
+## DECISION-033 — Arms are compared under a matched decision rule, and the stage 1 ranking changes
+
+- **Date:** 2026-08-22
+- **Status:** Accepted
+- **Deviates from proposal:** No. QWK remains the metric; what changes is that every arm
+  is scored with the same number of free parameters.
+
+### The asymmetry
+
+The stage 1 table compared **arm E's QWK after fitting four cut points on validation**
+against every other arm's QWK from a bare `argmax`. Those are not the same quantity: E
+was scored with four fitted parameters and the softmax arms with none.
+
+Giving every arm the same four degrees of freedom — cut points on the **expected grade**
+`sum(p_i * i)` for a softmax head, which is the natural continuous analogue that `argmax`
+discards — and measuring the optimism by fitting on half the validation set and scoring
+the other half:
+
+| arm | as run | fitted | held-out | optimism | gain | train−val gap |
+|---|---:|---:|---:|---:|---:|---:|
+| A | 0.6823 | 0.7315 | **0.7194** | 0.0121 | +0.037 | +0.092 |
+| E | 0.7081 | 0.7263 | **0.7132** | 0.0131 | +0.005 | +0.073 |
+| F | 0.6192 | 0.7091 | 0.7004 | 0.0087 | +0.081 | +0.301 |
+| D | 0.5538 | 0.6541 | 0.6400 | 0.0140 | +0.086 | +0.300 |
+| B | 0.5841 | 0.6474 | 0.6295 | 0.0180 | +0.045 | +0.290 |
+| C | 0.4048 | 0.6078 | 0.5967 | 0.0111 | **+0.192** | −0.145 |
+
+**Ranking on held-out fitted QWK: A > E > F > D > B > C.**
+**As run it was: E > A > F > B > D > C.**
+
+Two positions moved, and neither move is about imbalance handling — the decision rule
+moved them. **Threshold-fitting optimism is 0.009–0.018 QWK**, so the fitted numbers are
+usable; that is measured here rather than assumed, and it is re-measured whenever
+`src/eval/compare_arms.py` is re-run.
+
+### A and E are a tie, not a lead
+
+Paired bootstrap on held-out fitted QWK, on the same validation images:
+
+    QWK(A) - QWK(E) = +0.0069   95% CI [-0.0203, +0.0291]   A better in 74% of resamples
+
+**Not separable.** E's apparent 0.04 QWK lead was substantially the fitting asymmetry.
+At a fixed operating point the two were already tied (sens@spec 0.6618 vs 0.6589), and
+they are tied on QWK too once the comparison is fair. **No arm is the presumptive winner
+on this evidence.**
+
+### What the arms are actually doing
+
+The `train − val` QWK gap at the best epoch separates them far more cleanly than the
+headline metric does:
+
+- **A (+0.092) and E (+0.073)** — mild overfitting, and the two best arms. Neither
+  rebalances anything.
+- **B (+0.290), D (+0.300), F (+0.301)** — the three arms with the **weighted sampler**.
+  They reach train QWK 0.87–0.92 and lose ~0.30 on validation. Sampling with replacement
+  shows the same few hundred grade-3 and grade-4 images many times per epoch, and the
+  model memorises them. Their epochs confirm it: B stopped at 16 (best 8), D at 14
+  (best 6), against A and E at 28 (best 20).
+- **C (−0.145)** — the only arm that *underfits*. Train QWK 0.26 against val 0.40, train
+  loss 1.71 where every other arm is 0.13–0.71.
+
+**The headline result of the ablation is therefore negative: neither rebalancing mechanism
+beats doing nothing on this data.** That is a real finding, not a disappointment, and it
+is the honest answer to the question the ablation was built to ask.
+
+---
+
+## DECISION-034 — Arm C's failure is a displaced decision boundary, not a broken model
+
+- **Date:** 2026-08-22
+- **Status:** Accepted
+- **Deviates from proposal:** No
+
+Arm C looks catastrophic as run — QWK 0.4048 against arm B's 0.5841 — and the obvious
+write-up line, "the sampler beats class weights", would be **overstated**.
+
+**Re-thresholding recovers most of it: +0.192 QWK, the largest gain of any arm, to
+0.5967 against B's 0.6295.** At matched decision rules the gap is **0.03, not 0.18**, and
+that is inside the range where these arms are not separable on one seed.
+
+### The mechanism, for the viva
+
+`class_weights_from` uses inverse frequency, normalised to mean 1. On the committed train
+split that is:
+
+    grade  0      1      2      3      4
+    weight 0.061  0.637  0.299  1.812  2.191      ratio 4:0 = 36x
+
+**A grade-0 mistake costs 1/36 of a grade-4 mistake**, so the model rationally gives grade
+0 away. Its confusion matrix shows exactly that: **1,385 of 3,882 grade-0 images (35.7%)
+predicted as grade 1**, and grade-0 recall collapsing to 0.493. It is the only arm where
+**specificity** is the binding constraint on the operating point — every other arm is
+limited by sensitivity. That is the signature of a decision boundary pushed too far
+toward the rare classes, and moving the boundary back is exactly what re-thresholding does.
+
+The residual damage, after the boundary is corrected, is **optimisation instability**.
+Weighting does not change which images are in a batch: a batch of 64 still holds about
+1.3 grade-4 images on average, and often none — but when one appears it arrives with 36×
+the gradient of a grade-0. The expected gradient matches the sampler's; its **variance is
+far higher**. That shows up as the highest train loss in the ablation (1.71), a train QWK
+*below* its own validation QWK, and an early stop at epoch 9.
+
+So the two mechanisms fail in opposite directions, and neither is subtle:
+
+| | what it changes | how it fails here |
+|---|---|---|
+| **Sampler** (B, D, F) | which images are in the batch | rare images repeat within an epoch and get memorised — train QWK 0.87–0.92, gap ~0.30 |
+| **Class weights** (C) | how much each image counts | boundary displaced 36:1, and high-variance gradients destabilise optimisation |
+
+### The claim the thesis can actually make
+
+Not "the sampler beats class weights". The defensible claims are:
+
+1. **Inverse-frequency weighting displaces the decision boundary severely, and most of
+   the apparent damage is recoverable by re-thresholding on validation.** The comparison
+   is only fair after that correction.
+2. **Neither mechanism beat the unbalanced baseline** on validation QWK at matched
+   decision rules.
+3. The result is specific to **inverse-frequency** weighting. `class_weights_from` also
+   implements `effective_number` (Cui et al. 2019), which exists precisely because
+   inverse frequency over-corrects, and **it has not been run**. Claiming "class weighting
+   does not work" from arm C alone would overreach; claiming it about inverse-frequency
+   weighting at a 36:1 ratio is supported.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

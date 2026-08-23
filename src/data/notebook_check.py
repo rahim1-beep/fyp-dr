@@ -368,6 +368,7 @@ CLI_MODULES = (
     "src.train.smoke",
     "src.eval.predict",
     "src.eval.thresholds",
+    "src.eval.compare_arms",
 )
 
 
