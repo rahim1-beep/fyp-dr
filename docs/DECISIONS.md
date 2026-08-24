@@ -2048,6 +2048,61 @@ re-running the stage 1 comparison after the fix.
 
 ---
 
+## DECISION-041 — Stage 2 is a stability measurement, not a tie-break, and cannot become one
+
+- **Date:** 2026-08-25
+- **Status:** Accepted — **stated before the run**
+- **Deviates from proposal:** No.
+
+Written down in advance because the tempting claim after three seeds is exactly the one
+the design does not support.
+
+### What stage 2 can settle
+
+- The **seed variance of the headline number**, so arm E's QWK is reported as a mean over
+  seeds with a spread rather than one draw presented as a fact.
+- Whether the **operating point** is stable — `sens@spec>=0.95` gates deployment and is
+  the number closest to a floor.
+- Whether arm E's unusually small **generalisation gap (0.034)** is a property of the arm
+  or of one seed.
+- Whether the **sign** of the A-vs-E difference is consistent across seeds — a
+  descriptive fact, never a significance claim.
+
+### What it cannot settle, at three seeds or thirty
+
+**The A-vs-E tie.** Every seed is scored on **the same 5,268 validation images**.
+Averaging over seeds reduces the training-stochasticity component of the uncertainty and
+does **nothing** to the validation-set sampling component, which is common to all seeds
+and is a fixed floor. The measured effect on B0 is **+0.0224 QWK** and the paired
+interval's half-width is **about 0.027** — the effect is smaller than a floor that
+seed-averaging cannot lower.
+
+Worse for the tempting claim: properly accounting for seed variance makes the honest
+interval **wider** than the single-seed paired CI, which understates uncertainty by
+ignoring training noise altogether. **Stage 2's effect on the tie, if any, is to make it
+more of a tie.**
+
+Three seeds give a **spread, not an interval**. Non-overlapping ranges are not a
+significance test and must not be written up as one.
+
+### The rule this creates
+
+**The reported number is the mean across seeds. Never the best seed.** Best-of-three
+would be a configuration choice made on validation, against the soft budget of four with
+a positive-argument gate (DECISION-036). Stage 2 is a measurement and spends none of that
+budget — but only because this is fixed in advance.
+
+Arm E is carried forward on the secondary criteria stated **before** this run — a better
+operating point, a smaller gap, and an output already calibrated in grade units — and not
+because it won a comparison. A and E are reported as a tie (DECISION-035).
+
+### Design
+
+Seeds **42, 43, 44**, sequential and obviously arbitrary. Seed 42 already exists for both
+arms from stage 3, so stage 2 is **four new runs, not six** (~2.4 h rather than ~3.5 h).
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

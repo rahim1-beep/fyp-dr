@@ -317,8 +317,11 @@ order A→B→C→D→E→F by increasing implementation risk.
       **prediction held**, backbone fixed at **EfficientNet-B0** (DECISION-039). B2 is
       also worse on the deployment metric: sens@spec.95 0.7211 vs 0.7464.
 - [x] `compare_arms` label fix — it was silently dropping 4 of 11 runs (DECISION-040)
-- [ ] **← NEXT: stage 2 seeds** — arms E and A on EfficientNet-B0, 3 seeds each, ~3.5 h
+- [ ] **← NEXT: stage 2** — `notebooks/phase4_stage2.py`. Arms E and A on B0, seeds
+      43 and 44 (42 exists), **4 new runs ~2.4 h**. A stability MEASUREMENT, not a
+      tie-break — it cannot break the A-vs-E tie at any number of seeds (DECISION-041).
 - [ ] Then the 384px decision, on arm E alone
+- [ ] Then Phase 5
 
 **Selection optimism: 3 architecture choices made on validation, soft budget 4.**
 A fourth needs a positive argument written down BEFORE the run, logged as a decision —
