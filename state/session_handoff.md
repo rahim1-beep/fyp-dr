@@ -184,7 +184,7 @@ the top of a training run costs the session.
 2. **GitHub** — private repo + collaborator access for Ameena Ahmed and Muhammad Ali
    Abdullah. **Do not push without asking.** No remote is configured. User previously
    mentioned distributing as an archive instead; confirm which.
-3. **Supervisor** — written confirmation of DECISION-001 before Phase 7.
+3. ~~**Supervisor** — written confirmation of DECISION-001 before Phase 7.~~ **DONE 2026-08-24 — approved.**
 4. **Arm F vs Phase 6** — unchanged from session 1; decide when the numbers exist.
 
 ## Known-broken / not yet built

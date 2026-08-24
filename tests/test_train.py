@@ -7,6 +7,7 @@ tensors is a training loop nobody has run.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -699,3 +700,44 @@ def test_an_unknown_arm_names_the_configs_that_exist():
 
     with pytest.raises(ValueError, match="configs/ defines"):
         load_arm_splits("Z9")
+
+
+def test_smoke_accepts_an_arch_override_and_uses_it():
+    """`smoke --arch` must actually reach the model factory.
+
+    Stage 3.5 switches backbone via `--arch` on a Kaggle run. Without this the first
+    execution of that code path is the hour-long one — which is how DECISION-022, -024
+    and -025 each cost a session.
+    """
+    from src.train.smoke import build_parser
+
+    args = build_parser().parse_args(["--arm", "E", "--arch", "efficientnet_b2"])
+    assert args.arch == "efficientnet_b2"
+
+
+def test_smoke_run_arm_passes_arch_through_to_train_argv(tmp_path, monkeypatch):
+    import src.train.smoke as smoke
+
+    seen = {}
+
+    def fake_main():
+        seen["argv"] = list(sys.argv)
+        raise RuntimeError("stop here — argv is what is under test")
+
+    monkeypatch.setattr("src.train.train.main", fake_main)
+    monkeypatch.setattr(smoke, "build_fixture",
+                        lambda d: (tmp_path / "cache", tmp_path / "splits"))
+    with pytest.raises(RuntimeError):
+        smoke.run_arm("E", tmp_path, arch="efficientnet_b2")
+    assert "--arch" in seen["argv"]
+    assert seen["argv"][seen["argv"].index("--arch") + 1] == "efficientnet_b2"
+
+
+def test_efficientnet_b2_builds_with_the_ordinal_head():
+    """The stage 3.5 backbone, with arm E's head, before an hour of GPU is spent on it."""
+    import torch
+    from src.models.factory import ModelConfig, build_model
+
+    m = build_model(ModelConfig(arch="efficientnet_b2", num_outputs=1,
+                                head="ordinal_regression", pretrained=False))
+    assert tuple(m(torch.randn(2, 3, 224, 224)).shape) == (2, 1)

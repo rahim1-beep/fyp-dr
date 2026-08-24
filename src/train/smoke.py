@@ -114,8 +114,16 @@ def build_fixture(root: Path, image_size: int = 224) -> tuple[Path, Path]:
     return cache, splits
 
 
-def run_arm(arm: str, workdir: Path, *, epochs: int = 1, keep: bool = False) -> dict:
-    """One arm, through the real main(). Returns the parsed metrics.json."""
+def run_arm(arm: str, workdir: Path, *, epochs: int = 1, keep: bool = False,
+            arch: str | None = None) -> dict:
+    """One arm, through the real main(). Returns the parsed metrics.json.
+
+    `arch` exists so a backbone can be exercised end to end BEFORE an hour of GPU is
+    spent on it. Every architecture switch so far has been made by passing `--arch` to
+    a Kaggle run whose first execution of that code path was the real one; a head that
+    does not attach, or a classifier attribute timm names differently for that family,
+    fails at minute zero of an hour-long cell instead of here in twelve seconds.
+    """
     from src.train.train import main as train_main
 
     cache, splits = build_fixture(workdir / arm)
@@ -135,6 +143,8 @@ def run_arm(arm: str, workdir: Path, *, epochs: int = 1, keep: bool = False) -> 
         "--no-pretrained",          # no network, and the weights are irrelevant here
         "--skip-gate",              # the gate is over the COMMITTED splits, not these
     ]
+    if arch:
+        argv += ["--arch", arch]
 
     old_argv = sys.argv
     sys.argv = ["src.train.train"] + argv
@@ -170,6 +180,7 @@ def build_parser() -> argparse.ArgumentParser:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("--arm", default="A")
+    ap.add_argument("--arch", help="backbone to exercise, e.g. efficientnet_b2; default is whatever the config says")
     ap.add_argument("--all-arms", action="store_true")
     ap.add_argument("--epochs", type=int, default=1)
     ap.add_argument("--keep", action="store_true", help="leave the fixture on disk")
@@ -194,11 +205,13 @@ def main() -> int:
     try:
         for arm in arms:
             print("\n" + "#" * 78)
-            print(f"# SMOKE: arm {arm}")
+            print(f"# SMOKE: arm {arm}"
+                  + (f" on {args.arch}" if args.arch else ""))
             print("#" * 78, flush=True)
             t0 = time.time()
             try:
-                m = run_arm(arm, workdir, epochs=args.epochs, keep=args.keep)
+                m = run_arm(arm, workdir, epochs=args.epochs, keep=args.keep,
+                            arch=args.arch)
                 print(f"\n[arm {arm} OK in {time.time() - t0:.0f}s  "
                       f"qwk={m['qwk']:.3f} acc={m['accuracy']:.3f} "
                       f"(scores are meaningless at this size)]")
@@ -217,7 +230,8 @@ def main() -> int:
             print(f"  arm {arm}: {why}")
         print("=" * 78)
         return 1
-    print(f"SMOKE PASSED - {len(arms)} arm(s) ran end to end through the real main().")
+    print(f"SMOKE PASSED - {len(arms)} arm(s) ran end to end through the real main()"
+          + (f" on {args.arch}." if args.arch else "."))
     print("=" * 78)
     return 0
 

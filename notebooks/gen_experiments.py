@@ -90,7 +90,17 @@ def render(run: str, runs_root: Path) -> tuple[str, str]:
 
     ---
 
-    ## PRE-REGISTERED - the stage 3 capacity hypothesis
+    ## PRE-REGISTERED - the stage 3 "capacity" hypothesis - **RESOLVED: HALF WRONG**
+
+    > **Outcome (DECISION-036).** Arm B's gap held (0.290 -> 0.329). Arm A held (+0.015).
+    > **Arm E broke it** (+0.053), and the umbrella claim was **wrong**: E's
+    > sens@spec>=0.95 went 0.6589 -> 0.7464, closing 62% of the distance to the floor.
+    > **And the test manipulated the wrong variable** - B0 is 4.01M parameters and
+    > 0.385 GMAC against ResNet18's 11.18M and 1.814, i.e. smaller on both. Capacity was
+    > never tested and no claim about it appears in this document. What was tested is
+    > backbone quality at matched compute. The prediction is left below exactly as
+    > written; it is the record.
+
 
     **Written 2026-08-22, before the stage 3 runs.** Recorded here so the prediction is on
     record whichever way it goes.
@@ -131,6 +141,76 @@ def render(run: str, runs_root: Path) -> tuple[str, str]:
 
     Either way it is a result. `notebooks/phase4_stage3.py` cell 4 evaluates it directly
     and prints AS PREDICTED or PREDICTION WRONG.
+
+    ---
+
+    ## PRE-REGISTERED - stage 3.5, one backbone step (DECISION-038)
+
+    **Written 2026-08-24, before the run.** Arm E on EfficientNet-B2 @224, one arm.
+
+    ### The manipulated variable, in parameters and FLOPs
+
+    Measured locally with `timm` and `torch.utils.flop_counter` - not a loose word like
+    "capacity", which is what went wrong last time.
+
+    | backbone | params | GMAC @224 | native input |
+    |---|---:|---:|---:|
+    | resnet18 | 11.18M | 1.814 | 224 |
+    | efficientnet_b0 | 4.01M | 0.385 | 224 |
+    | **efficientnet_b2** | **7.70M** | **0.658** | **256** |
+
+    The step is **+92% parameters and +71% GMAC** over B0. **The whole ladder sits below
+    ResNet18 on both**, so nothing measured on it can be attributed to capacity.
+
+    ### The confound, stated in advance
+
+    B2's native input is 256 and it is run at 224 to hold resolution fixed. B0's native
+    input *is* 224. **A null result therefore does not show the backbone lever is
+    exhausted** - only that this step, at this resolution, did not pay.
+
+    ### The prediction
+
+    **B2 will not beat B0 by a separable margin: |dQWK| < 0.02, paired interval spanning
+    zero.** ResNet18 -> B0 crossed architecture families; B0 -> B2 is within-family
+    scaling at a below-native input, the weakest form of the same lever.
+
+    ### The stopping rule - every outcome stops
+
+    | paired held-out dQWK (B2 - B0) | decision |
+    |---|---|
+    | not separable | keep **B0** - smaller, cheaper, native at 224 |
+    | separable and positive | keep **B2**. Do not run B3. |
+    | separable and negative | keep **B0**, noting the off-native confound |
+    | any of the above, but B2 clears sens@spec>=0.95 of 0.80 | report as deployment-relevant, still do not run B3 |
+
+    **This is the last backbone step.** Reopening the ladder needs a positive argument
+    logged before the run, never a good result on its own.
+
+    ---
+
+    ## Selection optimism — the running total
+
+    **Architecture choices made by looking at validation: 3 of a soft budget of 4.**
+
+    | # | choice | decided on |
+    |---|---|---|
+    | 1 | ResNet18 as the Phase 3 baseline | proposal, not validation — **not counted** |
+    | 2 | ResNet18 -> EfficientNet-B0 | validation QWK, stage 3 |
+    | 3 | arm E (ordinal) over arm A (softmax) | validation, at a tie — decided on the
+          operating point and the gap |
+    | 4 | B0 -> B2, or keep B0 | validation, stage 3.5 — **pending** |
+
+    **What it costs.** DECISION-035 measures the optimism from fitting four cut points on
+    validation (0.006-0.010 QWK, re-measured every run). **Nothing measures the optimism
+    from choosing an architecture on the same 5,268 images.** It is real, it is not
+    separately estimable without a second held-out split we do not have, and it inflates
+    every validation figure in this document by an unknown amount. The **test set is
+    untouched** (R3), so the single number reported at the end of Phase 5 remains honest —
+    that is exactly what the test set is being saved for.
+
+    **The gate.** A fourth entry needs a **positive argument written down before the run**,
+    logged as a decision. Momentum from a good result is not an argument (DECISION-036).
+    `notebooks/phase4_stage35.py` carries a stopping rule with no escalating outcome.
 
     ---
 

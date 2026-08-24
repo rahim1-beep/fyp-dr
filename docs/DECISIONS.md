@@ -11,7 +11,9 @@ Any data rows excluded from the pipeline are listed here, never dropped silently
 ## DECISION-001 — Streamlit replaced by FastAPI + Next.js
 
 - **Date:** 2026-08-20
-- **Status:** Accepted by user; **pending written supervisor confirmation before Phase 7**
+- **Status:** **APPROVED** — supervisor confirmed 2026-08-24. No longer a pending
+  deviation; the proposal's §9 and §5.10/Month 8 Streamlit references are superseded
+  and the thesis states the change and its reasons rather than flagging it as open.
 - **Deviates from proposal:** Yes — §9 (Tools and Technologies) and §5.10/Month 8
   (Milestones) name Streamlit.
 
@@ -1904,6 +1906,65 @@ point, which thresholding recovers, and partly by degrading the ranking, which i
 still well below arm A's 0.7270. The conclusion that **loss-level class weighting
 underperforms leaving the distribution alone** is now robust to the weighting scheme and
 to the decision rule, which is exactly what one run of one scheme could not establish.
+
+---
+
+## DECISION-038 — Stage 3.5: one backbone step, pre-registered, with a stopping rule
+
+- **Date:** 2026-08-24
+- **Status:** Accepted — **pre-registered before the run**
+- **Deviates from proposal:** No. EfficientNet is the proposal's primary family.
+
+DECISION-036 found backbone quality to be the only lever with separable evidence
+(+0.0408 QWK [+0.0181, +0.0654] for 1.08x compute). This tests one more step and then
+**closes the question**, so that a ladder does not turn into an unbudgeted search.
+
+### The manipulated variable, in parameters and FLOPs
+
+Measured locally with `timm` and `torch.utils.flop_counter`:
+
+| backbone | params | GMAC @224 | native input |
+|---|---:|---:|---:|
+| resnet18 | 11.18M | 1.814 | 224 |
+| efficientnet_b0 | 4.01M | 0.385 | 224 |
+| **efficientnet_b2** | **7.70M** | **0.658** | **256** |
+
+The step is **+3.69M parameters (+92%) and +0.273 GMAC (+71%)** over B0. **The entire
+ladder sits below ResNet18 on both measures**, which is why no result anywhere on it may
+be attributed to capacity. What varies is architecture family and pretrained-feature
+quality.
+
+### The confound, stated before the run
+
+B2's native input is 256 and we run at 224 to hold resolution fixed against every other
+run in the project. B0's native input **is** 224. B2 is therefore handicapped and B0 is
+not, so **a null result does not show the backbone lever is exhausted** — only that this
+step, at this resolution, did not pay. Only the second claim may be written up.
+
+### The prediction
+
+**B2 will not beat B0 by a separable margin: |dQWK| < 0.02, paired interval spanning
+zero.** The ResNet18 -> B0 gain came from crossing architecture *families* — a different
+inductive bias and a stronger ImageNet initialisation. B0 -> B2 is within-family compound
+scaling at a below-native input size, the weakest form of the same lever.
+
+### The stopping rule — every outcome stops
+
+| paired held-out dQWK (B2 − B0) | decision |
+|---|---|
+| not separable | keep **B0** — smaller, cheaper, native at 224 |
+| separable and positive | keep **B2**. Do not run B3. |
+| separable and negative | keep **B0**, noting the off-native confound |
+| any of the above, but B2 clears sens@spec>=0.95 of 0.80 | report as deployment-relevant, still do not run B3 |
+
+Nothing escalates. Reopening the ladder requires a positive argument logged first
+(DECISION-036), never a good result on its own. `notebooks/phase4_stage35.py` cell 3
+applies this table rather than interpreting it.
+
+### After this
+
+Backbone fixed -> stage 2 seeds (arms E and A, 3 seeds, on the chosen backbone) -> the
+384px decision on arm E alone.
 
 ---
 

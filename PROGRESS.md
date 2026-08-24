@@ -23,7 +23,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done
 
 **Answers recorded:** Python 3.12 toolchain (DECISION-002) · Kaggle account `rah098`, quota
 intact · preprocessed cache → private Kaggle Dataset, report size first · private GitHub
-repo, **ask before first push** · DECISION-001 logged, supervisor confirmation before
+repo, **ask before first push** · DECISION-001 **approved by supervisor 2026-08-24**; was pending before
 Phase 7 · 224×224 headline (DECISION-005) · no Intel XPU/IPEX (DECISION-003)
 
 ---
@@ -313,20 +313,16 @@ order A→B→C→D→E→F by increasing implementation risk.
       capacity, because B0 is 4.01M params against ResNet18's 11.18M (DECISION-036)
 - [x] Arm C2 — the arm C conclusion survives both the weighting scheme and the matched
       decision rule; ~78% of C2's advantage is boundary displacement (DECISION-037)
-- [ ] **← NEXT: arm E on EfficientNet-B2 @224, one arm, ~1 h** — settle the backbone
-      before spending seeds on it
-- [ ] Stage 2 seeds on the FINAL backbone (E and A, 3 seeds), not on B0
-- [ ] 384px decision, on arm E only, with the backbone result in hand
+- [ ] **← NEXT: stage 3.5** — arm E on EfficientNet-B2 @224, one arm, ~1 h.
+      `notebooks/phase4_stage35.py`. Pre-registered with a stopping rule whose every
+      outcome stops (DECISION-038). **THE LAST BACKBONE STEP.**
+- [ ] Stage 2 seeds on the CHOSEN backbone (E and A, 3 seeds), not on B0
+- [ ] 384px decision, on arm E alone, with the backbone result in hand
 
-**Architecture choices made on validation so far: 2** (ResNet18 -> B0; B0 -> ?).
-DECISION-036 requires this count to be reported — cut-point optimism is measured,
-architecture-selection optimism is not.
-- [ ] **Supervisor:** confirm the screening standard (DECISION-032). Until then the floor
-      is PROVISIONAL and stays out of the write-up
-- [ ] Stage 2: seed repeats on E, A, F
-- [ ] Fetch with `src.data.fetch_run`, regenerate `docs/EXPERIMENTS.md`
-- [ ] Stage 2: seed repeats on the top three
-- [ ] Stage 3: EfficientNet-B0, budgeted from cell 4's measurement
+**Selection optimism: 3 architecture choices made on validation, soft budget 4.**
+A fourth needs a positive argument written down BEFORE the run, logged as a decision —
+not momentum from a good result (DECISION-036). The running total and what it costs are
+in `docs/EXPERIMENTS.md`; cut-point optimism is measured, selection optimism is not.
 
 **Why arm A is re-run:** the Phase 3 baseline was 8 epochs with the cosine annealed to
 3.0e-06 by the end. It is the Phase 3 record and **not** a valid comparator for a
@@ -470,7 +466,7 @@ must state that it trades a generalisation claim for in-domain performance.
 
 ## Phase 7 — Deployment `[ ]`
 
-**Blocked on:** written supervisor confirmation of DECISION-001.
+**Blocked on:** nothing — DECISION-001 was approved by the supervisor on 2026-08-24.
 **Acceptance:** clean `docker compose up` → prediction with Grad-CAM in browser;
 `tests/test_api.py` green.
 
@@ -497,4 +493,4 @@ must state that it trades a generalisation claim for in-domain performance.
 
 - **GitHub:** private repo + collaborator access for Ameena Ahmed and Muhammad Ali
   Abdullah. **Ask before the first push.**
-- **Supervisor:** written confirmation of DECISION-001 before Phase 7.
+- [x] **Supervisor:** DECISION-001 (FastAPI + Next.js) **approved 2026-08-24**.
