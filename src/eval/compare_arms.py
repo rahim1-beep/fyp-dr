@@ -120,8 +120,61 @@ def load_run(run_dir: Path) -> dict:
         row = log[log.epoch == m.get("best_epoch")]
         if len(row) and "train_qwk" in log.columns:
             fit_gap = float(row.train_qwk.iloc[0] - row.val_qwk.iloc[0])
-    return {"name": Path(run_dir).name, "arm": m.get("arm"), "outputs": outputs,
-            "y": y, "metrics": m, "generalisation_gap": fit_gap}
+    # arch and seed come from the run's own config, because the arm letter alone does not
+    # identify a run: arm E has been trained on three backbones and stage 2 will train it
+    # on three seeds. See `label_runs`.
+    arch = seed = None
+    cfg_path = Path(run_dir) / "config.yaml"
+    if cfg_path.exists():
+        import yaml
+
+        cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+        arch = (cfg.get("model") or {}).get("arch")
+        seed = cfg.get("seed")
+    return {"name": Path(run_dir).name, "arm": m.get("arm"), "arch": arch, "seed": seed,
+            "outputs": outputs, "y": y, "metrics": m, "generalisation_gap": fit_gap}
+
+
+SHORT_ARCH = {"resnet18": "r18", "efficientnet_b0": "b0", "efficientnet_b1": "b1",
+              "efficientnet_b2": "b2", "efficientnet_b3": "b3", "densenet121": "d121"}
+
+
+def label_runs(runs: list[dict]) -> dict[str, dict]:
+    """Key each run by arm PLUS whichever of arch/seed actually varies in this set.
+
+    THIS FUNCTION EXISTS BECAUSE THE OBVIOUS THING IS SILENTLY WRONG. Keying a dict on
+    the arm letter looks fine for as long as one arm means one run, and this comparison
+    was built when that was true. It stopped being true the moment arm E was trained on a
+    second backbone: three runs of arm E collapsed to one row, last write won, and the
+    table reported it without a word. The ranking was then computed over the survivors.
+
+    Nothing warned because nothing counted. So: the label carries every dimension that
+    differs, a set that is a single run keeps the bare arm letter, and a collision that
+    still gets through raises rather than overwrites.
+    """
+    varies = {
+        "arch": len({r.get("arch") for r in runs}) > 1,
+        "seed": len({r.get("seed") for r in runs}) > 1,
+    }
+    out: dict[str, dict] = {}
+    for r in runs:
+        parts = [str(r.get("arm") or r["name"])]
+        if varies["arch"] and r.get("arch"):
+            parts.append(SHORT_ARCH.get(r["arch"], r["arch"]))
+        if varies["seed"] and r.get("seed") is not None:
+            parts.append(f"s{r['seed']}")
+        label = "/".join(parts)
+        if label in out:
+            # Two runs the label cannot tell apart. Dropping one is what this function
+            # was written to stop, so fall back to the directory name, which is unique
+            # by construction, rather than lose a run.
+            label = r["name"]
+        if label in out:
+            raise ValueError(f"two runs share the label {label!r}: "
+                             f"{out[label]['name']} and {r['name']}")
+        r["label"] = label
+        out[label] = r
+    return out
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -132,8 +185,15 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--pattern", default="phase4_arm_*")
     ap.add_argument("--repeats", type=int, default=40)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--compare", nargs=2, metavar=("ARM_A", "ARM_B"),
-                    help="two arm letters for a paired bootstrap, e.g. --compare A E")
+    ap.add_argument("--compare", nargs=2, metavar=("RUN_A", "RUN_B"),
+                    help="two run labels for a paired bootstrap. A label is the arm "
+                         "letter plus whatever else varies in the matched set, e.g. "
+                         "'A' when one backbone is present, 'E/b2' when several are, "
+                         "'E/b2/s1' when seeds differ too. The label list is printed "
+                         "above the table.")
+    ap.add_argument("--operating-point", action="store_true",
+                    help="also report sensitivity at specificity >= 0.95 and specificity "
+                         "at sensitivity >= 0.80, the screening floors of DECISION-032")
     ap.add_argument("--out", type=Path, help="write the comparison as JSON")
     return ap
 
@@ -147,26 +207,64 @@ def main() -> int:
               file=sys.stderr)
         return 1
 
-    runs = {}
+    loaded = []
     for d in dirs:
         r = load_run(d)
         r["score"] = continuous_score(r["outputs"])
         r["as_run"] = as_run_qwk(r["outputs"], r["y"])
         r.update(split_half_qwk(r["score"], r["y"], repeats=args.repeats, seed=args.seed))
-        runs[r["arm"] or r["name"]] = r
+        loaded.append(r)
+    runs = label_runs(loaded)
+    assert len(runs) == len(dirs), "a run was dropped while labelling"
+    print(f"{len(runs)} run(s) matched {args.pattern}:")
+    for lab in sorted(runs):
+        print(f"  {lab:<12} {runs[lab]['name']}")
+    print()
 
     print("MATCHED-DECISION-RULE COMPARISON (validation only, R3)")
     print("Every arm gets the same four degrees of freedom; softmax arms are scored on")
     print("their expected grade rather than argmax.\n")
-    hdr = (f"{'arm':<5}{'as run':>9}{'fitted':>9}{'held-out':>10}{'optimism':>10}"
+    # The screening operating point, alongside the QWK. Selection is on QWK
+    # (DECISION-030) but the floor is what gates deployment, and having to run a second
+    # command to see it is how the two get discussed separately when they are one
+    # decision.
+    if args.operating_point:
+        from src.eval.thresholds import (NICE_SENSITIVITY, NICE_SPECIFICITY,
+                                         choose_operating_point, referable_scores,
+                                         sensitivity_specificity_curve)
+
+        for r in runs.values():
+            head = ("ordinal_regression" if r["outputs"].ndim == 1
+                    or r["outputs"].shape[1] == 1 else "softmax")
+            op = choose_operating_point(
+                sensitivity_specificity_curve(referable_scores(r["outputs"], head),
+                                              r["y"]))
+            r["sens_at_spec"] = (op.get("max_sens_at_spec") or {}).get("sensitivity")
+            r["spec_at_sens"] = (op.get("max_spec_at_sens") or {}).get("specificity")
+            r["meets_both"] = op.get("meets_both") is not None
+
+    hdr = (f"{'run':<12}{'as run':>9}{'fitted':>9}{'held-out':>10}{'optimism':>10}"
            f"{'gain':>8}{'gen gap':>9}")
+    if args.operating_point:
+        hdr += f"{'sens@sp.95':>12}{'spec@se.80':>12}"
     print(hdr)
     print("-" * len(hdr))
     for arm in sorted(runs):
         r = runs[arm]
         gap = f"{r['generalisation_gap']:+.3f}" if r["generalisation_gap"] is not None else "-"
-        print(f"{arm:<5}{r['as_run']:>9.4f}{r['in_sample']:>9.4f}{r['held_out']:>10.4f}"
-              f"{r['optimism']:>10.4f}{r['held_out'] - r['as_run']:>+8.4f}{gap:>9}")
+        line = (f"{arm:<12}{r['as_run']:>9.4f}{r['in_sample']:>9.4f}{r['held_out']:>10.4f}"
+                f"{r['optimism']:>10.4f}{r['held_out'] - r['as_run']:>+8.4f}{gap:>9}")
+        if args.operating_point:
+            for k in ("sens_at_spec", "spec_at_sens"):
+                line += f"{r[k]:>12.4f}" if r.get(k) is not None else f"{'-':>12}"
+        print(line)
+    if args.operating_point:
+        print(f"\nfloors: sensitivity >= {NICE_SENSITIVITY}, specificity >= "
+              f"{NICE_SPECIFICITY}  [PROVISIONAL - DECISION-032]")
+        clears = [a for a in sorted(runs)
+                  if (runs[a].get("sens_at_spec") or 0) >= NICE_SENSITIVITY]
+        print(f"clearing the sensitivity floor at spec >= {NICE_SPECIFICITY}: "
+              f"{', '.join(clears) if clears else 'none'}")
 
     order = sorted(runs, key=lambda a: -runs[a]["held_out"])
     print(f"\nranking on held-out fitted QWK: {' > '.join(order)}")
@@ -180,7 +278,19 @@ def main() -> int:
               for a, r in runs.items()}
 
     if args.compare:
-        a, b = (x.upper() for x in args.compare)
+        def resolve(token: str) -> str:
+            for cand in (token, token.upper(), token.replace("_", "/")):
+                if cand in runs:
+                    return cand
+            hits = [k for k in runs if k.upper().startswith(token.upper())] or                    [k for k, r in runs.items() if token.lower() in r["name"].lower()]
+            if len(hits) == 1:
+                return hits[0]
+            raise SystemExit(
+                f"--compare {token!r} matches {len(hits)} run(s). Available: "
+                f"{', '.join(sorted(runs))}"
+            )
+
+        a, b = (resolve(x) for x in args.compare)
         if a in runs and b in runs:
             d = paired_difference(runs[a]["score"], runs[b]["score"], runs[a]["y"],
                                   seed=args.seed)

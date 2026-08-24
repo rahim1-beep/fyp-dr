@@ -313,11 +313,12 @@ order A→B→C→D→E→F by increasing implementation risk.
       capacity, because B0 is 4.01M params against ResNet18's 11.18M (DECISION-036)
 - [x] Arm C2 — the arm C conclusion survives both the weighting scheme and the matched
       decision rule; ~78% of C2's advantage is boundary displacement (DECISION-037)
-- [ ] **← NEXT: stage 3.5** — arm E on EfficientNet-B2 @224, one arm, ~1 h.
-      `notebooks/phase4_stage35.py`. Pre-registered with a stopping rule whose every
-      outcome stops (DECISION-038). **THE LAST BACKBONE STEP.**
-- [ ] Stage 2 seeds on the CHOSEN backbone (E and A, 3 seeds), not on B0
-- [ ] 384px decision, on arm E alone, with the backbone result in hand
+- [x] **Stage 3.5 done** — B2 vs B0 = +0.0052 [-0.0195, +0.0285], NOT separable;
+      **prediction held**, backbone fixed at **EfficientNet-B0** (DECISION-039). B2 is
+      also worse on the deployment metric: sens@spec.95 0.7211 vs 0.7464.
+- [x] `compare_arms` label fix — it was silently dropping 4 of 11 runs (DECISION-040)
+- [ ] **← NEXT: stage 2 seeds** — arms E and A on EfficientNet-B0, 3 seeds each, ~3.5 h
+- [ ] Then the 384px decision, on arm E alone
 
 **Selection optimism: 3 architecture choices made on validation, soft budget 4.**
 A fourth needs a positive argument written down BEFORE the run, logged as a decision —

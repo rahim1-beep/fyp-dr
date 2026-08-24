@@ -144,7 +144,16 @@ def render(run: str, runs_root: Path) -> tuple[str, str]:
 
     ---
 
-    ## PRE-REGISTERED - stage 3.5, one backbone step (DECISION-038)
+    ## PRE-REGISTERED - stage 3.5, one backbone step - **RESOLVED: AS PREDICTED**
+
+    > **Outcome (DECISION-039).** `QWK(E/b2) - QWK(E/b0) = +0.0052 [-0.0195, +0.0285]`,
+    > **not separable**, |dQWK| < 0.02 as predicted. Stopping rule row 1: **keep B0**.
+    > B2 is also behind on the metric that gates deployment - sens@spec>=0.95 of 0.7211
+    > against B0's 0.7464 - with nearly double the generalisation gap. **The backbone
+    > question is closed.** The off-native confound below still stands: this does not
+    > show backbone scaling is exhausted in general, only that this step at 224 did not
+    > pay.
+
 
     **Written 2026-08-24, before the run.** Arm E on EfficientNet-B2 @224, one arm.
 

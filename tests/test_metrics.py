@@ -458,3 +458,55 @@ def test_a_minority_grade_below_the_threshold_stays_a_warning():
     y_true, y_pred = _from_recall(VAL_SUPPORT, [0.982, 0.0, 0.376, 0.316, 0.407])
     rep = detect_collapse(y_true, y_pred, referable_threshold=2)
     assert not rep.collapsed and rep.level == "warning"
+
+
+def test_two_runs_of_one_arm_do_not_collapse_into_one_row(tmp_path):
+    """Regression: `compare_arms` keyed its table on the arm letter.
+
+    Arm E has been trained on three backbones and stage 2 will train it on three seeds.
+    Keying on the letter meant last-write-wins, silently: runs vanished from the table
+    AND from the ranking computed over it, with nothing printed to say so. Four of eleven
+    runs were being dropped when this was found.
+    """
+    import numpy as np, yaml
+    from src.eval.compare_arms import label_runs
+
+    def fake(name, arch, seed=42, arm="E"):
+        return {"name": name, "arm": arm, "arch": arch, "seed": seed}
+
+    runs = [fake("phase4_arm_e_resnet18", "resnet18"),
+            fake("phase4_stage3_arm_e_efficientnet_b0", "efficientnet_b0"),
+            fake("phase4_stage35_arm_e_efficientnet_b2", "efficientnet_b2")]
+    out = label_runs(runs)
+    assert len(out) == 3, f"a run was dropped: {sorted(out)}"
+    assert set(out) == {"E/r18", "E/b0", "E/b2"}
+
+
+def test_seeds_of_one_arm_and_backbone_stay_distinct():
+    """Stage 2's shape: same arm, same backbone, three seeds."""
+    from src.eval.compare_arms import label_runs
+
+    runs = [{"name": f"stage2_e_b0_s{s}", "arm": "E", "arch": "efficientnet_b0",
+             "seed": s} for s in (1, 2, 3)]
+    out = label_runs(runs)
+    assert set(out) == {"E/s1", "E/s2", "E/s3"}, sorted(out)
+
+
+def test_a_single_backbone_and_seed_keeps_the_bare_arm_letter():
+    """The label must not get noisier when there is nothing to disambiguate."""
+    from src.eval.compare_arms import label_runs
+
+    runs = [{"name": f"phase4_arm_{a.lower()}_resnet18", "arm": a,
+             "arch": "resnet18", "seed": 42} for a in ("A", "B", "E")]
+    assert set(label_runs(runs)) == {"A", "B", "E"}
+
+
+def test_indistinguishable_runs_fall_back_to_the_directory_name():
+    """Two runs the label cannot separate must both survive, not silently merge."""
+    from src.eval.compare_arms import label_runs
+
+    runs = [{"name": "run_one", "arm": "E", "arch": "resnet18", "seed": 42},
+            {"name": "run_two", "arm": "E", "arch": "resnet18", "seed": 42}]
+    out = label_runs(runs)
+    assert len(out) == 2, sorted(out)
+    assert "run_two" in out

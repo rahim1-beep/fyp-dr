@@ -1,0 +1,35 @@
+{
+  "E/b2": {
+    "name": "phase4_stage35_arm_e_efficientnet_b2",
+    "arm": "E",
+    "arch": "efficientnet_b2",
+    "seed": 42,
+    "generalisation_gap": 0.06073637658631936,
+    "as_run": 0.7515915483705291,
+    "in_sample": 0.7684791912944808,
+    "held_out": 0.7631751279494828,
+    "optimism": 0.005304063344998,
+    "label": "E/b2"
+  },
+  "E/b0": {
+    "name": "phase4_stage3_arm_e_efficientnet_b0",
+    "arm": "E",
+    "arch": "efficientnet_b0",
+    "seed": 42,
+    "generalisation_gap": 0.03443649868775278,
+    "as_run": 0.7614671328146116,
+    "in_sample": 0.7651219118348753,
+    "held_out": 0.7577651423453787,
+    "optimism": 0.007356769489496595,
+    "label": "E/b0"
+  },
+  "_compare": {
+    "a": "E/b2",
+    "b": "E/b0",
+    "mean": 0.00517169246035986,
+    "lo": -0.01948140808093097,
+    "hi": 0.0285464698002181,
+    "separable": false,
+    "a_better_fraction": 0.675
+  }
+}

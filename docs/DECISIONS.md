@@ -1968,6 +1968,86 @@ Backbone fixed -> stage 2 seeds (arms E and A, 3 seeds, on the chosen backbone) 
 
 ---
 
+## DECISION-039 — Stage 3.5 resolved: keep B0. The backbone question is closed.
+
+- **Date:** 2026-08-25
+- **Status:** Accepted — **the pre-registered prediction held**
+- **Deviates from proposal:** No.
+
+DECISION-038 predicted B2 would not beat B0 separably, |dQWK| < 0.02, interval spanning
+zero. Measured, arm E, matched decision rule, paired on the same 5,268 validation images:
+
+```
+paired: QWK(E/b2) - QWK(E/b0) = +0.0052  95% CI [-0.0195, +0.0285]
+  E/b2 better in 68% of resamples
+  NOT SEPARABLE - the interval spans zero, so this pair is a tie
+```
+
+**AS PREDICTED.** Stopping rule row 1: **keep EfficientNet-B0** — smaller (4.01M vs
+7.70M), cheaper (0.385 vs 0.658 GMAC) and native at 224 where B2 is not.
+
+The screening operating point points the same way, which the QWK tie alone would not have
+shown:
+
+| run | held-out QWK | sens@spec>=0.95 | spec@sens>=0.80 | gen gap |
+|---|---:|---:|---:|---:|
+| **E/b0** | 0.7560 | **0.7464** | **0.9030** | **0.034** |
+| E/b2 | 0.7600 | 0.7211 | 0.8738 | 0.061 |
+
+B2 is nominally ahead on QWK by an amount that is not separable, and **behind on the
+metric that gates deployment** — 2.5 points of sensitivity at fixed specificity — with
+nearly double the generalisation gap. Nothing here justifies the larger model.
+
+**Consequence.** The backbone is fixed at EfficientNet-B0. Selection-optimism count stays
+at **3 of 4**: this step was pre-registered and resolved to "keep what we had", so it
+spent a run, not a degree of freedom. Reopening the ladder still needs a positive
+argument logged before a run (DECISION-036), and the off-native confound (DECISION-038)
+means this result does **not** license the claim that backbone scaling is exhausted in
+general — only that this step, at 224, did not pay.
+
+---
+
+## DECISION-040 — `compare_arms` was silently dropping runs; comparisons are keyed on a label
+
+- **Date:** 2026-08-25
+- **Status:** Accepted — bug fixed, regression tests added
+- **Deviates from proposal:** No.
+
+`src/eval/compare_arms.py` built its table as `runs[metrics["arm"]] = r`. That is correct
+for exactly as long as one arm means one run, which is how it was written and how it was
+true until arm E was trained on a second backbone.
+
+**Found by the user, from the symptom: the E row read 0.7615, which is the B0 run, after
+B2 had been fetched.** Three runs of arm E collapsed to one, last write won, and
+`sorted()` put B0 last. **Four of eleven runs were being dropped**, and the ranking was
+then computed over the seven survivors. Nothing warned, because nothing counted.
+
+This is the DECISION-024 shape again — a branch that was never wrong until the data grew
+a dimension it did not model — and it would have hit stage 2 immediately, where three
+seeds of arm E would have reported as one seed and the seed-stability claim would have
+been built on a single run.
+
+**The fix.** `label_runs()` keys each run on the arm **plus whichever of arch and seed
+actually varies in the matched set**, so a homogeneous set still reads `A`, `B`, `E`,
+while a mixed one reads `E/r18`, `E/b0`, `E/b2` and a seed sweep reads `E/s1`, `E/s2`,
+`E/s3`. A label collision that still gets through falls back to the run directory name
+and then raises — it never overwrites. `main()` asserts `len(runs) == len(dirs)` and
+prints the label-to-directory mapping above every table, so a dropped run is impossible
+to have and impossible to miss.
+
+`--compare` now resolves labels rather than uppercasing arm letters, and lists the
+available labels when a token is ambiguous.
+
+**Four regression tests** cover the three-backbone case, the three-seed case, the
+homogeneous case (the label must not get noisier when there is nothing to disambiguate),
+and the indistinguishable-runs case.
+
+**Everything reported before this fix used single-backbone sets**, where the arm letter
+was unique and the label is identical, so no committed number changes. Verified by
+re-running the stage 1 comparison after the fix.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and
