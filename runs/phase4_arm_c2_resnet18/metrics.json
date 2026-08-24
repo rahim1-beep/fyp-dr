@@ -1,0 +1,126 @@
+{
+  "split": "val",
+  "n": 5268,
+  "qwk": 0.6029216200196851,
+  "accuracy": 0.7289293849658315,
+  "balanced_accuracy": 0.4997796476805534,
+  "per_class_recall": [
+    0.8789283874291602,
+    0.1876750700280112,
+    0.28045685279187815,
+    0.6240601503759399,
+    0.5277777777777778
+  ],
+  "support": [
+    3882,
+    357,
+    788,
+    133,
+    108
+  ],
+  "predicted_counts": [
+    4040,
+    485,
+    358,
+    256,
+    129
+  ],
+  "confusion_matrix": [
+    [
+      3412,
+      308,
+      79,
+      44,
+      39
+    ],
+    [
+      268,
+      67,
+      16,
+      4,
+      2
+    ],
+    [
+      344,
+      98,
+      221,
+      101,
+      24
+    ],
+    [
+      8,
+      10,
+      25,
+      83,
+      7
+    ],
+    [
+      8,
+      2,
+      17,
+      24,
+      57
+    ]
+  ],
+  "referable": {
+    "threshold": 2.0,
+    "sensitivity": 0.543245869776482,
+    "specificity": 0.9565935362113706,
+    "ppv": 0.7523553162853297,
+    "npv": 0.8961325966850828,
+    "tp": 559.0,
+    "tn": 4055.0,
+    "fp": 184.0,
+    "fn": 470.0
+  },
+  "collapse": {
+    "collapsed": false,
+    "level": "warning",
+    "reasons": [],
+    "warnings": [
+      "accuracy 0.7289 is at or below the majority-class rate 0.7369, but QWK is 0.6029 \u2014 this is what rebalancing looks like, not a collapse: the model is trading accuracy for rare-class recall on purpose"
+    ]
+  },
+  "class_names": [
+    "No DR",
+    "Mild",
+    "Moderate",
+    "Severe",
+    "Proliferative"
+  ],
+  "qwk_ci": {
+    "point": 0.6029216200196851,
+    "lo": 0.5721472565884868,
+    "hi": 0.631644580866022,
+    "n_boot": 1000.0,
+    "n_undefined": 0.0,
+    "ci": 0.95
+  },
+  "rare_class_ci": {
+    "3": {
+      "point": 0.6240601503759399,
+      "lo": 0.5432903009216872,
+      "hi": 0.7083786231884058,
+      "n_boot": 1000.0,
+      "n_undefined": 0.0,
+      "ci": 0.95
+    },
+    "4": {
+      "point": 0.5277777777777778,
+      "lo": 0.43240593534711186,
+      "hi": 0.6310679611650486,
+      "n_boot": 1000.0,
+      "n_undefined": 0.0,
+      "ci": 0.95
+    }
+  },
+  "run_id": "phase4_arm_c2_resnet18",
+  "arm": "C2",
+  "best_epoch": 8,
+  "best_val_qwk_during_training": 0.6022257307112171,
+  "stopped_early": true,
+  "stop_reason": "val QWK did not improve for 7 epochs (best 0.6022 at epoch 8)",
+  "epochs_run": 16,
+  "wall_clock_minutes": 26.21182928880056,
+  "is_smoke_test": false
+}

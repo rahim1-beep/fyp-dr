@@ -1,0 +1,124 @@
+{
+  "split": "val",
+  "n": 5268,
+  "qwk": 0.6636812473547207,
+  "accuracy": 0.7775246772968869,
+  "balanced_accuracy": 0.48127847867763746,
+  "per_class_recall": [
+    0.9227202472952086,
+    0.0392156862745098,
+    0.48984771573604063,
+    0.43609022556390975,
+    0.5185185185185185
+  ],
+  "support": [
+    3882,
+    357,
+    788,
+    133,
+    108
+  ],
+  "predicted_counts": [
+    4220,
+    136,
+    720,
+    110,
+    82
+  ],
+  "confusion_matrix": [
+    [
+      3582,
+      96,
+      199,
+      0,
+      5
+    ],
+    [
+      298,
+      14,
+      45,
+      0,
+      0
+    ],
+    [
+      321,
+      25,
+      386,
+      39,
+      17
+    ],
+    [
+      11,
+      0,
+      60,
+      58,
+      4
+    ],
+    [
+      8,
+      1,
+      30,
+      13,
+      56
+    ]
+  ],
+  "referable": {
+    "threshold": 2.0,
+    "sensitivity": 0.6443148688046647,
+    "specificity": 0.9412597310686482,
+    "ppv": 0.7269736842105263,
+    "npv": 0.9159779614325069,
+    "tp": 663.0,
+    "tn": 3990.0,
+    "fp": 249.0,
+    "fn": 366.0
+  },
+  "collapse": {
+    "collapsed": false,
+    "level": "none",
+    "reasons": [],
+    "warnings": []
+  },
+  "class_names": [
+    "No DR",
+    "Mild",
+    "Moderate",
+    "Severe",
+    "Proliferative"
+  ],
+  "qwk_ci": {
+    "point": 0.6636812473547207,
+    "lo": 0.6376520223023887,
+    "hi": 0.6890198594484207,
+    "n_boot": 1000.0,
+    "n_undefined": 0.0,
+    "ci": 0.95
+  },
+  "rare_class_ci": {
+    "3": {
+      "point": 0.43609022556390975,
+      "lo": 0.3537341660802252,
+      "hi": 0.5294227392449518,
+      "n_boot": 1000.0,
+      "n_undefined": 0.0,
+      "ci": 0.95
+    },
+    "4": {
+      "point": 0.5185185185185185,
+      "lo": 0.41928763440860223,
+      "hi": 0.6117101004939532,
+      "n_boot": 1000.0,
+      "n_undefined": 0.0,
+      "ci": 0.95
+    }
+  },
+  "run_id": "phase4_stage3_arm_b_efficientnet_b0",
+  "arm": "B",
+  "best_epoch": 16,
+  "best_val_qwk_during_training": 0.663470148819792,
+  "stopped_early": true,
+  "stop_reason": "val QWK did not improve for 7 epochs (best 0.6635 at epoch 16)",
+  "epochs_run": 24,
+  "wall_clock_minutes": 40.0690177321434,
+  "is_smoke_test": false
+}
