@@ -14,32 +14,21 @@ five-checkpoint backfill (~5 min), one session. It needs the Phase 4 ablation no
 
 After it: the operating-point table for all six arms, then stage 2.
 
-## THE IDENTIFIED ROUTE TO THE SENSITIVITY GAP - a live decision after stage 3
+## THE ROUTE TO THE SENSITIVITY GAP — REVISED after stage 3 (DECISION-036)
 
-No arm reaches the screening floor; the best is **sens@spec 0.66 against 0.80 required**.
-Stage 1's traces say what is and is not limiting these runs, so this is not guesswork:
+Best operating point is now **arm E on EfficientNet-B0: sens@spec>=0.95 = 0.7464**
+against the 0.80 floor. The gap was 0.141 on ResNet18; it is **0.054**. Stage 3 closed
+62% of it for 1.08x compute, which changes the priority order that was written here
+before the run.
 
-- **Not the schedule.** All six arms early-stopped, best epochs 6-20 of 30.
-- **Not capacity** (pending stage 3's test). The sampler arms reach train QWK 0.87-0.92
-  and lose ~0.30 on validation - memorisation, not underfitting.
-- **Generalisation is the binding constraint.**
+| lever | evidence | cost | priority |
+|---|---|---|---|
+| **Backbone quality** | +0.0408 held-out QWK [+0.0181, +0.0654], **separable**; sens +0.087 | 1.08x, already paid once | **1 — one more step (B2 @224, ~1 h)** |
+| **Input resolution 224 -> 384** | none yet; the argument is physical, not measured | **~2.9x** compute + ~2.5 h cache rebuild + ~2.4 GB | 2 — after the backbone step |
+| **Regularisation** | applies to the softmax arms, whose gaps WIDENED on B0 (A +0.065, B +0.039) | cheap | 3 — only if a softmax arm is kept; **arm E's gap is 0.034, there is nothing to regularise** |
 
-**The two levers, in the order the evidence supports:**
-
-1. **Input resolution, 224 -> 384.** The strongest lever in the DR literature and the one
-   most likely to move rare-class sensitivity: microaneurysms are a few pixels across at
-   224, which is exactly the signal grades 1-2 depend on. **Cost ~2.9x compute**
-   ((384/224)^2 on the pixel count), so a 30-epoch ResNet18 arm goes from ~36 min to
-   ~1.7 h and a six-arm sweep from 3.7 h to ~11 h. It also needs the **cache rebuilt at
-   384**: another ~2.5 h and roughly 2.4 GB. Already scoped as an optional ablation in the
-   proposal (DECISION-005), so it is a deviation to approve rather than to invent.
-2. **Regularisation for the sampler arms.** Their failure is specifically memorisation of
-   repeated rare images. Stronger augmentation, mixup/cutmix, or a sampler that draws with
-   a softened weight rather than full inverse frequency all target that directly, and all
-   are far cheaper than a resolution change.
-
-**Decide after stage 3**, because its result changes which is worth doing: if capacity
-turns out to matter after all, both are premature.
+Sequencing matters: **settle the backbone before spending seeds on it.** Seeding B0 and
+then moving to B2 throws the seeds away.
 
 ## DO NOT WRITE UP — three unconfirmed items (DECISION-032)
 

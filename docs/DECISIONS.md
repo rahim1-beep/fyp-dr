@@ -1804,6 +1804,109 @@ beforehand, and is not a ranking.
 
 ---
 
+## DECISION-036 — The stage 3 prediction is half wrong, and it tested the wrong variable
+
+- **Date:** 2026-08-24
+- **Status:** Accepted
+- **Deviates from proposal:** No.
+
+The pre-registration in `docs/EXPERIMENTS.md` called stage 3 a **capacity** test. It was
+not one. **EfficientNet-B0 has 4.01M parameters against ResNet18's 11.18M** — measured,
+not looked up. The run swapped in a backbone that is 64% *smaller*, so whatever it
+measured, it did not measure the effect of more capacity. That is a design error in the
+pre-registration, recorded here rather than quietly re-labelled.
+
+### What the prediction said and what happened
+
+| claim | outcome |
+|---|---|
+| Arm B's train−val gap stays ≥ 0.25 | **held** — 0.290 → 0.329 |
+| Arms A and E move < 0.03 QWK | **A held** (+0.015); **E broke it** (+0.053) |
+| B0 will not close the 0.14 referable-sensitivity gap | **wrong** — E's sens@spec≥0.95 went 0.6589 → 0.7464, closing 62% of the distance to the 0.80 floor |
+
+### What it actually tested, and the result
+
+Backbone quality at matched compute (B0 is 1.08× ResNet18 per epoch). All three arms
+improved. The informative part is that **the two softmax arms turned better features into
+more overfitting and the ordinal arm did not**:
+
+| arm | head | gap on R18 | gap on B0 | Δgap |
+|---|---|---:|---:|---:|
+| A | softmax | 0.092 | 0.157 | **+0.065** |
+| B | softmax | 0.290 | 0.329 | **+0.039** |
+| E | ordinal regression | 0.073 | 0.034 | **−0.039** |
+
+Same backbone change, opposite gap response. The gap response is therefore a property of
+the **head**, not of the backbone.
+
+The mechanism: cross-entropy over five logits can always spend a better representation on
+driving the correct logit higher on individual training images, and confidence does not
+transfer. Smooth-L1 on a single scalar cannot — the output is already in grade units and
+the loss stops rewarding a residual once it is small — so a better representation has
+nowhere to go except better ordering. The corroborating evidence is in the cut points:
+**arm E on B0 has a fitted first cut of exactly 0.500, the default**, and re-thresholding
+buys it +0.002 QWK against +0.041 for A and +0.046 for B.
+
+### Consequences
+
+1. **Capacity remains untested.** No claim about it may be made in the write-up.
+2. **Backbone quality is a demonstrated, cheap lever**: +0.0408 held-out QWK
+   [+0.0181, +0.0654], separable, for 1.08× compute.
+3. **"Regularise" now applies only to arms we are not going to use.** Arm E's gap is
+   0.034; there is nothing there to regularise. It was the right prescription for the
+   symptom and the symptom belongs to the softmax arms.
+4. **384px moves down the queue but not off it.** Its argument — microaneurysms are a few
+   pixels across at 224 — is physical and untouched by this result, but it costs ~2.9×
+   compute plus a ~2.5 h cache rebuild, against ~1 h to test one more backbone.
+
+### The new methodological risk this creates
+
+Architecture is now being selected on the same 5,268 validation images as everything else.
+DECISION-035's optimism measurement covers **cut points only**; it does not cover
+architecture choice. The test set is still untouched, so the final reported number stays
+honest — but the *validation* figure is now optimistic by an amount nobody has measured.
+Every architecture decision made on validation is counted in `PROGRESS.md` and the count
+is reported in the write-up.
+
+---
+
+## DECISION-037 — Arm C's failure is mostly, but not only, a displaced boundary
+
+- **Date:** 2026-08-24
+- **Status:** Accepted
+- **Deviates from proposal:** No.
+
+DECISION-034 proposed that inverse-frequency class weighting fails by displacing the
+decision boundary rather than by learning a worse model. Arm C2 (effective-number
+weighting, 17.1:1 against inverse frequency's 36:1) tests it. **The story holds, and the
+decomposition is not 100/0.**
+
+The displacement is monotone in how aggressive the weighting is:
+
+| arm | weight ratio | mean expected grade on **true grade-0** images | fitted first cut | as-run grade-0 recall | re-thresholding gain |
+|---|---:|---:|---:|---:|---:|
+| A | 1.0 | 0.414 | 0.642 | 0.964 | +0.045 |
+| C2 | 17.1 | 1.456 | 1.581 | 0.879 | +0.045 |
+| C | 36.0 | **1.877** | **1.970** | **0.493** | **+0.200** |
+
+Arm C's average output on an image that is genuinely healthy is **1.877** — nearly two
+grades of severity — and recovering from that needs the first cut moved +1.47. Once the
+weights are gentler, **C2's re-thresholding gain is identical to plain arm A's**, so the
+pathology is a property of the weight ratio, not of class weighting as such.
+
+**The decomposition.** C2 beats C by **+0.198 as-run**, but at matched decision rules by
+only **+0.0436 [+0.0144, +0.0746]** (paired bootstrap, separable). So **about 78% of the
+apparent advantage is decision-boundary displacement and about 22% is a genuinely better
+learned ordering.** Aggressive weighting hurts twice: mostly by moving the operating
+point, which thresholding recovers, and partly by degrading the ranking, which it does not.
+
+**What survives for the write-up.** At matched rules C2 is 0.6483 and C is 0.6050, both
+still well below arm A's 0.7270. The conclusion that **loss-level class weighting
+underperforms leaving the distribution alone** is now robust to the weighting scheme and
+to the decision rule, which is exactly what one run of one scheme could not establish.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

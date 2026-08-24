@@ -309,10 +309,18 @@ order A→B→C→D→E→F by increasing implementation risk.
       frequency's 36:1, so the arm C result stops resting on one scheme (DECISION-034)
 - [x] `notebooks/phase4_stage3.py` — the capacity hypothesis as a falsifiable test,
       **pre-registered in EXPERIMENTS.md before the run**, plus arm C2
-- [ ] **← RUN STAGE 3** (~2.6 h: A/E/B on EfficientNet-B0, then C2 on ResNet18)
-- [ ] Stage 2, reduced scope: seeds on A, E, F to establish stability — it cannot break
-      a tie this small
-- [ ] Then decide the resolution/regularisation route (handoff)
+- [x] **Stage 3 run** — prediction half wrong; it tested backbone quality, not
+      capacity, because B0 is 4.01M params against ResNet18's 11.18M (DECISION-036)
+- [x] Arm C2 — the arm C conclusion survives both the weighting scheme and the matched
+      decision rule; ~78% of C2's advantage is boundary displacement (DECISION-037)
+- [ ] **← NEXT: arm E on EfficientNet-B2 @224, one arm, ~1 h** — settle the backbone
+      before spending seeds on it
+- [ ] Stage 2 seeds on the FINAL backbone (E and A, 3 seeds), not on B0
+- [ ] 384px decision, on arm E only, with the backbone result in hand
+
+**Architecture choices made on validation so far: 2** (ResNet18 -> B0; B0 -> ?).
+DECISION-036 requires this count to be reported — cut-point optimism is measured,
+architecture-selection optimism is not.
 - [ ] **Supervisor:** confirm the screening standard (DECISION-032). Until then the floor
       is PROVISIONAL and stays out of the write-up
 - [ ] Stage 2: seed repeats on E, A, F
