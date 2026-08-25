@@ -2427,7 +2427,16 @@ scores well above 1.
 | statistic | PASS | FAIL |
 |---|---|---|
 | median **rim** mass ratio over 200 images | **< 1.5** | ≥ 1.5 |
-| median **outside** mass ratio | **< 0.5** | ≥ 0.5 |
+| median **outside** mass ratio | **< 1.0** | ≥ 1.0 |
+
+> **AMENDED 2026-08-26 (DECISION-050).** This threshold was **0.5**, justified as
+> "beyond the disc there is literally nothing to see, so mass there is unambiguous
+> artefact". That justification was wrong — padded convolutions and a 7×7 upsample
+> deposit mass at frame edges unavoidably, and an **untrained** network scores 0.615,
+> failing the gate. Recalibrated to the fair-share expectation against measured nulls.
+> **The Phase 5 measurement of 2.342 fails 0.5 and 1.0 alike, so the recalibration is
+> not the reason that run failed and does not change its verdict.**
+
 | rim ratio on grade 3–4 images specifically | **< 1.5** | ≥ 1.5 |
 
 The `outside` threshold is strict on purpose: there is literally nothing to see beyond the
@@ -2674,7 +2683,7 @@ the test uses the real one.
 ## DECISION-050 — The `outside` failure is real, but the `outside` THRESHOLD was mis-specified
 
 - **Date:** 2026-08-26
-- **Status:** Accepted for the diagnosis; **the threshold change is proposed, not applied**
+- **Status:** Accepted. **Threshold change APPROVED and APPLIED 2026-08-26**; DECISION-046 amended in place.
 - **Deviates from proposal:** No.
 
 Phase 5 result: rim 1.217 PASS, **outside 2.342 FAIL**, rim on grades 3–4 1.087 PASS,
@@ -2751,6 +2760,106 @@ The **rim** result stands and is a genuine finding: 1.217 overall, **1.087 on gr
 — lower where peripheral disease lives. DECISION-016's erosion choice is supported by
 evidence, which is what it was deferred to Phase 5 for. No rebuild is triggered by that
 path.
+
+---
+
+## DECISION-051 — How the outside-occlusion number will be read, written before it exists
+
+- **Date:** 2026-08-26
+- **Status:** Accepted — **pre-registered**
+- **Deviates from proposal:** No.
+
+### First, a correction to the test itself
+
+The occlusion test as written ran on the **200-image gate sample** (40 per grade). That is
+wrong for `sens@spec>=0.95`: the operating point needs the **natural distribution**, and a
+stratified 200 gives it roughly 80 non-referable images to estimate a 0.95 specificity
+threshold from. The number would have been noise dressed as a measurement.
+
+**The occlusion test runs on the FULL validation split (5,268 images).** It is
+forward-only, so it costs seconds of GPU plus about a minute of mask computation, and it
+makes the result directly comparable to the 0.7360 baseline. **The operating point is
+fixed on the unoccluded data and reused** — re-optimising the threshold after occluding
+would absorb the very effect being measured.
+
+### O1 — the fill test, and why its threshold is 0.03 rather than 0.02
+
+Replacing the surround with the interior's mean colour is a **much larger perturbation
+than the rim equivalent**: the surround is black, so the fill is a black→grey change
+across ~25% of the frame. A large response is therefore confounded with the fill simply
+being out of distribution. The bar is set conservatively to account for that:
+
+| `abs(Δsens)` on the full validation set | reading | action |
+|---|---|---|
+| **< 0.01** | correlate | documented limitation, no remedy |
+| **0.01 – 0.03** | equivocal — the fill's OOD-ness could explain it | **decided by O2** |
+| **>= 0.03** | real dependence | remedy, below |
+
+0.03 also sits above the 0.025 seed range of this metric, so it clears the noise scale the
+project already treats as meaningful — even though this particular comparison is paired
+within one model and so is not itself seed-noisy.
+
+### O2 — the actual test of the hypothesis
+
+The hypothesis is not "the model reacts to a weird fill". It is **"the model reads how much
+surround there is"**, because surround extent encodes field of view, which is site-specific,
+which can correlate with prevalence. So the targeted perturbation **varies the amount of
+surround** using the pipeline's own erosion operation, keeping every pixel in
+distribution: `shrink_field_of_view` at **+0%, +3%, +6%, +9%** extra erosion (measured:
+retina coverage 69.4% → 67.5% → 64.5% → 61.9%).
+
+| result | reading |
+|---|---|
+| **monotone** trend in mean predicted grade with total `abs(Δ) >= 0.10` grade units | **field-of-view shortcut CONFIRMED** |
+| non-monotone, or total `abs(Δ) < 0.10` | not a FOV shortcut; O1's effect was the fill being OOD |
+
+Monotonicity matters more than magnitude: a shortcut on extent predicts a *trend*, whereas
+a generic sensitivity to perturbation predicts noise.
+
+### If it is real — the remedy, and why the obvious one is rejected
+
+**Rejected: constant-fill the surround at preprocess time.** As anticipated, it does not
+remove the information — a constant fill still marks exactly where the boundary is, so
+field-of-view extent remains perfectly readable. It costs a ~12 h rebuild to move the
+shortcut rather than remove it.
+
+**Preferred: randomise the surround as a train-only augmentation.** Fill the masked-out
+region with a per-image random constant (or noise) during training only. This breaks the
+*correlation* between surround appearance and label without discarding any retina.
+
+**It needs no cache rebuild** — augmentation is applied in `DRDataset` at load time. Cost
+is a retrain (~40 min) plus **re-running stage 2's three seeds** (~2 h) because the model
+changes: **~2.7 h, not 12 h.** Success is re-measured by re-running the gate and O2.
+
+**Fallback if that fails: crop to the largest square inscribed in the eroded disc**, so
+there is no surround to read at all. Rejected as first choice because an inscribed square
+keeps only ~64% of the disc area and discards the periphery — colliding directly with
+DECISION-016's reasoning about proliferative disease, and with grade 4 being the thinnest
+class. It needs supervisor sign-off, not just a rebuild.
+
+**In all cases** the EyePACS validation figures would be inflated by an amount not
+estimable from EyePACS alone, and the write-up must say so.
+
+### Phase 6 becomes a test of the hypothesis — and here is what would confirm it
+
+Yes. But **a drop on APTOS confirms nothing on its own**, because domain shift predicts a
+drop anyway (DECISION-031 already found pooling to be a null on the target domain). Two
+things are diagnostic, and both are pre-registered here:
+
+1. **Within-grade correlation between prediction and field of view, on APTOS.** For each
+   true grade, correlate the predicted score against the image's retina-coverage
+   fraction. **Confirmation: `abs(r) >= 0.2` within grades, and larger on APTOS than on
+   EyePACS validation.** A model reading anatomy has no reason to show this; a model
+   reading field of view does. This is inference-only and costs minutes.
+2. **The paired comparison, if the augmentation remedy is applied.** Train
+   surround-randomised arm E and compare the *APTOS drop* of the two models.
+   **Confirmation: the randomised model loses less on APTOS**, even if it is equal or
+   slightly worse on EyePACS validation. That trade — worse in-domain, better
+   out-of-domain — is the signature of removing a shortcut, and is a thesis result in its
+   own right.
+
+Recording this now so that whichever way the APTOS number lands, it is read against a
+prediction rather than explained after the fact.
 
 ---
 

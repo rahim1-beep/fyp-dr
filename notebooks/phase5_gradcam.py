@@ -8,12 +8,15 @@ final (DECISION-045).
 
 THIS IS A GATE, NOT A FIGURE. Thresholds were fixed in DECISION-046 before any heatmap
 existed, and the failure path was fixed in DECISION-047 before any number landed. Cell 3
-applies them and exits non-zero on failure.
+applies them and exits non-zero on failure. The `outside` threshold was later recalibrated
+from 0.5 to 1.0 against measured nulls (DECISION-050) — an UNTRAINED network scores 0.615,
+so the original could not be passed by any model; the Phase 5 measurement of 2.342 fails
+both, so the change did not alter that verdict.
 
     statistic                                        PASS      FAIL
     ----------------------------------------------   -------   -------
     median RIM mass ratio (outer 10% of retina)      < 1.5     >= 1.5
-    median OUTSIDE mass ratio (beyond the disc)      < 0.5     >= 0.5
+    median OUTSIDE mass ratio (beyond the disc)      < 1.0     >= 1.0
     median RIM mass ratio, grades 3-4 only           < 1.5     >= 1.5
     median |corr(cam, cam_randomised)|               < 0.5     >= 0.5
 
@@ -168,7 +171,7 @@ assert run([sys.executable, "-m", "pytest", "tests/test_no_leakage.py", "-q"]) =
 
 print("""
 GATE THRESHOLDS (DECISION-046, fixed before any heatmap existed):
-  median rim ratio < 1.5   |  median outside ratio < 0.5
+  median rim ratio < 1.5   |  median outside ratio < 1.0
   median rim ratio on grades 3-4 < 1.5   |  median |corr vs randomised| < 0.5
 
 FAILURE PATH (DECISION-047, fixed before any number landed):
@@ -256,61 +259,128 @@ Follow DECISION-047. Do NOT rebuild anything yet.
 
   randomisation -> TOOLING. Fix src/xai/gradcam.py. Nothing about the model is
                    implicated and no heatmap goes in the write-up until it passes.
-  outside       -> retina_mask is probably under-segmenting. Inspect the masks on the
-                   worst images; a wrong mask is a preprocessing BUG, not an erosion
-                   parameter.
-  rim           -> RUN CELL 3B (the occlusion test) FIRST. A high CAM ratio is
-                   correlational. Only |dsens| >= 0.02 justifies changing erosion and
-                   rebuilding, which costs ~12 h including stage 2's seeds.
+  outside       -> NOT presumed to be the mask. Measured (DECISION-050): retina_mask
+                   is slightly GENEROUS on cached images, not under-segmenting. Run
+                   CELL 3B: O1 for dependence, O2 for whether it is a field-of-view
+                   shortcut. Thresholds in DECISION-051.
+  rim           -> RUN CELL 3B FIRST. A high CAM ratio is correlational. Only
+                   |dsens| >= 0.03 justifies changing erosion and rebuilding, which
+                   costs ~12 h including stage 2's seeds.
 """)
 '''
 
 CELL_3B = r'''
-# -- Cell 3B -- occlusion test. ONLY IF THE RIM OR OUTSIDE GATE FAILED -------
-# COMMIT THIS but it is a no-op unless one of those gates failed. ~2 min each.
+# -- Cell 3B -- O1 and O2. ONLY IF THE RIM OR OUTSIDE GATE FAILED ------------
+# COMMIT THIS but it is a no-op unless one of those gates failed. ~5 min.
 #
-# DECISION-047 step F1: does the DECISION depend on the rim, or does the CAM merely
-# light up there? Grad-CAM cannot tell you; replacing the region and re-running can.
-from src.xai.border_check import occlusion_delta
+# ON THE FULL VALIDATION SPLIT, not the 200-image gate sample. sens@spec>=0.95 needs the
+# NATURAL distribution: a stratified 200 leaves ~80 non-referable images to estimate a
+# 0.95-specificity threshold from, which is noise dressed as a measurement. Forward-only,
+# so it costs seconds of GPU plus about a minute of mask computation (DECISION-051).
+from src.data.manifest import load_split
+from src.eval.thresholds import (choose_operating_point, referable_scores,
+                                 sensitivity_specificity_curve)
+from src.xai.border_check import occlusion_delta, shrink_field_of_view
+from src.xai.gradcam import scalar_target
 
 FAILED = [k for k in ("rim", "outside") if not gate["gates"].get(k, True)]
 if not FAILED:
-    print("rim and outside both passed — occlusion test not required, skipping.")
+    print("rim and outside both passed — no occlusion test required, skipping.")
+
+VAL = load_split("val")
+vds = DRDataset(VAL, CACHE, train=False, mean=MEAN, std=STD, image_size=224)
+vloader = DataLoader(vds, batch_size=48, shuffle=False, num_workers=2)
+print(f"full validation split: {len(vds)} images")
+
+
+def sens_at_spec(scores, y, fixed_threshold=None):
+    """sens@spec>=0.95. The operating point is FIXED on the unoccluded data and reused —
+    re-optimising after occluding would absorb the effect being measured."""
+    if fixed_threshold is None:
+        op = choose_operating_point(sensitivity_specificity_curve(scores, y))
+        m = op.get("max_sens_at_spec") or {}
+        return m.get("sensitivity", float("nan")), m.get("threshold")
+    pos, pred = y >= 2, scores >= fixed_threshold
+    return float((pred & pos).sum() / max(1, pos.sum())), fixed_threshold
+
+
+base_scores, ys = [], []
+with torch.no_grad():
+    for x, y, idx in vloader:
+        base_scores.extend(scalar_target(model(x.to(DEV))).cpu().numpy().tolist())
+        ys.extend(y.numpy().tolist())
+base_scores, ys = np.asarray(base_scores), np.asarray(ys)
+base_sens, THR = sens_at_spec(base_scores, ys)
+print(f"baseline sens@spec>=0.95 {base_sens:.4f} at threshold {THR:.4f}\n")
+
+# ---- O1: replace the region, measure the change at the FIXED operating point ----
 for REGION in FAILED:
-    print(f"--- occlusion test on {REGION.upper()} ---")
-    deltas = []
+    occ = []
     with torch.no_grad():
-        for x, y, idx in loader:
+        for x, y, idx in vloader:
             x = x.to(DEV)
-            bgrs = [cv2.imdecode(np.fromfile(str(ds.cache_paths[int(i)]), np.uint8),
+            bgrs = [cv2.imdecode(np.fromfile(str(vds.cache_paths[int(i)]), np.uint8),
                                  cv2.IMREAD_COLOR) for i in idx]
-            deltas.extend(occlusion_delta(model, x, bgrs, region=REGION).tolist())
+            d = occlusion_delta(model, x, bgrs, region=REGION)
+            occ.extend((scalar_target(model(x)).cpu().numpy() + d).tolist())
+    occ = np.asarray(occ)
+    s_occ, _ = sens_at_spec(occ, ys, THR)
+    dsens = s_occ - base_sens
+    print(f"[O1 {REGION}] sens {base_sens:.4f} -> {s_occ:.4f}   dsens {dsens:+.4f}")
+    if abs(dsens) < 0.01:
+        print("     < 0.01  -> CORRELATE. Documented limitation, no remedy.")
+    elif abs(dsens) < 0.03:
+        print("     0.01-0.03 -> EQUIVOCAL. The fill is a large out-of-distribution")
+        print("     change, so O2 decides.")
+    else:
+        print("     >= 0.03 -> REAL DEPENDENCE (subject to O2 for the mechanism).")
+    (OUT / f"o1_{REGION}.json").write_text(
+        json.dumps({"base_sens": base_sens, "occluded_sens": s_occ,
+                    "dsens": dsens, "threshold": float(THR)}, indent=1), encoding="utf-8")
 
-    d = np.asarray(deltas)
-    print(f"[{REGION}] occlusion delta on the scalar score: mean {d.mean():+.4f}  "
-          f"median {np.median(d):+.4f}  |mean| {abs(d.mean()):.4f}")
-    (OUT / f"occlusion_{REGION}.json").write_text(json.dumps(deltas, indent=1),
-                                                  encoding="utf-8")
-    print("""
-Now recompute sens@spec>=0.95 with the occluded scores and compare:
+# ---- O2: the actual field-of-view test, only when `outside` failed ----
+if "outside" in FAILED:
+    print("\n[O2] field-of-view sweep — varies HOW MUCH surround there is, using the")
+    print("     pipeline's own erosion, so every pixel stays in distribution.")
+    means = []
+    for extra in (0.0, 0.03, 0.06, 0.09):
+        sc = []
+        with torch.no_grad():
+            for x, y, idx in vloader:
+                bgrs = [shrink_field_of_view(
+                            cv2.imdecode(np.fromfile(str(vds.cache_paths[int(i)]),
+                                                     np.uint8), cv2.IMREAD_COLOR), extra)
+                        for i in idx]
+                xb = torch.stack([
+                    (torch.from_numpy(cv2.cvtColor(b, cv2.COLOR_BGR2RGB))
+                     .permute(2, 0, 1).float() / 255 - torch.tensor(MEAN).view(3, 1, 1))
+                    / torch.tensor(STD).view(3, 1, 1) for b in bgrs]).to(DEV)
+                sc.extend(scalar_target(model(xb)).cpu().numpy().tolist())
+        means.append(float(np.mean(sc)))
+        print(f"     +{extra:.0%} erosion -> mean predicted grade {means[-1]:.4f}")
 
-  |dsens| <  0.02  -> the CAM shows a CORRELATE. Record as a documented limitation.
-                      DO NOT rebuild the cache.
-  |dsens| >= 0.02  -> real dependence. Go to DECISION-047 F2: measure the residual
-                      annulus ratio at 5% and 10% erosion on a 2,000-image subsample
-                      and take the SMALLEST value that brings it into line. Then F3:
-                      rebuild (~9 h) + retrain arm E (~40 min) + re-run stage 2's
-                      three seeds (~2 h).
+    total = means[-1] - means[0]
+    monotone = all(b >= a for a, b in zip(means, means[1:])) or \
+               all(b <= a for a, b in zip(means, means[1:]))
+    print(f"\n     total change {total:+.4f}   monotone {monotone}")
+    if monotone and abs(total) >= 0.10:
+        print("     -> FIELD-OF-VIEW SHORTCUT CONFIRMED (DECISION-051).")
+        print("        Remedy: randomise the surround as a TRAIN-ONLY augmentation.")
+        print("        No cache rebuild — ~40 min retrain + ~2 h for stage 2's seeds.")
+        print("        NOT constant-fill at preprocess: a constant still marks the")
+        print("        boundary, so it moves the shortcut rather than removing it.")
+    else:
+        print("     -> NOT a field-of-view shortcut. O1's effect was the fill being")
+        print("        out of distribution. Record as a limitation.")
+    (OUT / "o2_fov_sweep.json").write_text(
+        json.dumps({"extra_erosion": [0.0, 0.03, 0.06, 0.09], "mean_score": means,
+                    "total": total, "monotone": monotone}, indent=1), encoding="utf-8")
 
-If REGION was OUTSIDE, the question is different and sharper: does the model read the
-BLACK SURROUND? Its extent encodes the camera's field of view, which is site-specific,
-which can correlate with disease prevalence — a shortcut external validation punishes.
-A large |dsens| there is a generalisation finding, not a masking parameter question,
-and it belongs in the limitations either way (DECISION-050).
-
-NOT an option either way: full 0.9r masking. DECISION-016 rejected it for costing 19%
-of retinal area including the periphery where proliferative disease appears, and that
-reasoning does not change with this result.
+print("""
+Either way, Phase 6 now tests this hypothesis rather than merely reporting a drop
+(DECISION-051): a drop on APTOS confirms nothing by itself, but a within-grade
+correlation of |r| >= 0.2 between predicted score and retina-coverage fraction —
+larger on APTOS than on EyePACS validation — does.
 """)
 '''
 

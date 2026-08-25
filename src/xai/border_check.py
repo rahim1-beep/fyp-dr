@@ -9,15 +9,17 @@ THREE GATES, ALL OF WHICH MUST PASS.
     statistic                                          PASS      FAIL
     ------------------------------------------------   -------   -------
     median RIM mass ratio (outer 10% of retina)        < 1.5     >= 1.5
-    median OUTSIDE mass ratio (beyond the disc)        < 0.5     >= 0.5
+    median OUTSIDE mass ratio (beyond the disc)        < 1.0     >= 1.0
     median RIM mass ratio on grade 3-4 images only     < 1.5     >= 1.5
     median |corr(cam, cam_randomised)|                 < 0.5     >= 0.5
 
 `mass ratio` = (share of CAM mass in a region) / (share of image area in that region).
 A model ignoring a region scores about 1.0 there; one keying on it scores well above.
 
-Why OUTSIDE is stricter: beyond the retinal disc there is literally nothing to see, so
-mass there is unambiguous artefact rather than a judgement call.
+Why OUTSIDE is 1.0 and not stricter: 1.0 is the fair-share expectation. The original 0.5
+assumed any mass beyond the disc is artefact, which ignored that padded convolutions and a
+7x7 upsample deposit mass at frame edges unavoidably — an untrained network scores 0.615.
+The thresholds are calibrated against measured nulls, not intuition (DECISION-050).
 
 Why grades 3-4 are separate: peripheral disease appears there, and the periphery is
 precisely what erosion was chosen to preserve. A model keying on the rim *only* for
@@ -51,7 +53,18 @@ from src.data.preprocess import retina_mask
 
 RIM_FRACTION = 0.10          # outer 10% of the retinal radius
 RIM_MAX = 1.5
-OUTSIDE_MAX = 0.5
+# 1.0 = the fair-share expectation. It was 0.5, justified as "beyond the disc there is
+# nothing to see, so any mass there is unambiguous artefact". That reasoning was WRONG:
+# zero-padded convolutions plus a 7x7 upsample put unavoidable mass at frame edges, and
+# an UNTRAINED efficientnet_b0 scores 0.615 on real cached images — it failed the gate.
+# A threshold an untrained model cannot pass is not measuring what it claims.
+# Calibrated against measured nulls (DECISION-050), pinned in tests/test_gradcam.py:
+#     ideal null (attention proportional to retina per cell)  0.359
+#     interior-only 7x7                                       0.125
+#     untrained efficientnet_b0 on real cached images         0.615
+# The Phase 5 measurement of 2.342 fails 0.5 AND 1.0, so this recalibration is not the
+# reason that run failed and does not change its verdict.
+OUTSIDE_MAX = 1.0
 RANDOMISATION_MAX = 0.5
 SEVERE_GRADES = (3, 4)
 
@@ -129,6 +142,26 @@ def occlusion_delta(model, x, bgr_batch, *, region: str = "rim",
         before = scalar_target(model(x)).cpu().numpy()
         after = scalar_target(model(occluded)).cpu().numpy()
     return after - before
+
+
+def shrink_field_of_view(bgr: np.ndarray, extra_frac: float) -> np.ndarray:
+    """Re-mask a cached image at `extra_frac` MORE erosion, filling with black.
+
+    The targeted test of the field-of-view shortcut (DECISION-051). Filling the surround
+    with a constant is a large out-of-distribution change and a big response to it is
+    confounded with the fill simply being strange. Changing how MUCH surround there is,
+    using the same operation the preprocessing pipeline already applies, keeps every pixel
+    in-distribution and varies exactly the quantity the hypothesis is about.
+    """
+    if not 0.0 <= extra_frac < 1.0:
+        raise ValueError(f"extra_frac={extra_frac}; expected [0, 1)")
+    m = retina_mask(bgr) > 0
+    if extra_frac > 0:
+        dist = cv2.distanceTransform(m.astype(np.uint8), cv2.DIST_L2, 5)
+        m = m & (dist > dist.max() * extra_frac)
+    out = bgr.copy()
+    out[~m] = 0
+    return out
 
 
 def summarise(rows: list[dict], randomisation: list[float] | None = None) -> dict:

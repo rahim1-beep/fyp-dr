@@ -238,6 +238,21 @@ def rows(rim, outside, interior=1.0, labels=(0, 1, 2, 3, 4)):
             for g in labels]
 
 
+def test_the_outside_threshold_is_the_calibrated_one():
+    """DECISION-050. It was 0.5, which an UNTRAINED efficientnet_b0 fails (0.615 on real
+    cached images) — a threshold no untrained model can pass is not measuring what it
+    claims. Recalibrated to the fair-share expectation against measured nulls."""
+    from src.xai.border_check import OUTSIDE_MAX
+
+    assert OUTSIDE_MAX == 1.0
+    assert summarise(rows(1.0, 0.615))["gates"]["outside"], (
+        "an untrained model's score must not fail this gate")
+    assert not summarise(rows(1.0, 2.342))["gates"]["outside"], (
+        "the Phase 5 measurement must still fail — the recalibration is not the reason "
+        "that run failed"
+    )
+
+
 def test_summary_passes_when_every_statistic_is_inside_its_threshold():
     s = summarise(rows(1.0, 0.1), randomisation=[0.05, 0.1])
     assert s["passed"] and all(s["gates"].values())
@@ -245,7 +260,7 @@ def test_summary_passes_when_every_statistic_is_inside_its_threshold():
 
 def test_a_single_failing_statistic_fails_the_whole_gate():
     assert not summarise(rows(2.0, 0.1))["passed"]
-    assert not summarise(rows(1.0, 0.9))["passed"]
+    assert not summarise(rows(1.0, 1.4))["passed"]
     assert not summarise(rows(1.0, 0.1), randomisation=[0.95])["passed"]
 
 
