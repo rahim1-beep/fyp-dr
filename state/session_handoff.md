@@ -1,198 +1,155 @@
 # Session Handoff
 
-**Session:** 2026-08-20 (session 2)
-**Phase:** 2 — Preprocessing — **at the user sign-off gate**
-**Next phase:** 2 (cache build) once the contact sheet is approved
+**Last updated:** 2026-08-25
+**Phase:** 4 — ablation, near the end. Stages 1, 3 and 3.5 done; **stage 2 is next.**
+**HEAD:** `3cc6982`. Working tree clean; every number below traces to a committed
+`runs/<run_id>/metrics.json` (R4).
 
 ---
 
 ## FIRST ACTION NEXT SESSION
 
-**Run `notebooks/phase4_armc_backfill.py`** — arm C's re-run (~36 min) plus the
-five-checkpoint backfill (~5 min), one session. It needs the Phase 4 ablation notebook's
-**output** mounted as a third input, for the checkpoints.
+**Run `notebooks/phase4_stage2.py`** — arms E and A on EfficientNet-B0, seeds 43 and 44,
+**four new runs, ~2.4 h**. Cell 1 by hand, cells 2–4 by commit.
 
-After it: the operating-point table for all six arms, then stage 2.
+Inputs: `fyp-dr-eyepacs-224`, `fyp-dr-code`, **and the stage 3 notebook's output** (cell 3
+needs the seed-42 runs to compare against; without it cell 3 says so and prints the local
+command instead of failing). GPU T4 ×2, Internet **ON**.
 
-## THE ROUTE TO THE SENSITIVITY GAP — REVISED after stage 3 (DECISION-036)
+Rebuild the code bundle first — `compare_arms.py`, `smoke.py`, `gen_experiments.py` and
+two notebooks have all changed since the last bundle.
 
-Best operating point is now **arm E on EfficientNet-B0: sens@spec>=0.95 = 0.7464**
-against the 0.80 floor. The gap was 0.141 on ResNet18; it is **0.054**. Stage 3 closed
-62% of it for 1.08x compute, which changes the priority order that was written here
-before the run.
+**Stage 2 is a MEASUREMENT, not a tie-break (DECISION-041).** It cannot break the A-vs-E
+tie at three seeds or thirty: every seed is scored on the same 5,268 validation images, so
+seed-averaging lowers the training-noise component and does nothing to the
+validation-sampling floor. The effect is +0.0224 QWK against a paired half-width of
+~0.027. **Report the mean across seeds, never the best seed** — best-of-three would be a
+selection on validation.
 
-| lever | evidence | cost | priority |
-|---|---|---|---|
-| **Backbone quality** | +0.0408 held-out QWK [+0.0181, +0.0654], **separable**; sens +0.087 | 1.08x, already paid once | **1 — one more step (B2 @224, ~1 h)** |
-| **Input resolution 224 -> 384** | none yet; the argument is physical, not measured | **~2.9x** compute + ~2.5 h cache rebuild + ~2.4 GB | 2 — after the backbone step |
-| **Regularisation** | applies to the softmax arms, whose gaps WIDENED on B0 (A +0.065, B +0.039) | cheap | 3 — only if a softmax arm is kept; **arm E's gap is 0.034, there is nothing to regularise** |
+After stage 2: **the 384px decision on arm E alone**, then Phase 5 (Grad-CAM).
 
-Sequencing matters: **settle the backbone before spending seeds on it.** Seeding B0 and
-then moving to B2 throws the seeds away.
+---
+
+## WHERE THE PROJECT ACTUALLY STANDS
+
+**Best model: arm E (ordinal regression head) on EfficientNet-B0, seed 42.**
+
+| | value |
+|---|---|
+| held-out matched QWK | **0.7560** |
+| sens @ spec ≥ 0.95 | **0.7464** (floor 0.80 — **not met**) |
+| spec @ sens ≥ 0.80 | 0.9030 (floor 0.95 — not met) |
+| train−val gap | 0.034 |
+
+**No arm reaches the screening floor.** That gap — 0.054 of sensitivity — is the open
+problem going into the rest of the project.
+
+The full table is `python -m src.eval.compare_arms --pattern 'phase4_*' --operating-point`
+(~2 min). Rankings come from the **held-out** column only, never the as-run column
+(DECISION-035).
+
+### The route to the sensitivity gap — priorities as they now stand
+
+| lever | status |
+|---|---|
+| **Backbone quality** | **CLOSED.** B0 → B2 was +0.0052 [−0.0195, +0.0285], not separable, and B2 was *worse* on the operating point. Backbone fixed at B0 (DECISION-039). |
+| **Input resolution 224 → 384** | **The remaining live lever.** No evidence yet; the argument is physical (microaneurysms are a few pixels at 224). Costs ~2.9× compute **plus** a ~2.5 h cache rebuild at ~2.4 GB. Scoped as an optional ablation in the proposal (DECISION-005), so it is a deviation to approve rather than invent. |
+| **Regularisation** | Applies only to the softmax arms, whose gaps *widened* on B0. **Arm E's gap is 0.034 — there is nothing there to regularise.** |
+
+---
+
+## STANDING RULES THAT ARE EASY TO BREAK
+
+1. **Matched decision rule, always (DECISION-035).** No ranking claim may compare arms
+   scored with different numbers of free parameters. Softmax heads score on the expected
+   grade `Σ pᵢ·i`, not argmax. Every arm gets four fitted cut points. Differences carry a
+   paired bootstrap interval; one spanning zero is **a tie**. The as-run column stays but
+   **never ranks**.
+2. **Selection optimism is a budget: 3 of 4 spent (DECISION-036).** Cut-point optimism is
+   measured (0.006–0.010 QWK, re-measured every run); **architecture-selection optimism is
+   not measured and is not estimable** without a second held-out split we do not have. A
+   fourth selection needs a positive argument written down *before* the run. The running
+   total is a table in `docs/EXPERIMENTS.md`.
+3. **Pre-register before you run.** Stage 3's prediction was half wrong *and* tested the
+   wrong variable — it was labelled a capacity test when B0 is smaller than ResNet18 on
+   both parameters (4.01M vs 11.18M) and FLOPs (0.385 vs 1.814 GMAC). State the
+   manipulated variable in measured units, and state what result would make you stop.
+4. **The test set has not been touched** (R3) and stays untouched until Phase 5.
+
+---
 
 ## DO NOT WRITE UP — three unconfirmed items (DECISION-032)
 
-The screening floor of **sensitivity >= 0.80 at specificity >= 0.95** is implemented and
-printed, but it is marked PROVISIONAL everywhere it appears and **must not reach the
-thesis** until the supervisor confirms:
+The screening floor of **sensitivity ≥ 0.80 at specificity ≥ 0.95** is implemented and
+printed, but is marked PROVISIONAL everywhere and **must not reach the thesis** until the
+supervisor confirms:
 
 1. **Whether UK DESP referable criteria map onto this project's `grade >= 2`.** DESP
    referable includes **maculopathy**, which these labels do not encode at all. *This is
    the one that matters most:* if they do not map, the benchmark is **indicative only**
-   and the write-up has to say so plainly rather than implying compliance.
+   and the write-up must say so plainly rather than implying compliance.
 2. The precise NICE guideline number and clause — the 80/95 pair is corroborated by
    secondary sources; the primary document was not read.
 3. IDx-DR's exact pre-specified endpoints. That it exceeded them is confirmed; the
-   numbers commonly quoted (85% / 82.5%) are **not** — FDA DEN180001 returned 404. Cite
-   the achieved 87.2 / 90.7 only.
+   commonly quoted 85% / 82.5% are **not** — FDA DEN180001 returned 404. Cite the
+   achieved 87.2 / 90.7 only.
 
 `docs/EXPERIMENTS.md` states none of these, and `src/eval/thresholds.py` prints
 `[PROVISIONAL]` beside the floor so it cannot be copied out as settled.
 
-## What was done this session
+---
 
-**Phase 2 preprocessing, built and validated on real images, stopped at the gate.**
+## THE RECURRING FAILURE MODE — read this before writing a notebook
 
-- `src/data/fetch_sample.py` — downloads named images from Kaggle without the 35.3 GB.
-- `src/data/preprocess.py` — retina mask → square crop → Ben Graham (normalised
-  convolution) → 224×224 → individual JPEGs. Plus `scan_quality()` and a parallel
-  batch driver.
-- `src/data/contact_sheet.py` — the QA renderer: original / cached / 3x detail.
-- `tests/test_preprocess.py` (22) + `tests/test_preprocess_plumbing.py` (10).
-  **Full suite: 70 green.**
-- `docs/phase2_contact_sheet.png` — rendered from the 20 real QA images **and their
-  actual cache files**. **Approved by the user 2026-08-20.**
-- `src/data/reconcile_cache.py`, `notebooks/make_bundle.py`,
-  `notebooks/phase2_build_cache.py` — the Kaggle build and its three gates.
-- DECISION-009 … DECISION-016 logged.
+Six sessions have now lost time to the same shape: **glue code whose first execution is
+the real one.** DECISION-021 (archive deleted before verification), -022 (missing
+subcommand after an 8.1 h build), -023 (Kaggle auto-extracted the archive), -024 (a config
+branch never exercised), -025 (a str subclass SafeDumper would not serialise), -028
+(import-time file reads), -040 (`compare_arms` silently dropping runs once one arm meant
+several runs).
 
-**`code-reviewer` ran and returned CHANGES REQUIRED — 7 defects, all now fixed.** Two of
-them (the "before" panel downsampled below the "after" panel; the "after" panel being an
-in-memory recomputation rather than the cached JPEG) invalidated the first sheet, so the
-version in commit `c948c1a` was never a valid gate artefact. The QA cache was rebuilt
-after the connected-component fix and the sheet re-rendered from it. See PROGRESS.md for
-the full table.
+The countermeasures exist — **use them**:
 
-## MEASURED numbers — these replace the old [ESTIMATE]
+- `python -m src.data.notebook_check --all --self-test` validates every notebook command
+  line against the real parser. Run it before pasting anything.
+- `python -m src.train.smoke --arm X --arch Y` runs a whole arm end to end on a synthetic
+  fixture, on CPU, in ~15 s. **Pass `--arch` when the run changes backbone** or the smoke
+  exercises the wrong path.
+- `tests/test_no_leakage.py` runs before every training run, and again inside it.
 
-| | Value |
-|---|---|
-| Mean output size | **21.4 KB/image** |
-| EyePACS cache | **0.72 GB** (35,126) |
-| APTOS cache | **0.08 GB** (3,662) |
-| **Total** | **~0.80 GB**, a 44× reduction from 35.34 GB |
-| Throughput | 0.94 s/image, 1 worker |
-| Full build | **10.1 h @1 worker → 2.5 h @4 workers** |
+---
 
-The old 0.82 GB projection was accurate. It is now a measurement, not an estimate.
+## Gotchas that are still live
 
-## Gotchas discovered this session (do not rediscover these)
+1. **Kaggle notebooks have Internet OFF by default** and `model.pretrained: true` makes
+   timm download from HuggingFace. Turn it on, or a training run dies at minute zero.
+2. **Kaggle caps notebook output at 500 files** and **auto-extracts published archives.**
+   `resolve_cache()` finds the cache by shape rather than by path for this reason.
+3. **`/kaggle/working` is wiped between sessions.** Anything needed later must be fetched
+   (`src/data/fetch_run.py`) or published.
+4. **`retina_mask` returns uint8 0/255, not bool.** Index with `mask > 0` — indexing a
+   numpy array *with* a uint8 array is integer fancy-indexing and silently returns the
+   wrong pixels.
+5. **Split CSVs carry a `#` provenance header.** Every reader needs
+   `pd.read_csv(..., comment='#')`.
+6. **The kaggle CLI needs 2.2.4+**, and a legacy `~/.kaggle/kaggle.json` shadows newer
+   OAuth credentials — `kaggle auth login` plus renaming that file is what fixed it.
+   Kernel slugs so far are `rah098/fyp-dr-phase3-baseline` and the Phase 4 ones.
 
-1. **The kaggle CLI cannot download a single nested file.** It fails to URL-encode the
-   path separators and gets 404 for every file in these datasets — including
-   `trainLabels.csv/trainLabels.csv`, which it downloaded successfully in session 1, so
-   this is a regression in kaggle 1.7.4.5, not a dataset quirk. Use
-   `src/data/fetch_sample.py`, which calls the endpoint with `quote(path, safe="")`.
-2. **Kaggle serves large files ZIP-WRAPPED.** Files above roughly 1 MB come back as a
-   one-entry ZIP (`PK` magic) with `Content-Type: image/jpeg`; smaller files come back
-   raw. Written straight to disk the large ones are ZIPs named `.jpeg`, `cv2.imdecode`
-   returns None, and the byte count looks like a truncated download. `fetch_sample.py`
-   sniffs the magic bytes.
-3. **A large-sigma `cv2.GaussianBlur` is catastrophically slow.** sigma = width/10 means
-   a ~1537-tap kernel and **30.8 s for one image**. See DECISION-011.
-4. **Laplacian-variance focus is resolution-dependent.** It flagged 19 of 20 images as
-   blurred. Must be measured at a normalised scale. See DECISION-013.
-5. **`retina_mask` returns uint8 0/255, not bool.** Boolean-index with `mask > 0` —
-   indexing a numpy array *with* a uint8 array is integer fancy-indexing and silently
-   returns the wrong pixels rather than raising.
-6. **The local venv had only numpy/pandas/pyyaml/pytest installed**, despite
-   `requirements.txt` being "resolved" in session 1. The imaging subset (opencv, pillow,
-   matplotlib, tqdm, kaggle) was installed at pinned versions this session; pytest was
-   corrected from 9.1.1 to the pinned 8.4.2. **torch/timm are still NOT installed
-   locally** — install them before any local smoke test or the Phase 7 demo.
-
-## Regenerating the gate artefact
-
-Both steps, in this order — the sheet reads the cache, so a stale cache means a stale sheet:
-
-```bash
-.venv/Scripts/python -m src.data.preprocess --manifest docs/phase2_qa_sample.csv     --src-root data/raw/qa --out-root data/processed/qa --stats docs/phase2_qa_stats.csv
-
-.venv/Scripts/python -m src.data.contact_sheet --sample docs/phase2_qa_sample.csv     --src-root data/raw/qa --cache-root data/processed/qa     --out docs/phase2_contact_sheet.png --stats docs/phase2_qa_quality.csv
-```
-
-`--cache-root` is required and deliberately has no default (DECISION-015).
-
-## The rim question — decided, DECISION-016
-
-2.5% mask erosion, chosen by the user over Ben Graham's 0.9 r. **The residual was measured
-and reported as asked, and it is not flattering:** a fixed annulus ratio moves only
-1.610 → 1.516, and against depth from the actual edge the excess runs 2.61× at the
-outermost 1% and reaches the interior level only by 10% of the radius. Erosion at 2.5%
-removes ~63% of the peak excess and leaves a ≈1.6× edge.
-
-**Do not reopen this on aesthetics.** The user's stated trigger for revisiting is Phase 5
-Grad-CAM evidence that the model keys on the rim.
-
-## The Kaggle build
-
-`notebooks/phase2_build_cache.py` holds the exact cell. `--workers 4` is not optional:
-single-threaded is 10.1 h and will not fit in a session. Set the accelerator to **None** —
-this is CPU work and must not burn GPU quota.
-
-The three auditor conditions are wired into that cell, not left to memory:
-reconciliation (`src/data/reconcile_cache.py`), a re-run of `tests/test_no_leakage.py`
-against the built artefact, and the measured size. It prints DO NOT PUBLISH if any fails.
-
-**Already proven, before the build:** the 38,788 split rows map to 38,788 distinct cache
-paths with **zero claimed by more than one split**, so the flat layout cannot alias an
-image across the train/test boundary. That was the leakage risk in DECISION-012 and it is
-now settled independently of whether the build succeeds.
-
-## Phase 3 — the colour-order question is CLOSED
-
-`tests/test_channel_order.py` settles it end to end and nobody needs to re-derive it:
-
-- There is **no such thing as a BGR file.** `cv2.imwrite` takes a BGR array and writes a
-  correct JPEG; the cache holds ordinary images.
-- `src/data/dataset.py::load_cached_image` converts BGR→RGB **exactly once**, and its
-  output is asserted **pixel-identical to PIL's**, an independent decoder sharing no code
-  with cv2. One test deliberately shows the un-converted array failing that comparison, so
-  the check is known to be capable of failing.
-- Red dominance is tracked from a source file, through the real batch driver, into a real
-  cache file, back through the real Dataset, to the tensor — on a synthetic fundus and on
-  a **real EyePACS image**.
-- timm's constants are RGB and channel-asymmetric, so a swap would shift red by ~0.35σ and
-  blue the other way on every image forever. A test asserts the asymmetry itself, so if
-  normalisation ever went symmetric the file's assumptions get revisited.
-
-Ben Graham subtracts the local mean, so a flat disc cancels to grey 128 and carries no
-hue. Colour assertions use `enhancement="none"`; testing hue through Ben Graham asserts
-nothing.
-
-## Watch out in Phase 4 — pretrained weights need internet
-
-`model.pretrained: true` makes timm download weights from HuggingFace. **Kaggle notebooks
-have Internet OFF by default**, and the cache build cell requires it off. The first
-TRAINING notebook must either turn Internet on (Settings → Internet → On; needs a verified
-phone number on the account) or mount the weights as a Kaggle Dataset. Discovering this at
-the top of a training run costs the session.
+---
 
 ## Open questions for the user
 
-1. **Kaggle build** — the user launches it; see "The Kaggle build" above.
-2. **GitHub** — private repo + collaborator access for Ameena Ahmed and Muhammad Ali
-   Abdullah. **Do not push without asking.** No remote is configured. User previously
+1. **GitHub** — private repo + collaborator access for Ameena Ahmed and Muhammad Ali
+   Abdullah. **Do not push without asking.** No remote is configured. The user previously
    mentioned distributing as an archive instead; confirm which.
-3. ~~**Supervisor** — written confirmation of DECISION-001 before Phase 7.~~ **DONE 2026-08-24 — approved.**
-4. **Arm F vs Phase 6** — unchanged from session 1; decide when the numbers exist.
+2. **384px** — needs approval before it is spent (~2.9× compute + ~2.5 h cache rebuild).
+3. **Arm F vs Phase 6** — arm F's pooled-training result was a null on the target domain
+   (DECISION-031). Decide what Phase 6 external validation looks like given that.
 
-## Known-broken / not yet built
+## Not yet built
 
-- `src/models/`, `src/train/`, `src/eval/`, `src/xai/`, `src/inference/` — empty.
-- No Kaggle notebook has been run; **GPU quota fully unconsumed.**
-- `docs/EXPERIMENTS.md` does not exist (no runs).
-- torch 2.9.1+cpu / torchvision 0.24.1+cpu / timm 1.0.28 are now installed locally, so the
-  data layer is testable here. The pins are still unverified against the Kaggle image —
-  the first notebook must print its versions and the pins be updated to match.
+- `src/xai/` (Grad-CAM) — Phase 5.
+- `backend/`, `frontend/`, `src/inference/predictor.py` — Phase 7. DECISION-001
+  (FastAPI + Next.js over Streamlit) is **approved** by the supervisor as of 2026-08-24.
 - The CLAHE-on-green ablation path is implemented but has never been run.
