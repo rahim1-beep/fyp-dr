@@ -1,14 +1,13 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **Phase 5 - Grad-CAM** on arm E seed 42, B0 at 224, with the
-> border-artefact check as a pre-registered quantitative gate (DECISION-046).
-> `src/xai/` is empty; nothing is built yet.
+> **NEXT ACTION:** **Run `notebooks/phase5_gradcam.py`** (~15 min). Built and tested;
+> 24 tests in `tests/test_gradcam.py`. Needs the stage 3 notebook's OUTPUT attached for
+> `best.pth`.
 >
-> **Order changed (DECISION-045):** Phase 5 -> Phase 6 -> 384 -> Phase 7/8. The 384
-> notebook is written (`notebooks/phase4_res384.py`) and held until after Phase 6,
-> because Phase 5's rim gate can invalidate the preprocessing its cache would use.
+> It is a GATE (DECISION-046), with a failure path fixed in advance (DECISION-047).
+> A failed rim gate does NOT mean rebuild - run the occlusion test first.
 >
-> **The EyePACS test set opens once, after the 384 decision is final.**
+> Order: Phase 5 -> Phase 6 -> 384 -> Phase 7/8. **Test set opens once, at the end.**
 
 **Current phase:** Phase 4 — Ablation arms A–F. **Phases 1–3 complete.**
 **Last updated:** 2026-08-20
@@ -328,7 +327,9 @@ order A→B→C→D→E→F by increasing implementation risk.
       annotated and their affected claims struck.
 - [x] 384 notebook written and pre-registered (DECISION-044); **held** until after
       Phase 6 (DECISION-045)
-- [ ] **← NEXT: Phase 5 Grad-CAM** — `src/xai/gradcam.py`, `src/xai/border_check.py`,
+- [x] Phase 5 BUILT — `src/xai/gradcam.py`, `src/xai/border_check.py`,
+      `tests/test_gradcam.py` (24 pass), `notebooks/phase5_gradcam.py`
+- [ ] **← NEXT: RUN Phase 5** and apply the gate
       `tests/test_gradcam.py`, `notebooks/phase5_gradcam.py`. Gate in DECISION-046.
 - [ ] Phase 6 APTOS external validation (inference only)
 - [ ] 384 ablation — run `notebooks/phase4_res384.py`, two sessions, ~11 h

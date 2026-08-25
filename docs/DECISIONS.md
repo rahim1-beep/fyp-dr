@@ -2463,6 +2463,87 @@ it is the kind of thing that otherwise surfaces in a viva.
 
 ---
 
+## DECISION-047 — What happens if the Phase 5 gate fails, written before the numbers
+
+- **Date:** 2026-08-25
+- **Status:** Accepted — **pre-registered, same discipline as the stopping rules**
+- **Deviates from proposal:** No.
+
+A gate with no defined failure path is a gate that gets argued with after the fact. Each
+of the three failure modes has a different cause and a different response, and conflating
+them would produce either an unnecessary 12-hour rebuild or a quietly ignored artefact.
+
+### If the RANDOMISATION gate fails — tooling, not model
+
+A CAM that barely changes when the target layer is randomised is measuring the image.
+**This invalidates every other number in the report**, so it is checked first and nothing
+else is believed until it passes.
+
+**Response:** fix `src/xai/gradcam.py`. **No cache rebuild, no retraining, and no heatmap
+enters the write-up** until the gate passes. The model is not implicated.
+
+### If the OUTSIDE gate fails — a segmentation bug, not a parameter
+
+Meaningful CAM mass beyond the retinal disc usually means `retina_mask` is
+**under-segmenting** — leaving black surround inside the "retina" — rather than that the
+model has learned something exotic about darkness.
+
+**Response:** inspect the masks on the offending images directly. If the mask is wrong
+that is a **preprocessing bug**, fixed and rebuilt on its own merits, not an erosion
+parameter question.
+
+### If the RIM gate fails — a staged path, cheapest causal test first
+
+**A high CAM ratio is not proof that the decision depends on the rim.** Grad-CAM is
+correlational, and high-contrast boundaries attract activation for reasons unrelated to
+the decision. So the path starts with a causal test, not with a rebuild.
+
+**F1 — occlusion test. ~10 minutes, no retraining.** `border_check.occlusion_delta`
+replaces the rim annulus with the **interior's mean colour** — not black, which is itself
+out-of-distribution and would confound the measurement — and re-runs the model on the same
+200 images. Measure the change in referable score and in `sens@spec>=0.95`.
+
+| result | reading | action |
+|---|---|---|
+| `abs(Δsens) < 0.02` | the CAM shows a correlate; the decision does not depend on the rim | **Record as a documented limitation in the write-up. Do not rebuild.** The gate is downgraded to a stated caveat, and the reasoning is shown. |
+| `abs(Δsens) >= 0.02` | real dependence | go to **F2** |
+
+**F2 — choose the new erosion value with evidence. ~30 minutes, preprocessing only.**
+DECISION-016 recorded the residual annulus ratio after 2.5% erosion. Re-measure that same
+statistic at **5% and 10%** on a 2,000-image stratified subsample and take **the smallest
+erosion that brings it into line** — a guessed value would be the same mistake this
+project has already made with single-seed numbers. Log the measured values.
+
+**F3 — rebuild and retrain. ~12 hours, and it is mandatory, not optional.**
+
+| step | cost |
+|---|---|
+| Full 224 cache rebuild at the new erosion | ~9 h |
+| Retrain arm E | ~40 min |
+| **Re-run stage 2's three seeds** | ~2 h |
+
+The seeds are not optional: both the headline number and its stability change, and
+DECISION-042 is the standing reminder of what a single seed is worth. Everything
+downstream — Phase 6 and the 384 cache — then uses the new cache, which is exactly why
+DECISION-045 put Phase 5 first.
+
+**Why mandatory.** Rim artefacts are camera- and site-specific. A model keying on them has
+a generalisation hazard aimed directly at the external-validation claim and at any
+deployment claim. That is not something the thesis can carry as a caveat; if F1 shows the
+dependence is real, the 224 headline is compromised and must be rebuilt.
+
+The old runs stay in `runs/` as the record and the write-up reports **both**, with the
+reason for the change.
+
+### Explicitly NOT the response: full 0.9r circular masking
+
+DECISION-016 rejected it because it costs **19% of retinal area including the periphery
+where proliferative disease appears**, and grade 4 is the thinnest class at 98 test
+images. A rim-gate failure says *erode more*; it says nothing in favour of masking a fixed
+geometric fraction, and that reasoning is unchanged by the gate's outcome.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

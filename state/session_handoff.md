@@ -10,36 +10,43 @@ the last item in Phase 4.**
 
 ## FIRST ACTION NEXT SESSION
 
-**Phase 5 — Grad-CAM on arm E, seed 42, B0 at 224.** Pre-registered as a quantitative
-gate, not a figure (DECISION-046). Nothing is built yet: `src/xai/` is empty.
+**Run `notebooks/phase5_gradcam.py`** — Grad-CAM on arm E seed 42, B0 at 224. ~15 min.
+Cell 1 by hand, cells 2–4 by commit. Everything is built and tested (24 tests).
 
-The order changed (DECISION-045): **Phase 5 → Phase 6 → 384 → Phase 7/8.** The 384
-notebook is written and waiting at `notebooks/phase4_res384.py`; hold it until after
-Phase 6.
+**Inputs: `fyp-dr-eyepacs-224`, `fyp-dr-code`, AND the stage 3 notebook's OUTPUT** — the
+gate needs `best.pth`, which is gitignored and not fetched by `fetch_run`.
 
-**Why 384 waits:** Phase 5's rim gate can invalidate the preprocessing the 384 cache would
-be built with (DECISION-016 pre-committed to revisiting masking on this evidence). Building
-384 first risks building it **twice at 8–9 h each**.
+Order (DECISION-045): **Phase 5 → Phase 6 → 384 → Phase 7/8.** `notebooks/phase4_res384.py`
+is written and held until after Phase 6, because Phase 5's rim gate can invalidate the
+preprocessing its cache would use.
 
-**The EyePACS test set is opened exactly once, on the selected model, after the 384
-decision is final.** Neither Phase 5 (validation only) nor Phase 6 (APTOS, a different
-dataset) touches it. Note `BOOTSTRAP.md` R3 says test metrics are computed "at the end of
-each phase" — that contradicts CLAUDE.md and **CLAUDE.md wins** (DECISION-045).
+**The EyePACS test set opens exactly once, on the selected model, after the 384 decision
+is final.** `BOOTSTRAP.md` R3 has been amended to say so — the two contracts now agree
+rather than CLAUDE.md silently overriding.
 
-### Phase 5 gate, fixed in advance
-
-Mass ratio = (share of CAM mass in a region) / (share of image area). Over a
-seed-fixed stratified sample of **200 validation images**:
+### The gate (DECISION-046), thresholds fixed before any heatmap existed
 
 | statistic | PASS | FAIL |
 |---|---|---|
-| median **rim** ratio (outer 10% of retinal radius) | < 1.5 | ≥ 1.5 |
-| median **outside** ratio (beyond the retinal disc) | < 0.5 | ≥ 0.5 |
-| rim ratio on grade 3–4 only | < 1.5 | ≥ 1.5 |
+| median **rim** mass ratio (outer 10% of retinal radius) | < 1.5 | ≥ 1.5 |
+| median **outside** mass ratio (beyond the disc) | < 0.5 | ≥ 0.5 |
+| median rim ratio, **grades 3–4 only** | < 1.5 | ≥ 1.5 |
+| median **\|corr\| vs randomised model** | < 0.5 | ≥ 0.5 |
 
-Three things that make this non-obvious: **arm E has one output, not five** (backprop from
-the scalar); **the CAM is 7×7**, so it cannot localise microaneurysms and the write-up must
-say so; and the panel is **pre-specified by seed**, not curated.
+`src/xai/border_check.py --gate` exits non-zero on failure.
+
+### The failure path (DECISION-047) — do NOT rebuild on a failed rim gate alone
+
+- **randomisation fails** → TOOLING bug. Fix `gradcam.py`. No rebuild, and no heatmap
+  enters the write-up until it passes. It is checked first because it invalidates the
+  other three.
+- **outside fails** → `retina_mask` is under-segmenting. A preprocessing **bug**, not an
+  erosion parameter.
+- **rim fails** → **F1 occlusion test first** (cell 3B). A high CAM ratio is
+  correlational. Only `|Δsens| ≥ 0.02` justifies F2 (measure the annulus ratio at 5% and
+  10%, take the smallest that works) and F3 (rebuild ~9 h + retrain 40 min + **re-run
+  stage 2's three seeds** ~2 h). Full 0.9r masking is **not** an option — DECISION-016
+  rejected it and a rim failure does not change that reasoning.
 
 ---
 

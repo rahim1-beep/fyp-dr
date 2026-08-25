@@ -369,6 +369,7 @@ CLI_MODULES = (
     "src.eval.predict",
     "src.eval.thresholds",
     "src.eval.compare_arms",
+    "src.xai.border_check",
 )
 
 
