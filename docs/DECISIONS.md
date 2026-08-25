@@ -2339,6 +2339,130 @@ so the count **stays at 3**. The positive argument, written before the run as re
 
 ---
 
+## DECISION-045 — Phases 5 and 6 run before the 384 ablation, and the test set waits for all three
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Deviates from proposal:** No — it is a reordering within the proposal's phases.
+
+Order becomes: **Phase 5 (Grad-CAM) → Phase 6 (APTOS) → 384 ablation → Phase 7/8**, with
+384 running while the web app is built.
+
+### Nothing breaks, and one thing improves
+
+Neither Phase 5 nor Phase 6 touches the **EyePACS test set**. Phase 5 is qualitative and
+runs on validation images. Phase 6 evaluates on **APTOS**, which is a different dataset,
+not the EyePACS test split — legitimate external validation for arms A–E (DECISION-007).
+
+### The reordering is actively better, for a reason worth stating
+
+**Phase 5's rim gate can invalidate the preprocessing the 384 cache would be built with.**
+DECISION-016 chose 2–3% erosion over full 0.9r masking and pre-committed to revisiting it
+"if the Phase 5 Grad-CAM sanity check shows the model keying on the rim, with evidence."
+If that gate fails, the fix is a preprocessing change → cache rebuild → retrain. Building
+the 384 cache first would mean building it **twice, at 8–9 hours each**.
+
+So Phase 5 before 384 is not merely harmless — it removes a 9-hour downside risk.
+
+Phase 6 before 384 costs little in the other direction: if 384 ever became the headline,
+APTOS would need re-running on it, but that is inference-only and takes minutes.
+
+### What this pins down: when the test set is opened
+
+**The EyePACS test set is opened exactly once, on the single selected model, after the 384
+decision is final** — including after any supervisor deviation is resolved either way.
+Deferring it until after the last thing that could change the model is what makes "touched
+once" achievable rather than aspirational.
+
+**A contradiction in the governing documents, resolved here.** `BOOTSTRAP.md` R3 says
+"Test metrics are computed at the end of each phase and recorded", which would be many
+touches. `CLAUDE.md` R2/R3 says the test set is touched once. **CLAUDE.md wins** — it is
+the operational distillation and the stricter reading, and the once-only rule is the
+project's central methodological claim. BOOTSTRAP's phrasing is superseded and the
+write-up describes the once-only protocol.
+
+---
+
+## DECISION-046 — Phase 5: the border-artefact check is a quantitative gate, pre-registered
+
+- **Date:** 2026-08-25
+- **Status:** Accepted — **pre-registered before any heatmap is generated**
+- **Deviates from proposal:** No. Proposal §5.8 names Grad-CAM and Grad-CAM++.
+
+Grad-CAM on **arm E, seed 42, EfficientNet-B0, 224**. The rim question was deferred to
+here with evidence (DECISION-016), so the check is a **gate with a number and a threshold
+fixed in advance**, not a figure someone eyeballs.
+
+### Three implementation facts that make this non-obvious
+
+**1. Arm E has ONE output, not five.** Standard Grad-CAM backpropagates from a class
+logit. The ordinal head emits a single scalar, so the gradient is taken **from the scalar
+itself** — the map answers "what raised the predicted severity". Any off-the-shelf snippet
+assuming five logits will pick `argmax` of a length-1 vector and silently produce
+something meaningless. A test asserts the target is the scalar.
+
+**2. The CAM is 7×7 before upsampling.** EfficientNet-B0 at 224 ends at a 7×7 feature map,
+so each CAM cell covers ~32×32 input pixels. **Grad-CAM at this resolution cannot localise
+microaneurysms**, which are sub-pixel at 224. It can only show gross attention — disc,
+macula, arcades, rim. The write-up must say this plainly rather than implying lesion-level
+explanation. It is, however, exactly the right resolution for the rim question.
+
+**3. The panel is pre-specified, not curated.** A fixed seed, a stratified random sample:
+**200 validation images for the quantitative gate** (40 per grade), and a **20-image
+qualitative panel** (correct and misclassified per grade) drawn by the same seed. Choosing
+attractive heatmaps after the fact is the standard way an XAI section becomes decorative.
+
+### The gate
+
+Using `retina_mask` from the preprocessing pipeline, each image is divided into:
+
+- **outside** — beyond the retinal disc entirely (black surround)
+- **rim** — the outer 10% of the retinal radius
+- **interior** — the rest
+
+For each image, compute **mass ratio = (fraction of CAM mass in region) / (fraction of
+image area in region)**. A model ignoring a region scores ≈ 1.0 there; one keying on it
+scores well above 1.
+
+| statistic | PASS | FAIL |
+|---|---|---|
+| median **rim** mass ratio over 200 images | **< 1.5** | ≥ 1.5 |
+| median **outside** mass ratio | **< 0.5** | ≥ 0.5 |
+| rim ratio on grade 3–4 images specifically | **< 1.5** | ≥ 1.5 |
+
+The `outside` threshold is strict on purpose: there is literally nothing to see beyond the
+retinal disc, so meaningful mass there is unambiguous artefact rather than a judgement
+call. The grade 3–4 row is separate because peripheral disease appears there and that is
+precisely the region erosion was chosen to preserve — a model keying on the rim *only* for
+severe grades is a different and worse failure than a uniform rim bias.
+
+**On FAIL:** revisit masking with this evidence, per DECISION-016 — and, per
+DECISION-045, **do so before building the 384 cache**, not after.
+
+### A gate on the method, not just the model
+
+Before any of the above is believed: **randomise the final block's weights and confirm the
+CAM changes materially.** A saliency map that survives model randomisation is a property
+of the image, not the model, and would invalidate the entire section. This is cheap and
+it is the kind of thing that otherwise surfaces in a viva.
+
+> The published sanity-check protocol for saliency maps (Adebayo et al., *Sanity Checks
+> for Saliency Maps*, NeurIPS 2018) is **[CITATION UNVERIFIED]** and must not enter the
+> write-up until checked, per the DECISION-032 rule. The check itself is run regardless —
+> it stands on its own logic.
+
+### Deliverables
+
+1. `src/xai/gradcam.py` — Grad-CAM and Grad-CAM++, ordinal-head aware, testable on CPU.
+2. `src/xai/border_check.py` — the three statistics above, `--gate` exits non-zero on FAIL.
+3. `tests/test_gradcam.py` — scalar-target, shape, a synthetic image whose bright corner
+   must produce high `outside` mass (so the statistic is proven to detect what it claims),
+   and the randomisation check.
+4. `notebooks/phase5_gradcam.py` — runs both on Kaggle, ~15 min.
+5. The 20-image qualitative panel, drawn by the pre-registered seed.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

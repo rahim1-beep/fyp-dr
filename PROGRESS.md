@@ -1,15 +1,14 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **The 384px ablation** (DECISION-044). Two Kaggle sessions: rebuild
-> the cache at 384 (**~8-9 h**, ~2.4 GB) then train arm E at 384 (~2 h). The notebook is
-> not written yet.
+> **NEXT ACTION:** **Phase 5 - Grad-CAM** on arm E seed 42, B0 at 224, with the
+> border-artefact check as a pre-registered quantitative gate (DECISION-046).
+> `src/xai/` is empty; nothing is built yet.
 >
-> **A 384 result cannot become the headline** - the proposal fixes 224. This answers
-> "was resolution the binding constraint?" and nothing more without a supervisor
-> deviation. Stopping rule is against the 224 three-seed range 0.7211-0.7464.
+> **Order changed (DECISION-045):** Phase 5 -> Phase 6 -> 384 -> Phase 7/8. The 384
+> notebook is written (`notebooks/phase4_res384.py`) and held until after Phase 6,
+> because Phase 5's rim gate can invalidate the preprocessing its cache would use.
 >
-> After it: Phase 5 Grad-CAM, Phase 6 APTOS, Phase 7 web app, Phase 8 write-up - none of
-> which needs meaningful GPU.
+> **The EyePACS test set opens once, after the 384 decision is final.**
 
 **Current phase:** Phase 4 — Ablation arms A–F. **Phases 1–3 complete.**
 **Last updated:** 2026-08-20
@@ -327,11 +326,15 @@ order A→B→C→D→E→F by increasing implementation risk.
 - [x] **DECISION-042** — arm E's 0.034 gap was a seed artefact; the real figure is 0.077
       over three seeds. It had been load-bearing in DECISION-036 and -039; both are
       annotated and their affected claims struck.
-- [ ] **← NEXT: the 384px ablation** (DECISION-044) — cache rebuild then one run
-- [ ] Phase 5 Grad-CAM
-- [ ] Phase 6 APTOS external validation
-- [ ] Phase 7 FastAPI + Next.js
+- [x] 384 notebook written and pre-registered (DECISION-044); **held** until after
+      Phase 6 (DECISION-045)
+- [ ] **← NEXT: Phase 5 Grad-CAM** — `src/xai/gradcam.py`, `src/xai/border_check.py`,
+      `tests/test_gradcam.py`, `notebooks/phase5_gradcam.py`. Gate in DECISION-046.
+- [ ] Phase 6 APTOS external validation (inference only)
+- [ ] 384 ablation — run `notebooks/phase4_res384.py`, two sessions, ~11 h
+- [ ] Phase 7 FastAPI + Next.js (can overlap the 384 run)
 - [ ] Phase 8 write-up
+- [ ] **LAST: open the EyePACS test set, once, on the selected model**
 
 **Selection optimism: 3 architecture choices made on validation, soft budget 4.**
 A fourth needs a positive argument written down BEFORE the run, logged as a decision —

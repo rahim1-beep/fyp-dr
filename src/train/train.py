@@ -156,6 +156,11 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--batch-size", type=int)
     ap.add_argument("--lr", type=float)
     ap.add_argument("--arch", help="override model.arch")
+    ap.add_argument("--image-size", type=int,
+                    help="override preprocess.image_size. Must MATCH the cache "
+                         "being read -- it selects the transform, it does not "
+                         "resize anything. reconcile_cache is what verifies the "
+                         "cache itself (DECISION-044).")
     ap.add_argument("--limit-train", type=int,
                     help="use only the first N TRAIN rows — smoke tests only, and it is "
                          "recorded in the run config so the result cannot be mistaken "
@@ -239,6 +244,13 @@ def main() -> int:
     print("\n" + describe(model, model_cfg))
 
     # ---- loaders -----------------------------------------------------------------
+    if args.image_size:
+        # Into cfg, not just into the call: config.yaml is the run's own record of what it
+        # did (R6), and a run that trained at 384 while its config says 224 is a
+        # provenance lie that nothing downstream could detect.
+        cfg.setdefault("preprocess", {})["image_size"] = int(args.image_size)
+        print(f"[--image-size] dataset transform at {args.image_size}px")
+
     imbalance = dict(cfg.get("imbalance", {}))
     aug = AugmentConfig.from_yaml(cfg)
     loaders = build_loaders(

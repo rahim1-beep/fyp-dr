@@ -741,3 +741,32 @@ def test_efficientnet_b2_builds_with_the_ordinal_head():
     m = build_model(ModelConfig(arch="efficientnet_b2", num_outputs=1,
                                 head="ordinal_regression", pretrained=False))
     assert tuple(m(torch.randn(2, 3, 224, 224)).shape) == (2, 1)
+
+
+def test_image_size_override_reaches_the_run_config(tmp_path, monkeypatch):
+    """`--image-size` must be recorded, not just applied.
+
+    DECISION-044's 384 ablation switches resolution via this flag. A run that trained at
+    384 while its `config.yaml` says 224 is a provenance lie (R6) that nothing downstream
+    could detect — the cache path, the metrics and the checkpoint all look identical.
+    """
+    from src.train.train import build_parser
+
+    args = build_parser().parse_args(
+        ["--arm", "E", "--cache-root", "x", "--run-id", "y", "--image-size", "384"])
+    assert args.image_size == 384
+
+
+def test_preprocess_image_size_override_travels_with_the_config():
+    """The override must reach PreprocessConfig, which is what the provenance sidecar
+    records and what reconcile_cache verifies the cache against."""
+    import dataclasses
+    from src.data.preprocess import load_preprocess_config, BASE_CONFIG, build_parser
+
+    args = build_parser().parse_args(
+        ["--split", "train", "--src-root", "x", "--out-root", "y",
+         "--image-size", "384"])
+    assert args.image_size == 384
+    cfg = dataclasses.replace(load_preprocess_config(BASE_CONFIG), image_size=args.image_size)
+    assert cfg.image_size == 384
+    assert dataclasses.asdict(cfg)["image_size"] == 384

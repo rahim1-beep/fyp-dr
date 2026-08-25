@@ -10,24 +10,36 @@ the last item in Phase 4.**
 
 ## FIRST ACTION NEXT SESSION
 
-**The 384px ablation (DECISION-044)** — one run, arm E, seed 42, EfficientNet-B0.
+**Phase 5 — Grad-CAM on arm E, seed 42, B0 at 224.** Pre-registered as a quantitative
+gate, not a figure (DECISION-046). Nothing is built yet: `src/xai/` is empty.
 
-It is two Kaggle sessions, not one:
+The order changed (DECISION-045): **Phase 5 → Phase 6 → 384 → Phase 7/8.** The 384
+notebook is written and waiting at `notebooks/phase4_res384.py`; hold it until after
+Phase 6.
 
-1. **Rebuild the cache at 384** — ~8–9 h, ~2.4 GB, then verify and publish as
-   `fyp-dr-eyepacs-384`. Same pipeline as Phase 2; only `image_size` changes.
-2. **Train arm E at 384** — ~2 h.
+**Why 384 waits:** Phase 5's rim gate can invalidate the preprocessing the 384 cache would
+be built with (DECISION-016 pre-committed to revisiting masking on this evidence). Building
+384 first risks building it **twice at 8–9 h each**.
 
-**A 384 result cannot become the headline number.** The proposal fixes 224 (CLAUDE.md §5),
-so this answers "was resolution the binding constraint?" and nothing more unless the
-supervisor approves a deviation. The stopping rule is stated against the **224 three-seed
-range (0.7211–0.7464)**, not against a point estimate — a single 384 seed must clear 0.78
-to mean anything.
+**The EyePACS test set is opened exactly once, on the selected model, after the 384
+decision is final.** Neither Phase 5 (validation only) nor Phase 6 (APTOS, a different
+dataset) touches it. Note `BOOTSTRAP.md` R3 says test metrics are computed "at the end of
+each phase" — that contradicts CLAUDE.md and **CLAUDE.md wins** (DECISION-045).
 
-The notebook for this has **not** been written yet.
+### Phase 5 gate, fixed in advance
 
-After it: Phase 5 (Grad-CAM), Phase 6 (APTOS external validation), Phase 7 (web app),
-Phase 8 (write-up). None of those needs meaningful GPU.
+Mass ratio = (share of CAM mass in a region) / (share of image area). Over a
+seed-fixed stratified sample of **200 validation images**:
+
+| statistic | PASS | FAIL |
+|---|---|---|
+| median **rim** ratio (outer 10% of retinal radius) | < 1.5 | ≥ 1.5 |
+| median **outside** ratio (beyond the retinal disc) | < 0.5 | ≥ 0.5 |
+| rim ratio on grade 3–4 only | < 1.5 | ≥ 1.5 |
+
+Three things that make this non-obvious: **arm E has one output, not five** (backprop from
+the scalar); **the CAM is 7×7**, so it cannot localise microaneurysms and the write-up must
+say so; and the panel is **pre-specified by seed**, not curated.
 
 ---
 

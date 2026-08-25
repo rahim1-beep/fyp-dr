@@ -47,6 +47,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import multiprocessing as mp
 import os
 import sys
@@ -863,6 +864,14 @@ def build_parser() -> argparse.ArgumentParser:
                     help="root that the manifest's image_path values are relative to")
     ap.add_argument("--out-root", type=Path, required=True)
     ap.add_argument("--stats", type=Path, help="write the per-image stats CSV here")
+    ap.add_argument("--image-size", type=int,
+                    help="override preprocess.image_size (DECISION-044's 384 ablation). "
+                         "An EXPLICIT flag rather than a config overlay because "
+                         "load_preprocess_config merges base under exactly ONE overlay, "
+                         "and the Kaggle build already spends that slot on kaggle.yaml's "
+                         "paths -- so an overlay would have silently produced a 224 cache "
+                         "at hour zero of an 8-hour build. It is recorded in the "
+                         "provenance sidecar, so reconcile_cache verifies it.")
     ap.add_argument("--no-scan", action="store_true",
                     help="skip scan_quality (faster for the full cache build)")
     ap.add_argument("--limit", type=int, help="process only the first N rows")
@@ -879,6 +888,13 @@ def main() -> int:
         ap.error("give exactly one of --manifest or --split")
 
     cfg = load_preprocess_config(args.config)
+    if args.image_size:
+        # dataclasses.replace rather than mutation: PreprocessConfig is what gets written
+        # to the provenance sidecar, so the override has to travel with it or the cache
+        # would claim a size it does not have and reconcile_cache would pass it.
+        cfg = dataclasses.replace(cfg, image_size=int(args.image_size))
+        print(f"[--image-size] preprocessing at {cfg.image_size}px, "
+              f"not base.yaml's {load_preprocess_config(BASE_CONFIG).image_size}px")
 
     if args.manifest:
         df = pd.read_csv(args.manifest, comment="#")
