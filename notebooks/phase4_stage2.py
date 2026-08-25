@@ -11,7 +11,8 @@ IT CAN settle:
   * whether the operating point is stable - sens@spec>=0.95 matters more than QWK for
     deployment and it is the number closest to a floor
   * whether arm E's unusually small generalisation gap (0.034) is a property of the ARM
-    or of that one seed
+    or of that one seed  -> ANSWERED: the seed. Mean 0.077, range 0.034-0.098
+    (DECISION-042). The 0.034 had been load-bearing in two earlier arguments.
   * whether the sign of the A-vs-E difference is even consistent across seeds, reported
     as a descriptive fact and never as a significance claim
 

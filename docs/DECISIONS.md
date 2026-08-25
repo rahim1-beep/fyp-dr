@@ -1832,14 +1832,20 @@ Backbone quality at matched compute (B0 is 1.08× ResNet18 per epoch). All three
 improved. The informative part is that **the two softmax arms turned better features into
 more overfitting and the ordinal arm did not**:
 
-| arm | head | gap on R18 | gap on B0 | Δgap |
-|---|---|---:|---:|---:|
-| A | softmax | 0.092 | 0.157 | **+0.065** |
-| B | softmax | 0.290 | 0.329 | **+0.039** |
-| E | ordinal regression | 0.073 | 0.034 | **−0.039** |
+> **CORRECTED BY DECISION-042 (2026-08-25).** The B0 figures below are single seeds.
+> Seed-resolved, arm E's B0 gap is **0.077** (mean of 0.034/0.098/0.097) and arm A's is
+> **0.130** (0.157/0.137/0.096). **Arm E's gap did not narrow — it was flat (+0.004).**
+> The "opposite response" claim is withdrawn. What survives: arm A's gap widened and arm
+> E's did not, and arm E's gap is consistently about 60% of arm A's.
 
-Same backbone change, opposite gap response. The gap response is therefore a property of
-the **head**, not of the backbone.
+| arm | head | gap on R18 `[1 seed]` | gap on B0 `[1 seed, superseded]` | Δgap |
+|---|---|---:|---:|---:|
+| A | softmax | 0.092 | 0.157 | +0.065 |
+| B | softmax | 0.290 | 0.329 | +0.039 |
+| E | ordinal regression | 0.073 | ~~0.034~~ → 0.077 | ~~−0.039~~ → +0.004 |
+
+The gap response still differs by head, but the difference is that arm A's gap widened
+while arm E's held steady — not that they moved in opposite directions.
 
 The mechanism: cross-entropy over five logits can always spend a better representation on
 driving the correct logit higher on individual training images, and confidence does not
@@ -1855,8 +1861,10 @@ buys it +0.002 QWK against +0.041 for A and +0.046 for B.
 2. **Backbone quality is a demonstrated, cheap lever**: +0.0408 held-out QWK
    [+0.0181, +0.0654], separable, for 1.08× compute.
 3. **"Regularise" now applies only to arms we are not going to use.** Arm E's gap is
-   0.034; there is nothing there to regularise. It was the right prescription for the
-   symptom and the symptom belongs to the softmax arms.
+   **0.077 across three seeds** (DECISION-042 corrects the 0.034 first written here),
+   against arm A's 0.130 and arm B's 0.329. Arm E still overfits far less than the arms
+   it is being carried forward over, so the conclusion holds — the number was wrong by
+   2.2×, the prescription was not.
 4. **384px moves down the queue but not off it.** Its argument — microaneurysms are a few
    pixels across at 224 — is physical and untouched by this result, but it costs ~2.9×
    compute plus a ~2.5 h cache rebuild, against ~1 h to test one more backbone.
@@ -1989,14 +1997,21 @@ paired: QWK(E/b2) - QWK(E/b0) = +0.0052  95% CI [-0.0195, +0.0285]
 The screening operating point points the same way, which the QWK tie alone would not have
 shown:
 
+> **THE SUPPORTING ARGUMENTS BELOW ARE STRUCK BY DECISION-042 (2026-08-25).** Both
+> compared single seeds. Seed-resolved at 224, B0's sens@spec≥0.95 ranges 0.7211–0.7464
+> (mean 0.7360) and its gap averages 0.077 — so **B2's 0.7211 is exactly B0's worst seed,
+> not 2.5 points behind it**, and B2's gap of 0.061 is **lower** than B0's mean, not
+> double it. **The decision to keep B0 stands** on the two reasons that survive: the QWK
+> difference is not separable, and B0 is smaller, cheaper and native at 224.
+
 | run | held-out QWK | sens@spec>=0.95 | spec@sens>=0.80 | gen gap |
 |---|---:|---:|---:|---:|
-| **E/b0** | 0.7560 | **0.7464** | **0.9030** | **0.034** |
-| E/b2 | 0.7600 | 0.7211 | 0.8738 | 0.061 |
+| **E/b0** | 0.7560 | 0.7464 `[1 seed; 3-seed mean 0.7360]` | 0.9030 `[1 seed]` | ~~0.034~~ → 0.077 |
+| E/b2 | 0.7600 | 0.7211 `[1 seed]` | 0.8738 `[1 seed]` | 0.061 `[1 seed]` |
 
-B2 is nominally ahead on QWK by an amount that is not separable, and **behind on the
-metric that gates deployment** — 2.5 points of sensitivity at fixed specificity — with
-nearly double the generalisation gap. Nothing here justifies the larger model.
+B2 is nominally ahead on QWK by an amount that is not separable. ~~and behind on the
+metric that gates deployment, with nearly double the generalisation gap~~ — struck; both
+differences are inside seed noise.
 
 **Consequence.** The backbone is fixed at EfficientNet-B0. Selection-optimism count stays
 at **3 of 4**: this step was pre-registered and resolved to "keep what we had", so it
@@ -2100,6 +2115,227 @@ because it won a comparison. A and E are reported as a tie (DECISION-035).
 
 Seeds **42, 43, 44**, sequential and obviously arbitrary. Seed 42 already exists for both
 arms from stage 3, so stage 2 is **four new runs, not six** (~2.4 h rather than ~3.5 h).
+
+---
+
+## DECISION-042 — Arm E's 0.034 gap was a seed artefact, and it was load-bearing
+
+- **Date:** 2026-08-25
+- **Status:** Accepted — **corrects DECISION-036 and DECISION-039**
+- **Deviates from proposal:** No.
+
+Stage 2 measured arm E's train−val gap on EfficientNet-B0 across three seeds:
+
+| arm | s42 | s43 | s44 | **mean** | range |
+|---|---:|---:|---:|---:|---:|
+| E | **0.034** | 0.098 | 0.097 | **0.0765** | 0.064 |
+| A | 0.157 | 0.137 | 0.096 | **0.1300** | 0.061 |
+
+**The honest figure to quote for arm E is a mean of 0.077 over three seeds, range
+0.034–0.098** — never 0.034, which is the most extreme of the three and was the only one
+we had. The seed-to-seed range (0.064) is larger than most of the between-arm differences
+this project has been reasoning about.
+
+### What this invalidates
+
+**1. DECISION-036's central mechanism claim does not survive.** It said the two softmax
+arms turned better features into more overfitting while the ordinal arm's gap *narrowed*,
+and called that "same backbone change, opposite gap response". Recomputed:
+
+| arm | gap on R18 (s42) | gap on B0 | change |
+|---|---:|---:|---:|
+| A | 0.092 | 0.130 (3-seed mean) | **+0.038, widened** |
+| E | 0.073 | 0.077 (3-seed mean) | **+0.004, unchanged** |
+
+Arm E's gap did **not** halve. It was flat. The surviving claim is weaker and must be
+stated as such: **arm A's gap widened on B0 and arm E's did not, and arm E's gap is
+consistently about 60% of arm A's.** The "opposite response" framing goes.
+
+**2. DECISION-039's two supporting arguments both dissolve.** It preferred B0 over B2
+partly because B2 was "2.5 points of sensitivity behind" and had "nearly double the
+generalisation gap". Against the seed-resolved 224 baseline:
+
+- B2's sens@spec≥0.95 of 0.7211 is **exactly B0's worst seed**, inside a 224 range of
+  0.7211–0.7464. Not behind — indistinguishable.
+- B2's gap of 0.061 is **lower** than B0's 3-seed mean of 0.077, not double it.
+
+Both were single-seed noise on both sides of the comparison. **The decision to keep B0
+still stands**, on the two reasons that do survive: the QWK difference was not separable
+(+0.0052 [−0.0195, +0.0285]), and B0 is smaller, cheaper and native at 224. The
+supporting arguments are struck.
+
+**3. "Arm E's gap is 0.034, there is nothing to regularise" becomes weaker but survives.**
+At 0.077 arm E still overfits far less than A (0.130) and B (0.329), so regularisation
+remains the wrong prescription for the arm we are carrying forward. The number was wrong
+by 2.2×; the conclusion was not.
+
+### The rule this creates
+
+**Every single-seed generalisation gap in this project is provisional and must be labelled
+so.** The stage 1 gaps for arms B (0.329), C, C2, D and F are all one seed each and none
+of them has been seed-resolved. **No gap may carry an argument unless it has been measured
+across seeds.** Where a single-seed gap appears in a table it is marked `[1 seed]`.
+
+This is the second time a single-seed number has been used as evidence (DECISION-036 was
+the first). The cost both times was a claim that had to be withdrawn rather than a wrong
+decision — but only by luck.
+
+---
+
+## DECISION-043 — What arm E beating arm A on every seed does and does not license
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Deviates from proposal:** No.
+
+Stage 2, three seeds each, EfficientNet-B0:
+
+| | E (s42/s43/s44) | mean | sd | A (s42/s43/s44) | mean | sd |
+|---|---|---:|---:|---|---:|---:|
+| held-out QWK | 0.7578 / 0.7548 / 0.7564 | **0.7563** | 0.0012 | 0.7346 / 0.7370 / 0.7426 | 0.7381 | 0.0034 |
+| sens@spec≥0.95 | 0.7464 / 0.7211 / 0.7405 | **0.7360** | 0.0108 | 0.6822 / 0.7085 / 0.7172 | 0.7026 | 0.0149 |
+
+Arm E is ahead on **all three seeds on both metrics**, the ranges do not overlap
+(QWK by 0.0122, sensitivity by 0.0039), and E's seed variance is roughly a third of A's on
+QWK.
+
+### What may be written
+
+> Arm E outperformed arm A on every seed on both metrics, with lower seed-to-seed
+> variability (held-out QWK range 0.003 against 0.008). Arm E was selected on that basis
+> together with the pre-stated secondary criteria.
+
+That is a factual description of six runs and a **selection rationale**. It is defensible.
+
+### What may NOT be written
+
+**Not** "arm E significantly outperforms arm A", or any phrasing implying the ordering is
+established for the population.
+
+The reason is specific and worth stating in the viva. Uncertainty here has two components:
+
+1. **Training stochasticity** — which seed. Stage 2 measures this, and it is small.
+2. **Validation-set sampling** — which patients happen to be in the validation split.
+   **All six runs share the same 5,268 images**, so this component is *identical* across
+   them and does not average away. The paired bootstrap puts it at ±0.027 on the
+   difference, against a seed-mean difference of +0.018.
+
+Consistency across seeds addresses (1) and is **completely silent** on (2). Six
+measurements of the same object with the same mis-calibrated ruler agree beautifully;
+agreement is not accuracy. Non-overlapping ranges over three points are a **spread, not an
+interval**, and cannot be converted into one.
+
+**The A-vs-E tie therefore stands** (DECISION-035). What stage 2 changes is the *confidence
+of the selection*, not the *status of the comparison*. Arm E is what we carry forward; we
+have not shown it is the better arm.
+
+The only thing that could settle it is the held-out test set, and it will be opened once,
+for the selected model only (R3). Running both arms on test would be selection on test.
+
+---
+
+## DECISION-044 — 384px goes ahead as ONE pre-registered ablation, not as a floor fix
+
+- **Date:** 2026-08-25
+- **Status:** Accepted — **pre-registered before the run**
+- **Deviates from proposal:** No. §5 already scopes 384 as an optional ablation "if GPU
+  quota survives Phase 4". It has.
+
+### The framing that matters most
+
+**A 384 result cannot become the headline number.** The proposal fixes **224 for all
+headline results** (CLAUDE.md §5). So this run cannot "fix" the sensitivity floor for the
+reported system — adopting 384 as the headline would be a separate deviation needing
+supervisor approval. What it can do is answer a real thesis question: **was input
+resolution the binding constraint?**
+
+The thesis should state plainly that **the system does not meet the screening floor at
+224** — best sens@spec≥0.95 is 0.7360 (3-seed mean) against 0.80 — and report this
+ablation as evidence about *why*, rather than presenting it as a rescue. That is a
+stronger and more honest chapter than a floor chased and missed.
+
+### What it manipulates
+
+**Input resolution only: 224 → 384.** Everything else is held — arm E, EfficientNet-B0,
+30 epochs, seed 42, same splits, same patients, same preprocessing pipeline and
+parameters. The pixel count rises **2.94×** ((384/224)²), which is also the training-cost
+multiplier.
+
+This is a **data** change, not a model change: it requires the cache to be rebuilt at 384,
+so the model sees genuinely more detail rather than an upsampled 224 image.
+
+### The prediction
+
+**Sensitivity improves but does not reach 0.80**, landing in roughly **0.76–0.80**, and
+**QWK improves by less than sensitivity does.**
+
+Reasoning: microaneurysms are on the order of 50 µm and a fundus image is ~3000 px across,
+so at 224 they are sub-pixel to one pixel. They are the defining lesion of grades 1–2 —
+which is exactly the referable boundary that `sens@spec≥0.95` measures. Resolution should
+therefore move the *operating point* more than it moves overall ordinal agreement, which
+is already dominated by the easy grade-0 mass.
+
+### The stopping rule — stated against the 224 seed RANGE, not a point estimate
+
+This is DECISION-042's lesson made structural. The 224 baseline is **not** 0.7464; it is a
+three-seed range of **0.7211–0.7464, mean 0.7360**. A single 384 seed must clear the top
+of that range to mean anything at all.
+
+| 384 sens@spec≥0.95 (seed 42) | reading | action |
+|---|---|---|
+| **≥ 0.78** | clearly above the 224 range | resolution is a real lever. **Take it to the supervisor** as a headline-resolution deviation. Only *after* approval, run 3 seeds at 384. |
+| **0.7464 – 0.78** | one seed above a three-seed range | **suggestive, not established.** Report as the ablation. Do not escalate, do not change the headline. |
+| **< 0.7464** | inside or below the 224 range | clean negative result. Report and stop. |
+
+**In no case** does this lead to 512px, to 384 on other arms, or to a 384 headline without
+supervisor approval.
+
+### Cost, and a correction to the figure previously quoted
+
+**The ~2.5 h cache rebuild written in the handoff was wrong.** That number was the compute
+*lost* to the first failed Phase 2 attempt (DECISION-021), not the build time. **The 224
+cache build actually took 8.1 hours** at `--workers 4` (DECISION-022).
+
+Preprocessing cost is dominated by decoding ~3000 px source JPEGs and the Ben Graham blur
+at source scale; the output size barely affects it. So:
+
+| item | cost |
+|---|---|
+| Cache rebuild at 384 + verify + publish | **~8–9 h**, one full Kaggle session |
+| Storage | ~2.4 GB (224 cache is 0.836 GB × 2.94) |
+| Reconcile + leakage gate | ~15 min |
+| Train arm E at 384, 30 epochs | 76 s/epoch × 2.94 ≈ 224 s/epoch → **~2 h** |
+| **Single-seed total** | **~11 h across two sessions** |
+| If it wins and 3 seeds are approved | +4 h |
+
+### Against what remains
+
+Quota is 30 h/week and **the remaining phases barely touch the GPU**:
+
+| phase | GPU |
+|---|---|
+| 5 — Grad-CAM | inference + overlays, **minutes** |
+| 6 — external validation on APTOS | inference only, **minutes** |
+| 7 — FastAPI + Next.js | local CPU, **none** |
+| 8 — write-up | **none** |
+
+**GPU quota is not the binding constraint; calendar time and attention are.** 11 h is
+roughly one week's quota for a result that is informative either way, and nothing
+downstream is blocked waiting on it.
+
+### The positive argument required by DECISION-036
+
+Selection-optimism count would reach **4 of 4** only if a 384 result were allowed to change
+the headline model. Under this decision it cannot without a separate supervisor approval,
+so the count **stays at 3**. The positive argument, written before the run as required:
+
+1. It is the **only remaining untested lever with a physical mechanism** — lesion size
+   against pixel size — rather than an architectural guess.
+2. It is **already scoped in the proposal**, so it is not an invention.
+3. The floor is a **deployment gate**, and a thesis that never tests the most-cited fix
+   for it is weaker for the omission.
+4. **A negative result is a genuine finding**: it would say the limit is data scale and
+   label noise, not resolution.
 
 ---
 

@@ -71,7 +71,10 @@ RUNS = WORK / "runs"
 
 EPOCHS = 30
 SEED = 42
-ARM = "E"                       # the ordinal head: the only arm whose gap NARROWED on B0
+ARM = "E"                       # the ordinal head. (The "gap NARROWED on B0" reason
+                                # written here was a seed artefact - DECISION-042.
+                                # Arm E is still the right arm, on its operating
+                                # point and its consistency across seeds.)
 ARCH = "efficientnet_b2"
 BASELINE_ARCH = "efficientnet_b0"
 
@@ -79,7 +82,9 @@ BASELINE_ARCH = "efficientnet_b0"
 # against these, so they are constants here: runs/ is not in the code bundle.
 B0_QWK_AS_RUN = 0.7615
 B0_QWK_HELD_OUT = 0.7564        # matched decision rule, DECISION-035
-B0_GAP = 0.034
+B0_GAP = 0.034                  # SEED 42 ONLY. Stage 2 later measured the
+                                # 3-seed mean at 0.077 (DECISION-042), and the
+                                # gap comparison this fed is struck.
 B0_SENS_AT_SPEC95 = 0.7464
 SENS_FLOOR = 0.80               # DECISION-032, PROVISIONAL pending supervisor
 B0_SECONDS_PER_EPOCH = 76.0

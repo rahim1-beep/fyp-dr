@@ -1,13 +1,15 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **Run `notebooks/phase4_stage2.py`** — arms E and A on
-> EfficientNet-B0, seeds 43 and 44. Four new runs, ~2.4 h. Cell 1 by hand, cells 2-4 by
-> commit. Rebuild the code bundle first.
+> **NEXT ACTION:** **The 384px ablation** (DECISION-044). Two Kaggle sessions: rebuild
+> the cache at 384 (**~8-9 h**, ~2.4 GB) then train arm E at 384 (~2 h). The notebook is
+> not written yet.
 >
-> Stage 2 is a stability **measurement** and cannot break the A-vs-E tie at any number of
-> seeds (DECISION-041). Report the mean across seeds, never the best seed.
+> **A 384 result cannot become the headline** - the proposal fixes 224. This answers
+> "was resolution the binding constraint?" and nothing more without a supervisor
+> deviation. Stopping rule is against the 224 three-seed range 0.7211-0.7464.
 >
-> After it: the 384px decision on arm E alone, then Phase 5 (Grad-CAM).
+> After it: Phase 5 Grad-CAM, Phase 6 APTOS, Phase 7 web app, Phase 8 write-up - none of
+> which needs meaningful GPU.
 
 **Current phase:** Phase 4 — Ablation arms A–F. **Phases 1–3 complete.**
 **Last updated:** 2026-08-20
@@ -320,11 +322,16 @@ order A→B→C→D→E→F by increasing implementation risk.
       **prediction held**, backbone fixed at **EfficientNet-B0** (DECISION-039). B2 is
       also worse on the deployment metric: sens@spec.95 0.7211 vs 0.7464.
 - [x] `compare_arms` label fix — it was silently dropping 4 of 11 runs (DECISION-040)
-- [ ] **← NEXT: stage 2** — `notebooks/phase4_stage2.py`. Arms E and A on B0, seeds
-      43 and 44 (42 exists), **4 new runs ~2.4 h**. A stability MEASUREMENT, not a
-      tie-break — it cannot break the A-vs-E tie at any number of seeds (DECISION-041).
-- [ ] Then the 384px decision, on arm E alone
-- [ ] Then Phase 5
+- [x] **Stage 2 done** (0b13e9e) — six labels, no collapse. E 0.7563 +/- 0.0012 vs A
+      0.7381 +/- 0.0034 held-out; E ahead on every seed on both metrics.
+- [x] **DECISION-042** — arm E's 0.034 gap was a seed artefact; the real figure is 0.077
+      over three seeds. It had been load-bearing in DECISION-036 and -039; both are
+      annotated and their affected claims struck.
+- [ ] **← NEXT: the 384px ablation** (DECISION-044) — cache rebuild then one run
+- [ ] Phase 5 Grad-CAM
+- [ ] Phase 6 APTOS external validation
+- [ ] Phase 7 FastAPI + Next.js
+- [ ] Phase 8 write-up
 
 **Selection optimism: 3 architecture choices made on validation, soft budget 4.**
 A fourth needs a positive argument written down BEFORE the run, logged as a decision —

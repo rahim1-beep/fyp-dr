@@ -1,47 +1,53 @@
 # Session Handoff
 
 **Last updated:** 2026-08-25
-**Phase:** 4 — ablation, near the end. Stages 1, 3 and 3.5 done; **stage 2 is next.**
-**HEAD:** `3cc6982`. Working tree clean; every number below traces to a committed
-`runs/<run_id>/metrics.json` (R4).
+**Phase:** 4 — ablation. **Stages 1, 2, 3 and 3.5 are all done. The 384px ablation is
+the last item in Phase 4.**
+**HEAD:** `0b13e9e` + this session's corrections. Every number below traces to a committed
+`runs/<run_id>/metrics.json` (R4), and every one that is a **3-seed mean says so**.
 
 ---
 
 ## FIRST ACTION NEXT SESSION
 
-**Run `notebooks/phase4_stage2.py`** — arms E and A on EfficientNet-B0, seeds 43 and 44,
-**four new runs, ~2.4 h**. Cell 1 by hand, cells 2–4 by commit.
+**The 384px ablation (DECISION-044)** — one run, arm E, seed 42, EfficientNet-B0.
 
-Inputs: `fyp-dr-eyepacs-224`, `fyp-dr-code`, **and the stage 3 notebook's output** (cell 3
-needs the seed-42 runs to compare against; without it cell 3 says so and prints the local
-command instead of failing). GPU T4 ×2, Internet **ON**.
+It is two Kaggle sessions, not one:
 
-Rebuild the code bundle first — `compare_arms.py`, `smoke.py`, `gen_experiments.py` and
-two notebooks have all changed since the last bundle.
+1. **Rebuild the cache at 384** — ~8–9 h, ~2.4 GB, then verify and publish as
+   `fyp-dr-eyepacs-384`. Same pipeline as Phase 2; only `image_size` changes.
+2. **Train arm E at 384** — ~2 h.
 
-**Stage 2 is a MEASUREMENT, not a tie-break (DECISION-041).** It cannot break the A-vs-E
-tie at three seeds or thirty: every seed is scored on the same 5,268 validation images, so
-seed-averaging lowers the training-noise component and does nothing to the
-validation-sampling floor. The effect is +0.0224 QWK against a paired half-width of
-~0.027. **Report the mean across seeds, never the best seed** — best-of-three would be a
-selection on validation.
+**A 384 result cannot become the headline number.** The proposal fixes 224 (CLAUDE.md §5),
+so this answers "was resolution the binding constraint?" and nothing more unless the
+supervisor approves a deviation. The stopping rule is stated against the **224 three-seed
+range (0.7211–0.7464)**, not against a point estimate — a single 384 seed must clear 0.78
+to mean anything.
 
-After stage 2: **the 384px decision on arm E alone**, then Phase 5 (Grad-CAM).
+The notebook for this has **not** been written yet.
+
+After it: Phase 5 (Grad-CAM), Phase 6 (APTOS external validation), Phase 7 (web app),
+Phase 8 (write-up). None of those needs meaningful GPU.
 
 ---
 
 ## WHERE THE PROJECT ACTUALLY STANDS
 
-**Best model: arm E (ordinal regression head) on EfficientNet-B0, seed 42.**
+**Best model: arm E (ordinal regression head) on EfficientNet-B0**, three seeds.
 
 | | value |
 |---|---|
-| held-out matched QWK | **0.7560** |
-| sens @ spec ≥ 0.95 | **0.7464** (floor 0.80 — **not met**) |
-| spec @ sens ≥ 0.80 | 0.9030 (floor 0.95 — not met) |
-| train−val gap | 0.034 |
+| held-out matched QWK | **0.7563** (3 seeds: 0.7578/0.7548/0.7564) |
+| sens @ spec ≥ 0.95 | **0.7360** (3 seeds: 0.7464/0.7211/0.7405) — floor 0.80 **not met** |
+| spec @ sens ≥ 0.80 | 0.9030 `[1 seed]` (floor 0.95 — not met) |
+| train−val gap | **0.077** (3 seeds: 0.034/0.098/0.097) |
 
-**No arm reaches the screening floor.** That gap — 0.054 of sensitivity — is the open
+**Quote the 3-seed means, never seed 42 alone.** The 0.034 gap and the 0.7464 sensitivity
+are the most extreme of their three seeds and both were used as arguments before stage 2
+existed (DECISION-042).
+
+**No arm reaches the screening floor.** That gap — **0.064** of sensitivity on the
+3-seed mean — is the open
 problem going into the rest of the project.
 
 The full table is `python -m src.eval.compare_arms --pattern 'phase4_*' --operating-point`
@@ -53,8 +59,8 @@ The full table is `python -m src.eval.compare_arms --pattern 'phase4_*' --operat
 | lever | status |
 |---|---|
 | **Backbone quality** | **CLOSED.** B0 → B2 was +0.0052 [−0.0195, +0.0285], not separable, and B2 was *worse* on the operating point. Backbone fixed at B0 (DECISION-039). |
-| **Input resolution 224 → 384** | **The remaining live lever.** No evidence yet; the argument is physical (microaneurysms are a few pixels at 224). Costs ~2.9× compute **plus** a ~2.5 h cache rebuild at ~2.4 GB. Scoped as an optional ablation in the proposal (DECISION-005), so it is a deviation to approve rather than invent. |
-| **Regularisation** | Applies only to the softmax arms, whose gaps *widened* on B0. **Arm E's gap is 0.034 — there is nothing there to regularise.** |
+| **Input resolution 224 → 384** | **The remaining live lever, and it is next.** Pre-registered with a stopping rule (DECISION-044). Costs 2.94× training (~2 h) **plus an ~8–9 h cache rebuild** — the "~2.5 h" written here before was wrong, it was the compute lost to the failed first Phase 2 attempt, not the build time. **A 384 result cannot become the headline** without a supervisor deviation; the proposal fixes 224. |
+| **Regularisation** | Applies to the softmax arms: arm A's gap widened on B0 (0.092 → 0.130) while arm E's held flat (0.073 → 0.077). At 0.077 against A's 0.130 and B's 0.329, **arm E still overfits far less than the arms it is carried over**, so this stays the wrong prescription for it. |
 
 ---
 

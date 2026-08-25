@@ -197,6 +197,44 @@ def render(run: str, runs_root: Path) -> tuple[str, str]:
 
     ---
 
+    ## Seed stability - stage 2 (DECISION-041, -042, -043)
+
+    Arms E and A on EfficientNet-B0, seeds 42/43/44. Everything else held.
+
+    | | E | mean | sd | A | mean | sd |
+    |---|---|---:|---:|---|---:|---:|
+    | held-out QWK | 0.7578 / 0.7548 / 0.7564 | **0.7563** | 0.0012 | 0.7346 / 0.7370 / 0.7426 | 0.7381 | 0.0034 |
+    | sens@spec>=0.95 | 0.7464 / 0.7211 / 0.7405 | **0.7360** | 0.0108 | 0.6822 / 0.7085 / 0.7172 | 0.7026 | 0.0149 |
+    | train-val gap | 0.034 / 0.098 / 0.097 | **0.0765** | 0.0298 | 0.157 / 0.137 / 0.096 | 0.1300 | 0.0254 |
+
+    ### What this corrected
+
+    **Arm E's train-val gap is 0.077, not 0.034.** The 0.034 was seed 42 alone, the most
+    extreme of the three, and it had been used as an argument twice before stage 2
+    existed - once for the mechanism claim in the stage 3 analysis, once as a reason to
+    prefer B0 over B2. Both are annotated and the affected claims struck (DECISION-042).
+    **The seed range, 0.064, is larger than most of the between-arm gap differences this
+    project had been reasoning about.**
+
+    Every single-seed gap in this document is marked `[1 seed]`. Arms B, C, C2, D and F
+    have never been seed-resolved, so **no gap carries an argument unless it was measured
+    across seeds.**
+
+    ### What it licenses
+
+    Arm E is ahead of arm A on **all three seeds on both metrics**, with roughly a third
+    of the seed variance on QWK, and the ranges do not overlap. That is a factual
+    description of six runs and a defensible **selection rationale**.
+
+    It is **not** a significance claim. All six runs share the same 5,268 validation
+    images, so the validation-sampling component of the uncertainty is identical across
+    them and does not average away; the paired bootstrap puts it at +/-0.027 against a
+    seed-mean difference of +0.018. Seed consistency addresses training stochasticity and
+    is silent on which patients are in the split. **The A-vs-E tie stands** - what changed
+    is the confidence of the selection, not the status of the comparison (DECISION-043).
+
+    ---
+
     ## Selection optimism — the running total
 
     **Architecture choices made by looking at validation: 3 of a soft budget of 4.**
