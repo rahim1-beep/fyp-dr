@@ -221,3 +221,35 @@ def smoke_forward(model: nn.Module, image_size: int = 224, batch: int = 2) -> to
     than in the first epoch on Kaggle."""
     model.eval()
     return model(torch.randn(batch, 3, image_size, image_size)).shape
+
+
+# The key `src/train/loop.py` saves the weights under. There is exactly one convention
+# and it lives here so that call sites cannot invent their own — which is precisely what
+# happened: `notebooks/phase5_gradcam.py` guessed `"model"`, a key that has never existed
+# in this project, and the guess survived local testing because no test loaded a real
+# checkpoint written by the real training loop.
+CHECKPOINT_STATE_KEY = "state_dict"
+
+
+def load_checkpoint(path: Path | str, model: nn.Module | None = None, *,
+                    map_location: str = "cpu") -> dict:
+    """Load a checkpoint written by `src/train/loop.py`, optionally into `model`.
+
+    Returns the whole dict — callers also want `epoch` and `val_qwk`.
+
+    Raises with the keys it ACTUALLY found rather than letting `load_state_dict` report
+    a wall of unexpected-key noise. Passing the outer dict (epoch, val_qwk, state_dict)
+    straight to `load_state_dict` produces a RuntimeError that reads like a model
+    architecture mismatch, which is a long way from "you used the wrong key".
+    """
+    ckpt = torch.load(path, map_location=map_location, weights_only=False)
+    if not isinstance(ckpt, dict) or CHECKPOINT_STATE_KEY not in ckpt:
+        found = sorted(ckpt) if isinstance(ckpt, dict) else type(ckpt).__name__
+        raise KeyError(
+            f"{path} has no {CHECKPOINT_STATE_KEY!r} key; found {found}. Checkpoints in "
+            "this project are written by src/train/loop.py as "
+            "{'epoch', 'val_qwk', 'state_dict'}."
+        )
+    if model is not None:
+        model.load_state_dict(ckpt[CHECKPOINT_STATE_KEY])
+    return ckpt

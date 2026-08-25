@@ -86,8 +86,9 @@ def predict_from_checkpoint(run_dir: Path, cache_root: Path, *, device: str = "a
     model_cfg = ModelConfig(**{**model_cfg.__dict__, "pretrained": False})
     model = build_model(model_cfg)
 
-    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
-    model.load_state_dict(ckpt["state_dict"])
+    from src.models.factory import load_checkpoint
+
+    ckpt = load_checkpoint(ckpt_path, model)
     print(f"  loaded epoch {ckpt.get('epoch')} (val QWK {ckpt.get('val_qwk'):.4f})")
 
     mean, std = normalisation(model)

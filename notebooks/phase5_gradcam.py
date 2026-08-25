@@ -110,7 +110,8 @@ print(f"torch {torch.__version__}  cuda {torch.cuda.is_available()}")
 DEV = "cuda" if torch.cuda.is_available() else "cpu"
 
 from src.data.manifest import load_split
-from src.models.factory import ModelConfig, build_model, normalisation
+from src.models.factory import (ModelConfig, build_model, load_checkpoint,
+                                normalisation)
 
 cfg = yaml.safe_load((RUN_DIR / "config.yaml").read_text(encoding="utf-8"))
 print(f"run config: arm {cfg['arm']}  arch {cfg['model']['arch']}  "
@@ -121,8 +122,12 @@ print(f"run config: arm {cfg['arm']}  arch {cfg['model']['arch']}  "
 model = build_model(ModelConfig(
     arch=cfg["model"]["arch"], num_outputs=cfg["model"]["num_outputs"],
     head=cfg["model"]["head"], pretrained=False))
-state = torch.load(CKPT, map_location="cpu")
-model.load_state_dict(state["model"] if "model" in state else state)
+# Via the shared loader (src/models/factory), which owns the ONE checkpoint convention.
+# This line previously guessed `state["model"]` — a key that has never existed — and the
+# fallback then handed load_state_dict the whole outer dict, producing a RuntimeError
+# that reads like an architecture mismatch. DECISION-049.
+state = load_checkpoint(CKPT, model)
+print(f"checkpoint: epoch {state.get('epoch')}  val_qwk {state.get('val_qwk')}")
 model.eval().to(DEV)
 MEAN, STD = normalisation(model)
 print("weights loaded; normalisation", MEAN, STD)

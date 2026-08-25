@@ -290,8 +290,9 @@ def fit(
             break
 
     if state.best_epoch >= 0 and ckpt_path.exists():
-        best = torch.load(ckpt_path, map_location=dev, weights_only=False)
-        model.load_state_dict(best["state_dict"])
+        from src.models.factory import load_checkpoint
+
+        best = load_checkpoint(ckpt_path, model, map_location=dev)
         print(f"restored best checkpoint: epoch {best['epoch']}, "
               f"val QWK {best['val_qwk']:.4f}")
 

@@ -2607,6 +2607,70 @@ float16 case. **31 tests, up from 24.**
 
 ---
 
+## DECISION-049 — One checkpoint convention, one definition, tested against a real checkpoint
+
+- **Date:** 2026-08-25
+- **Status:** Accepted — bug fixed, shared loader added, structural guard in tests
+- **Deviates from proposal:** No.
+
+`notebooks/phase5_gradcam.py` cell 1 loaded weights with:
+
+```python
+model.load_state_dict(state["model"] if "model" in state else state)
+```
+
+**`"model"` is a key that has never existed in this project.** `src/train/loop.py` has
+always written `{"epoch", "val_qwk", "state_dict"}`. The fallback then handed
+`load_state_dict` the whole outer dict, which fails with a `RuntimeError` about unexpected
+keys — a message that reads like an architecture mismatch rather than like a wrong key,
+which is why it cost a second Kaggle session after the CUDA-generator fix.
+
+### Why every test passed
+
+Three call sites each hardcoded the key independently. Two were right
+(`src/eval/predict.py`, `src/train/loop.py`) and the third was invented. **No test loaded a
+checkpoint that the real training loop had written** — `tests/test_train.py` checked the
+*save* side, the eval loaders happened to be correct, and the notebook was never executed
+locally. A hand-built dict in a test would only have re-asserted whatever convention the
+test author had in mind, which is the same coin flip that produced the bug.
+
+### The fix
+
+`src/models/factory.load_checkpoint()` now owns the convention, and **all three call sites
+go through it**. It raises naming the keys it actually found:
+
+```
+KeyError: .../best.pth has no 'state_dict' key; found ['epoch', 'model'].
+Checkpoints in this project are written by src/train/loop.py as
+{'epoch', 'val_qwk', 'state_dict'}.
+```
+
+### The structural guard
+
+`tests/test_checkpoint.py::test_nothing_loads_a_checkpoint_except_through_the_shared_loader`
+scans `src/` and `notebooks/` and fails on any `load_state_dict` outside `factory.py`.
+Three sites were three independent coin flips; a fourth would have been a fourth. Now
+there is one definition and adding a site that bypasses it is a test failure.
+
+### The tests
+
+`tests/test_checkpoint.py` builds a **real `best.pth` through `src/train/smoke.py`**, which
+runs the real `train.main()` end to end on a synthetic fixture, then: asserts the
+documented keys are present, asserts `"model"` is *not* (so a future divergence is
+deliberate rather than silent), restores it into a model rebuilt from the run's own
+`config.yaml` exactly as the notebook does, and **runs a forward pass** — because loading
+without erroring is not the same as loading correctly.
+
+### Relation to DECISION-048
+
+Same root cause one layer up. -048 was a context the fixture did not have (a GPU); this
+was an artefact the fixture did not produce (a real checkpoint). The rule generalises:
+**a test that constructs its own version of an artefact tests the constructor, not the
+artefact.** Where a real one can be produced cheaply — `smoke.py` does it in ~12 seconds —
+the test uses the real one.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and
