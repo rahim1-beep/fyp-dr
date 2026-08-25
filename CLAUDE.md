@@ -173,4 +173,10 @@ area: `data-engineer`, `leakage-auditor` (gatekeeper for anything touching parti
 
 ## 9. Current phase
 
-**Phase 1 — Data foundation.** See `PROGRESS.md` for the live checklist and NEXT ACTION.
+**Phase 4 — ablation, near the end.** Stages 1, 3 and 3.5 are done and stage 2 is next.
+Backbone is fixed at EfficientNet-B0 (DECISION-039); the best arm is E (ordinal
+regression head) at held-out QWK 0.7560, referable sensitivity 0.7464 at specificity
+0.95 — **below the 0.80 screening floor, which is the open problem.**
+
+See `PROGRESS.md` for the live checklist and NEXT ACTION, and
+`state/session_handoff.md` for the standing rules that are easiest to break.

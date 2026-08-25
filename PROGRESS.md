@@ -1,10 +1,13 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **Re-run arm C alone** (~36 min) with the criterion-device fix, then
-> regenerate `docs/EXPERIMENTS.md` once all six sets of artefacts are committed.
+> **NEXT ACTION:** **Run `notebooks/phase4_stage2.py`** — arms E and A on
+> EfficientNet-B0, seeds 43 and 44. Four new runs, ~2.4 h. Cell 1 by hand, cells 2-4 by
+> commit. Rebuild the code bundle first.
 >
-> Then `src/eval/thresholds.py` — arm E has the best QWK and the worst referable
-> sensitivity, and its cut points have never been optimised (DECISION-030).
+> Stage 2 is a stability **measurement** and cannot break the A-vs-E tie at any number of
+> seeds (DECISION-041). Report the mean across seeds, never the best seed.
+>
+> After it: the 384px decision on arm E alone, then Phase 5 (Grad-CAM).
 
 **Current phase:** Phase 4 — Ablation arms A–F. **Phases 1–3 complete.**
 **Last updated:** 2026-08-20
