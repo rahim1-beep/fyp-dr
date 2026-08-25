@@ -177,15 +177,34 @@ def randomise_last_block(model: nn.Module, seed: int = 0) -> nn.Module:
     For the randomisation gate in `border_check.py`. Deep-copied because randomising in
     place would destroy the checkpoint being analysed, and the caller almost never wants
     that.
+
+    THE NOISE IS ALWAYS GENERATED ON CPU AND COPIED ACROSS, even when the parameter is
+    already on CPU. A `torch.Generator` is device-bound: a CPU generator cannot seed
+    `normal_()` on a CUDA tensor, which is how this failed on the first real GPU run
+    (`Expected a 'cuda' device type for generator but found 'cpu'`) after passing every
+    CPU test.
+
+    Seeding a CUDA generator instead would also have worked, and would have been wrong:
+    the two devices produce **different streams for the same seed**, so the gate's
+    randomisation would not be reproducible across machines. The seed is the only reason
+    the gate repeats, so the stream is pinned to CPU and the device transfer happens
+    after the numbers exist.
     """
-    rng = torch.Generator().manual_seed(seed)
+    rng = torch.Generator(device="cpu").manual_seed(seed)
     clone = copy.deepcopy(model)
     layer = pick_target_layer(clone)
     n = 0
     for p in layer.parameters():
         with torch.no_grad():
-            p.copy_(torch.empty_like(p).normal_(0.0, 0.1, generator=rng)
-                    if p.dim() > 0 else torch.zeros_like(p))
+            if p.dim() == 0:
+                p.zero_()
+            else:
+                # float32 on CPU regardless of the parameter's dtype: `normal_` has no
+                # CPU kernel for float16, so a half-precision checkpoint would fail here
+                # for a second, unrelated reason.
+                noise = torch.empty(tuple(p.shape), dtype=torch.float32,
+                                    device="cpu").normal_(0.0, 0.1, generator=rng)
+                p.copy_(noise.to(device=p.device, dtype=p.dtype))
         n += 1
     if n == 0:
         raise ValueError("the target layer has no parameters to randomise, so the "

@@ -18,6 +18,20 @@ from src.xai.gradcam import (GradCAM, cam_correlation, pick_target_layer,
                              randomise_last_block, scalar_target)
 
 
+# Every device this machine actually has. On the CPU-only dev box this is ["cpu"] and
+# the cuda cases skip; on Kaggle it is both, and cell 1 of notebooks/phase5_gradcam.py
+# runs this file BEFORE cell 2 does the real work — which is the whole point. A
+# device-mismatch bug cannot be caught by a CPU-only fixture, so the fix is not a
+# cleverer local test, it is running these tests in the context the artefact runs in.
+DEVICES = ["cpu"] + (["cuda"] if torch.cuda.is_available() else [])
+
+# The pinned randomisation stream, generated on CPU with seed 7. These values must be
+# identical on every device: if someone re-seeds a CUDA generator instead of copying
+# CPU noise across, the numbers change on GPU and this test fails THERE, which is where
+# the reproducibility of the gate would actually have been lost.
+STREAM_SEED_7 = [-0.082013, 0.039563, 0.089891]
+
+
 def ordinal_model():
     return build_model(ModelConfig(arch="efficientnet_b0", num_outputs=1,
                                    head="ordinal_regression", pretrained=False))
@@ -252,3 +266,100 @@ def test_severe_rim_bias_is_caught_even_when_the_overall_median_is_clean():
     assert s["gates"]["rim"], "the overall median should look clean here"
     assert not s["gates"]["rim_severe"]
     assert not s["passed"]
+
+
+# ---------------------------------------------------------------- device parity (regression)
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_randomise_last_block_works_on_every_available_device(device):
+    """REGRESSION: Phase 5 cell 2 died with
+
+        RuntimeError: Expected a 'cuda' device type for generator but found 'cpu'
+
+    after all 24 tests in this file passed on CPU. A torch.Generator is device-bound, so
+    a CPU generator cannot seed normal_() on a CUDA parameter.
+    """
+    m = ordinal_model().to(device)
+    clone = randomise_last_block(m, seed=7)
+    w = pick_target_layer(clone).weight
+    assert w.device.type == device
+    assert torch.isfinite(w).all()
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_randomisation_stream_is_identical_on_every_device(device):
+    """The seed is the only reason the gate repeats, so the stream is pinned to CPU and
+    copied across rather than re-seeded per device — the two produce DIFFERENT streams
+    for the same seed, which would make the gate irreproducible across machines."""
+    clone = randomise_last_block(ordinal_model().to(device), seed=7)
+    got = [round(float(v), 6) for v in
+           pick_target_layer(clone).weight.detach().flatten()[:3].cpu()]
+    assert got == STREAM_SEED_7, f"stream changed on {device}: {got}"
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_noise_is_generated_on_cpu_whatever_device_the_model_is_on(monkeypatch, device):
+    """The invariant that broke, asserted directly. Vacuous on a CPU-only box and
+    meaningful on GPU — which is the honest shape of this bug."""
+    seen = []
+    real = torch.Tensor.normal_
+
+    def spy(self, *a, **kw):
+        seen.append(self.device.type)
+        return real(self, *a, **kw)
+
+    monkeypatch.setattr(torch.Tensor, "normal_", spy)
+    randomise_last_block(ordinal_model().to(device), seed=0)
+    assert seen, "no noise was generated at all"
+    assert set(seen) == {"cpu"}, f"noise generated on {set(seen)}"
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_cam_runs_end_to_end_on_every_available_device(device):
+    m = ordinal_model().to(device)
+    with GradCAM(m) as g:
+        r = g(torch.randn(2, 3, 224, 224, device=device))
+    assert r.cam.shape == (2, 224, 224)
+    assert np.isfinite(r.cam).all()
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_the_full_randomisation_gate_path_on_every_device(device):
+    """Exactly what cell 2 does: real CAM, randomised CAM, correlation between them."""
+    m = ordinal_model().to(device)
+    x = torch.randn(2, 3, 224, 224, device=device)
+    with GradCAM(m) as g:
+        real = g(x).cam
+    with GradCAM(randomise_last_block(m, seed=20260825).to(device)) as g:
+        rand = g(x).cam
+    c = cam_correlation(real[0], rand[0])
+    assert np.isfinite(c)
+
+
+def test_a_zero_dimensional_parameter_is_zeroed_not_crashed():
+    """Some layers carry 0-dim parameters; normal_ on them is meaningless."""
+    import torch.nn as nn
+
+    class WithScalar(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv_head = nn.Conv2d(3, 4, 3, padding=1)
+            self.conv_head.gain = nn.Parameter(torch.tensor(2.0))
+
+        def forward(self, x):
+            return self.conv_head(x).mean(dim=(1, 2, 3), keepdim=False)[:, None]
+
+    m = WithScalar()
+    clone = randomise_last_block(m, seed=0)
+    assert float(pick_target_layer(clone).gain.detach()) == 0.0
+
+
+def test_randomisation_survives_a_half_precision_parameter():
+    """`normal_` has no CPU kernel for float16, so a half checkpoint would fail here for
+    a second, unrelated device-ish reason."""
+    m = ordinal_model()
+    layer = pick_target_layer(m)
+    layer.half()
+    clone = randomise_last_block(m, seed=0)
+    w = pick_target_layer(clone).weight
+    assert w.dtype == torch.float16 and torch.isfinite(w).all()

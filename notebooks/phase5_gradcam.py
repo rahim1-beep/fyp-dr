@@ -32,6 +32,10 @@ covers ~32x32 input pixels. It **cannot localise microaneurysms**, which are sub
 this resolution. It resolves gross attention only — disc, macula, arcades, rim. That is
 the honest claim for the write-up, and it is exactly the resolution this gate needs.
 
+CELL 1 RUNS THE GRAD-CAM TESTS ON THE GPU, deliberately. They are device-parameterised,
+so the cuda cases only actually execute here — a CPU-only machine can do nothing but
+skip them. That is the countermeasure for cell 2's first failure (DECISION-048).
+
 NEEDS THE CHECKPOINT. `best.pth` is gitignored and not fetched by `src.data.fetch_run`,
 so the stage 3 notebook's OUTPUT must be attached as an input.
 
@@ -148,6 +152,12 @@ def run(cmd):
 
 
 assert run([sys.executable, "-m", "src.data.notebook_check", "--all", "--self-test"]) == 0
+# NOT a formality. tests/test_gradcam.py is device-parameterised, so running it HERE
+# exercises the cuda paths that a CPU-only dev box can only skip. Phase 5 cell 2
+# died on exactly such a path -- a CPU torch.Generator seeding a CUDA tensor --
+# after 24 CPU tests passed. This runs before cell 2 spends ten minutes.
+assert run([sys.executable, "-m", "pytest", "tests/test_gradcam.py", "-v",
+           "-k", "device or randomis"]) == 0
 assert run([sys.executable, "-m", "pytest", "tests/test_gradcam.py", "-q"]) == 0
 assert run([sys.executable, "-m", "pytest", "tests/test_no_leakage.py", "-q"]) == 0
 

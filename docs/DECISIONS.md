@@ -2544,6 +2544,69 @@ geometric fraction, and that reasoning is unchanged by the gate's outcome.
 
 ---
 
+## DECISION-048 — Tests must run in the context the artefact runs in; device parity is now tested
+
+- **Date:** 2026-08-25
+- **Status:** Accepted — bug fixed, device-parameterised tests added
+- **Deviates from proposal:** No.
+
+Phase 5 cell 2 died on the first real GPU run:
+
+```
+RuntimeError: Expected a 'cuda' device type for generator but found 'cpu'
+  src/xai/gradcam.py, randomise_last_block
+```
+
+`torch.Generator` is **device-bound**. The seeded CPU generator could not seed
+`normal_()` on a CUDA parameter, and `randomise_last_block` deep-copies a model that is
+already on the GPU. **All 24 tests in `tests/test_gradcam.py` passed on CPU**, where the
+model is on CPU and the mismatch cannot arise.
+
+### The fix, and why not the obvious one
+
+The noise is now **always generated on CPU and copied across**, even when the parameter
+is already on CPU.
+
+Seeding a CUDA generator instead would also have worked and would have been **wrong**:
+CPU and CUDA generators produce **different streams for the same seed**, so the gate's
+randomisation would not reproduce across machines. The seed is the only reason the gate
+repeats at all, so the stream is pinned to CPU and the device transfer happens after the
+numbers exist. `test_randomisation_stream_is_identical_on_every_device` pins three
+reference values so a future switch to a CUDA generator fails **on the GPU**, which is
+where the reproducibility would actually be lost.
+
+A second latent bug was fixed alongside it: `normal_` has no CPU kernel for float16, so
+the noise is generated in float32 and cast, and a half-precision checkpoint no longer
+fails here for an unrelated reason.
+
+### The pattern — this is the fourth time
+
+DECISION-022 (a command line never parsed), -024 (a config branch never exercised),
+-025 (a value never serialised), -040 (a dict key that was unique until it was not), and
+now this. **Every one has been a context the fixture did not reproduce**, and every one
+surfaced in the expensive run rather than the cheap one.
+
+**The countermeasure is not a cleverer local test.** A device-mismatch bug is *unreachable*
+on a CPU-only machine — no fixture can manufacture it. The countermeasure is to run the
+tests **in the context the artefact runs in**:
+
+1. `tests/test_gradcam.py` is now **device-parameterised** — `DEVICES = ["cpu"] + (["cuda"]
+   if available)`. Locally the cuda cases skip; on Kaggle they execute.
+2. **Cell 1 of `notebooks/phase5_gradcam.py` runs those tests on the GPU**, verbosely and
+   by name, *before* cell 2 spends ten minutes. That is what makes (1) worth anything.
+
+This generalises: **any notebook whose code path has a device, a driver, or a filesystem
+the dev box does not have must run its unit tests inside that environment as a pre-flight
+step**, not merely rely on them having passed locally. `smoke --arch` (DECISION-038) was
+the same idea for backbones; this is it for devices.
+
+Tests added: device parity for `randomise_last_block`, the pinned stream, an assertion
+that noise is generated on CPU whatever device the model is on, an end-to-end CAM per
+device, the full randomisation-gate path per device, a 0-dim parameter case, and the
+float16 case. **31 tests, up from 24.**
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and
