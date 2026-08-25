@@ -2671,6 +2671,89 @@ the test uses the real one.
 
 ---
 
+## DECISION-050 — The `outside` failure is real, but the `outside` THRESHOLD was mis-specified
+
+- **Date:** 2026-08-26
+- **Status:** Accepted for the diagnosis; **the threshold change is proposed, not applied**
+- **Deviates from proposal:** No.
+
+Phase 5 result: rim 1.217 PASS, **outside 2.342 FAIL**, rim on grades 3–4 1.087 PASS,
+randomisation 0.410 PASS, interior 0.447.
+
+Before diagnosing the mask, the prior question was whether the statistic itself is sound:
+the CAM is 7×7 upsampled to 224, so one cell spans ~32 px and mass **must** bleed across
+any mask boundary. Measured on the 20 real cached images held locally.
+
+### Is it upsampling bleed? No.
+
+| construction (through the exact CAM pipeline) | outside | interior |
+|---|---:|---:|
+| 7×7 cell value = fraction of that cell inside the retina (**the ideal null**) | **0.359** | 1.420 |
+| 7×7 interior only, edge cells zero | 0.125 | 1.440 |
+| 7×7 centre cell only | 0.112 | 1.419 |
+| **untrained EfficientNet-B0, real cached images** | **0.615** | 1.182 |
+| **the trained model (Phase 5)** | **2.342** | **0.447** |
+
+A model attending in exact proportion to how much retina each cell contains scores
+**0.359**. Bleed pushes a ratio *towards* 1.0; it cannot manufacture 2.342. **The
+measurement is real** — the trained model puts 3.8× the mass outside that an untrained one
+does, and less than half the fair share inside.
+
+### Is it the mask? No — and DECISION-047's presumption was wrong
+
+DECISION-047 said an `outside` failure means `retina_mask` is under-segmenting. Measured
+on cached images, it is not:
+
+- mean mask coverage **70.7%** (a circle inscribed in a square is 78.5%)
+- **the mask is LARGER than the non-black region in every image** (e.g. 70.1% vs 66.0%),
+  agreement 94–96%
+
+So it is slightly *generous*, not under-segmenting. That branch of the failure path is
+struck; the presumption was written without measuring.
+
+### What WAS wrong: the threshold
+
+`OUTSIDE_MAX = 0.5` was justified as "beyond the disc there is literally nothing to see,
+so mass there is unambiguous artefact". **That reasoning was wrong.** Zero-padded
+convolutions plus a 7×7 upsample put unavoidable mass at frame edges: an **untrained**
+network scores 0.615 and already fails the gate. A threshold an untrained model cannot
+pass is not measuring what it claimed to measure.
+
+**Proposed:** `OUTSIDE_MAX = 1.0` — the fair-share expectation — with the nulls above
+recorded as the calibration. **Not applied unilaterally.** Moving a gate threshold after
+seeing a failing result is exactly what this project's pre-registration discipline exists
+to prevent, so it needs explicit sign-off. What makes it defensible to propose at all:
+**2.342 fails 0.5 and 1.0 alike, so the recalibration does not change this run's verdict**
+— it only stops future runs failing for an artefact.
+
+`tests/test_gradcam.py` now pins the nulls so the calibration is reproducible rather than
+a paragraph.
+
+### Does it implicate the cached images?
+
+**No, not through this analysis.** `retina_mask` is used in two unrelated places: on
+**raw** images during cache building (circle crop), and on **cached** images here. This
+result concerns the second and says nothing about the first — and the cache reconciles
+clean against its provenance.
+
+**But there is a live hypothesis that does implicate the results**, and it is not a masking
+question: **the model may be reading the black surround.** Its extent encodes the camera's
+field of view, which is site-specific, which can correlate with disease prevalence. That is
+a textbook shortcut and external validation (Phase 6) is precisely what punishes it.
+
+`occlusion_delta(..., region="outside")` now exists and cell 3B runs it for whichever gate
+failed. **Until that number exists, the cause is undetermined** and no rebuild is
+triggered — the same discipline the rim path already has.
+
+### What is settled
+
+The **rim** result stands and is a genuine finding: 1.217 overall, **1.087 on grades 3–4**
+— lower where peripheral disease lives. DECISION-016's erosion choice is supported by
+evidence, which is what it was deferred to Phase 5 for. No rebuild is triggered by that
+path.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

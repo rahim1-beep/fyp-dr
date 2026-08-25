@@ -266,28 +266,31 @@ Follow DECISION-047. Do NOT rebuild anything yet.
 '''
 
 CELL_3B = r'''
-# -- Cell 3B -- occlusion test. ONLY IF THE RIM GATE FAILED ------------------
-# COMMIT THIS but it is a no-op unless the rim gate failed. ~2 min.
+# -- Cell 3B -- occlusion test. ONLY IF THE RIM OR OUTSIDE GATE FAILED -------
+# COMMIT THIS but it is a no-op unless one of those gates failed. ~2 min each.
 #
 # DECISION-047 step F1: does the DECISION depend on the rim, or does the CAM merely
 # light up there? Grad-CAM cannot tell you; replacing the region and re-running can.
 from src.xai.border_check import occlusion_delta
 
-if gate["gates"].get("rim", True):
-    print("rim gate passed — occlusion test not required, skipping.")
-else:
+FAILED = [k for k in ("rim", "outside") if not gate["gates"].get(k, True)]
+if not FAILED:
+    print("rim and outside both passed — occlusion test not required, skipping.")
+for REGION in FAILED:
+    print(f"--- occlusion test on {REGION.upper()} ---")
     deltas = []
     with torch.no_grad():
         for x, y, idx in loader:
             x = x.to(DEV)
             bgrs = [cv2.imdecode(np.fromfile(str(ds.cache_paths[int(i)]), np.uint8),
                                  cv2.IMREAD_COLOR) for i in idx]
-            deltas.extend(occlusion_delta(model, x, bgrs).tolist())
+            deltas.extend(occlusion_delta(model, x, bgrs, region=REGION).tolist())
 
     d = np.asarray(deltas)
-    print(f"occlusion delta on the scalar score: mean {d.mean():+.4f}  "
+    print(f"[{REGION}] occlusion delta on the scalar score: mean {d.mean():+.4f}  "
           f"median {np.median(d):+.4f}  |mean| {abs(d.mean()):.4f}")
-    (OUT / "occlusion.json").write_text(json.dumps(deltas, indent=1), encoding="utf-8")
+    (OUT / f"occlusion_{REGION}.json").write_text(json.dumps(deltas, indent=1),
+                                                  encoding="utf-8")
     print("""
 Now recompute sens@spec>=0.95 with the occluded scores and compare:
 
@@ -298,6 +301,12 @@ Now recompute sens@spec>=0.95 with the occluded scores and compare:
                       and take the SMALLEST value that brings it into line. Then F3:
                       rebuild (~9 h) + retrain arm E (~40 min) + re-run stage 2's
                       three seeds (~2 h).
+
+If REGION was OUTSIDE, the question is different and sharper: does the model read the
+BLACK SURROUND? Its extent encodes the camera's field of view, which is site-specific,
+which can correlate with disease prevalence — a shortcut external validation punishes.
+A large |dsens| there is a generalisation finding, not a masking parameter question,
+and it belongs in the limitations either way (DECISION-050).
 
 NOT an option either way: full 0.9r masking. DECISION-016 rejected it for costing 19%
 of retinal area including the periphery where proliferative disease appears, and that

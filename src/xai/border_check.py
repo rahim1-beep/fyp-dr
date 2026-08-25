@@ -89,7 +89,8 @@ def image_ratios(cam: np.ndarray, bgr: np.ndarray,
     return {k: mass_ratio(cam, v) for k, v in regions.items()}
 
 
-def occlusion_delta(model, x, bgr_batch, *, rim_fraction: float = RIM_FRACTION):
+def occlusion_delta(model, x, bgr_batch, *, region: str = "rim",
+                   rim_fraction: float = RIM_FRACTION):
     """Does the DECISION actually depend on the rim? The causal half of the question.
 
     Replaces the rim annulus with the interior's mean colour — NOT with black, which is
@@ -97,18 +98,25 @@ def occlusion_delta(model, x, bgr_batch, *, rim_fraction: float = RIM_FRACTION):
     measured — then re-runs the model and returns the per-image change in the scalar
     score.
 
-    Step F1 of the DECISION-047 failure path: if the CAM lights up on the rim but the
-    score barely moves when the rim is replaced, the map is showing a correlate and there
-    is nothing to rebuild.
+    Step F1 of the DECISION-047 failure path: if the CAM lights up on a region but the
+    score barely moves when that region is replaced, the map is showing a correlate and
+    there is nothing to rebuild.
+
+    `region="outside"` asks the same question of the black surround. That one carries a
+    specific worry: the EXTENT of the surround encodes the camera's field of view, which
+    is site-specific, which can correlate with disease prevalence. A model reading it
+    would be taking a shortcut that external validation punishes (DECISION-050).
     """
     import torch
 
     from src.xai.gradcam import scalar_target
 
+    if region not in ("rim", "outside"):
+        raise ValueError(f"region={region!r}; expected 'rim' or 'outside'")
     occluded = x.clone()
     for i, bgr in enumerate(bgr_batch):
         regions = region_masks(bgr, rim_fraction)
-        rim = torch.as_tensor(regions["rim"], device=x.device)
+        rim = torch.as_tensor(regions[region], device=x.device)
         interior = torch.as_tensor(regions["interior"], device=x.device)
         if not interior.any():
             continue

@@ -363,3 +363,56 @@ def test_randomisation_survives_a_half_precision_parameter():
     clone = randomise_last_block(m, seed=0)
     w = pick_target_layer(clone).weight
     assert w.dtype == torch.float16 and torch.isfinite(w).all()
+
+
+# ------------------------------------------------- gate calibration against known nulls
+
+def _upsampled_7x7(cam7):
+    """The exact gradcam path: 7x7 -> bilinear 224 -> per-image min-max."""
+    import torch.nn.functional as F
+
+    t = torch.tensor(cam7, dtype=torch.float32)[None, None]
+    c = F.interpolate(t, size=(224, 224), mode="bilinear", align_corners=False)[0, 0]
+    lo, hi = c.min(), c.max()
+    return ((c - lo) / (hi - lo)).numpy() if hi > lo else np.zeros_like(c.numpy())
+
+
+def test_upsampling_bleed_alone_cannot_manufacture_a_high_outside_ratio():
+    """The question that had to be answered before touching the mask.
+
+    The CAM is 7x7 upsampled to 224, so one cell spans ~32px and mass MUST bleed across
+    any mask boundary. Does that alone explain a failing `outside` ratio? No: a model
+    attending in exact proportion to how much retina each cell contains — the ideal null
+    — scores about 0.36, and bleed can only push a ratio TOWARDS 1.0, never far above it.
+    The 2.342 measured in Phase 5 is not a bleed artefact (DECISION-050).
+    """
+    bgr = synthetic_fundus()
+    inside = ~region_masks(bgr)["outside"]
+    cam7 = inside.astype(float).reshape(7, 32, 7, 32).mean(axis=(1, 3))
+    ratios = image_ratios(_upsampled_7x7(cam7), bgr)
+    assert ratios["outside"] < 0.6, ratios
+    assert ratios["interior"] > 1.0, ratios
+
+
+def test_an_interior_only_cam_stays_far_below_one_outside():
+    bgr = synthetic_fundus()
+    cam7 = np.pad(np.ones((5, 5)), 1)
+    assert image_ratios(_upsampled_7x7(cam7), bgr)["outside"] < 0.35
+
+
+def test_occlusion_delta_accepts_the_outside_region():
+    """The `outside` failure needs the same causal test the `rim` failure gets."""
+    from src.xai.border_check import occlusion_delta
+
+    m = ordinal_model()
+    bgrs = [synthetic_fundus() for _ in range(2)]
+    d = occlusion_delta(m, torch.randn(2, 3, 224, 224), bgrs, region="outside")
+    assert d.shape == (2,) and np.isfinite(d).all()
+
+
+def test_occlusion_delta_refuses_an_unknown_region():
+    from src.xai.border_check import occlusion_delta
+
+    with pytest.raises(ValueError, match="expected 'rim' or 'outside'"):
+        occlusion_delta(ordinal_model(), torch.randn(1, 3, 224, 224),
+                        [synthetic_fundus()], region="interior")
