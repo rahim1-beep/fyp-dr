@@ -3117,6 +3117,173 @@ threshold on APTOS alone.
 
 ---
 
+## DECISION-055 — Analysis artefacts live in `analysis/`, fetched by a parallel path; panel.png is tracked
+
+- **Date:** 2026-08-27
+- **Status:** Accepted
+- **Deviates from proposal:** No.
+
+### Where they belong: `analysis/<name>/`, not `runs/`
+
+Phase 5 produced JSON and a figure with **no `config.yaml`, `metrics.json` or
+`train_log.csv`** — nothing was trained. Putting that in `runs/` would mean two
+structurally different kinds of thing in one directory distinguished by nothing, and every
+consumer that globs `runs/` would have to learn the difference. `runs/` means *a training
+run*; `analysis/` means *analysis over one*. The Phase 5 set lands at
+`analysis/phase5_gradcam_arm_e_efficientnet_b0/`, named for the run it analyses.
+
+### Why `fetch_run` rejected them, and why that check was right
+
+`find_run_dir` and `verify` hard-require `metrics.json`. That is not an oversight: those
+checks are what make a committed run the record of a real execution (R4/R6). **Loosening
+them to admit analysis output would weaken the guarantee for the artefacts that actually
+need it.**
+
+So `--artefacts NAME` is a second, parallel path that **reuses the download and auth
+machinery** — the part that has actually cost sessions (kaggle 2.2.4, the shadowed
+`~/.kaggle/kaggle.json`) — and applies verification appropriate to what an analysis set
+is:
+
+| | training run (`--run-id`) | artefact set (`--artefacts`) |
+|---|---|---|
+| located by | a dir named `<id>` containing `metrics.json` | a dir named `<name>` containing at least one `.json` |
+| verified by | config/metrics/train_log present, metrics parse, `run_id` matches, R4/R6 checks | every JSON parses; **sha256 per file against `MANIFEST.json`** when present |
+| installed to | `runs/<id>/` | `analysis/<name>/` |
+| copies | a fixed `WANTED` list | **everything** except checkpoints |
+
+Copying everything rather than an allowlist is deliberate: an allowlist would silently drop
+a new artefact the day it is added, and an analysis set is by nature whatever the analysis
+produced.
+
+**Requiring at least one `.json`** is what stops an empty or half-written output directory
+being installed and committed as though it were a result.
+
+`write_manifest()` is called at the end of an analysis notebook so future fetches verify
+**bytes**, not just parseability. The Phase 5 set predates it; that is reported explicitly
+(`no MANIFEST.json in this set — JSON was parsed but bytes were not verified`) rather than
+passing silently.
+
+### `panel.png` is TRACKED, at full quality
+
+The deciding question is not size, it is **reproducibility from the repo**. It is not
+reproducible: regenerating it needs `best.pth` (gitignored, Kaggle-only), the 0.8 GB
+preprocessed cache, and a GPU session. **A file that cannot be regenerated from the repo
+is a record, not a derivative**, and the project's rule is that records are committed.
+
+3.84 MB, once. Recompression was measured — optimised PNG 3.77 MB, RGB at maximum
+compression 3.29 MB — a 14% saving not worth losing "these are the exact bytes the run
+produced". It is committed **once per phase**; if Phase 5 is ever re-run, the replacement
+is deliberate and the old figure is superseded, not accumulated.
+
+The JSON beside it is what makes it evidence rather than decoration: `ratios.json` carries
+all 200 per-image measurements, so any claim made from the figure can be checked against
+numbers.
+
+---
+
+## DECISION-056 — The panel is the pre-registered draw. Verified, not asserted.
+
+- **Date:** 2026-08-27
+- **Status:** Accepted — **verified by reproduction**
+- **Deviates from proposal:** No.
+
+The panel is 20 images and the eye cannot tell a pre-registered sample from a curated one.
+So it was checked rather than claimed: the draw was **reproduced locally** from the
+committed `data/splits/val.csv` and the pre-registered seed `20260825`, and compared
+against what the run actually used.
+
+**`ratios.json`'s 200 rows are identical, in order, to the reproduced sample.** That is
+proof the run used the pre-registered draw — the order is a property of the seeded
+`rng.choice` and would not survive any reselection. The 20 panel images are a subset of
+those 200, drawn by the next call on the same generator.
+
+`analysis/.../panel_provenance.json` now records the seed, the parameters, all 200 sample
+paths and the 20 panel paths with labels, so the check does not have to be re-derived.
+
+**A gap this exposed:** `panel.png` was not self-describing. The figure did not record
+which images it showed, so its provenance was only reconstructible because the draw is
+deterministic. Analysis notebooks now write the image list beside the figure.
+
+**One honest caveat for the write-up.** The panel is drawn **uniformly from the balanced
+200**, so its own grade distribution is uneven — 6/1/3/6/4 across grades 0–4, with only
+**one grade-1 image**. It is an unbiased sample of the analysis set, not a per-grade
+exhibit, and a caption implying even coverage would be wrong.
+
+---
+
+## DECISION-057 — What would make the model NOT deployable outside its training population
+
+- **Date:** 2026-08-27
+- **Status:** Accepted — **pre-registered before Phase 6 runs**
+- **Deviates from proposal:** No.
+
+Written before the APTOS number exists, because "degraded but usable" is exactly the
+judgement that drifts when you are looking at your own result.
+
+### First, the framing the question needs
+
+**"Deployable" is not a claim this thesis can make either way.** The model already fails
+the screening floor **in-domain**: sens@spec>=0.95 is **0.7360** over three seeds against
+the 0.80 required (DECISION-032, itself provisional). No external result can make a system
+deployable when it is below the floor on its own training distribution.
+
+So the question Phase 6 actually answers is narrower and answerable: **does this model
+generalise beyond its training population, or does it work only there?** The wording below
+is fixed accordingly, and the thesis must not slide from "generalises" to "deployable".
+
+### The instrument: carried-over vs re-fitted
+
+**Calibration shift is fixable; discrimination collapse is not.** Local threshold fitting
+on site data is a normal, documented deployment step. Losing the ability to *rank* severity
+is not recoverable by any thresholding.
+
+DECISION-054 already reports both. **The generalisation line is therefore drawn on the
+RE-FITTED number**, because that is the one that isolates discrimination. The carried-over
+number stays the headline for the domain-shift finding.
+
+### DOES NOT GENERALISE — any ONE of these
+
+| # | criterion | why this line |
+|---|---|---|
+| G1 | **re-fitted APTOS QWK < 0.60** | the Phase 3 baseline — an 8-epoch ResNet18 — scored **0.6138** on EyePACS validation. Falling below that externally means the entire ablation buys nothing outside the training population. |
+| G2 | **re-fitted sens@spec>=0.95 < 0.60** | in-domain is 0.7360 against a 0.80 floor. 0.60 means missing 40% of referable disease at the specificity one would deploy at — below any plausible screening utility. |
+| G3 | **grade 3–4 recall < 0.30 while grade 0 recall > 0.90** | a specific dangerous *shape*, not uniform degradation: the model is most reliable exactly where it matters least. This is caught separately because G1 and G2 can both pass while it is true. |
+| G4 | **coverage-correlation confirms the shortcut** (|r| >= 0.2 within grades AND larger on APTOS than EyePACS) | the model would be working for a reason that does not transfer. This invalidates the deployment claim **regardless of the headline number**, which is why it is a criterion and not a footnote. |
+
+Any one of these and the thesis states plainly: **this model does not generalise beyond
+its training population, and the in-domain results should be read as an upper bound.**
+
+### DEGRADED BUT USABLE — requires ALL of these
+
+- re-fitted QWK **>= 0.65**, and
+- re-fitting recovers **>= half** the carried-over drop (i.e. the loss is mostly
+  calibration), and
+- none of G1–G4.
+
+Then the finding is: **the model generalises, with a domain-shift penalty that is
+predominantly calibration.** The write-up must state the condition attached —
+**deployment in a new population would require local recalibration on site data; the
+EyePACS thresholds are not transferable** — rather than reporting the re-fitted number as
+if it were free.
+
+### The middle band, named so it cannot be rounded up
+
+Re-fitted QWK **0.60–0.65**, or re-fitting recovering less than half the drop:
+**"generalises weakly; not usable without further work."** This band exists specifically
+because it is the one a motivated reader rounds towards the better neighbour. It is
+neither of the other two verdicts and must be reported in these words.
+
+### Fixed regardless of outcome
+
+1. The **carried-over** figure is the headline. The re-fitted figure is secondary and
+   always labelled.
+2. The APTOS result is reported as a **three-seed range**, never a point (DECISION-042).
+3. A drop is expected and is a finding, not a failure.
+4. **Balanced accuracy may rise while QWK falls** — APTOS is 49.3% grade 0 against 73.5% —
+   and that is not evidence of generalisation.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

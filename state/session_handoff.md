@@ -10,29 +10,43 @@ the last item in Phase 4.**
 
 ## FIRST ACTION NEXT SESSION
 
-**Phase 6 — APTOS external validation (DECISION-054).** Inference only, ~15 min. Nothing
-is built: `src/eval/external.py` and `notebooks/phase6_aptos.py` do not exist yet.
+**RUN Phase 6** — `notebooks/phase6_aptos.py`. Three cells, ~15 min, inference only.
+Everything is built and tested.
 
-Arm E on B0, **all three seeds**, over **all 3,662 APTOS images** pooled. Arm F excluded —
-APTOS is its training data (DECISION-007).
+**Inputs: `fyp-dr-eyepacs-224`, `fyp-dr-code`, AND BOTH the stage 3 output (seed 42) and
+the stage 2 output (seeds 43, 44)** — three checkpoints, and `best.pth` is gitignored.
 
 **THE RULE THAT MAKES IT EXTERNAL VALIDATION:** cut points and the operating-point
-threshold are **carried over from EyePACS validation unchanged**. Re-fitting either on
-APTOS is fitting on the external set and destroys the claim. A re-fitted figure is reported
-as a clearly-labelled secondary, because the gap separates calibration shift from
-discrimination shift.
+threshold are carried over from EyePACS validation **unchanged**. `evaluate_external`
+takes them as required arguments and raises if absent — there is no "fit if missing"
+branch, because that is the easiest way to inflate the number. A re-fitted figure is
+reported as a labelled secondary, since the gap separates calibration from discrimination
+shift.
 
-A drop is expected and is the finding. **Balanced accuracy may rise while QWK falls** —
-APTOS is 49.3% grade 0 against EyePACS's 73.5% — and that is not an error.
+**The verdict is pre-registered (DECISION-057); cell 3 applies it.** G1 re-fit QWK < 0.60,
+G2 re-fit sens < 0.60, G3 grade 3-4 recall < 0.30 while grade 0 > 0.90, G4 coverage
+|r| >= 0.2 and larger on APTOS. Any one means it does not generalise. "Degraded but
+usable" needs re-fit QWK >= 0.65 **and** half the drop recovered **and** none of G1-G4.
+The 0.60-0.65 band is named "generalises weakly" so it cannot be rounded up.
 
-**Phase 5 is closed (DECISION-053); no rebuild.** Rim passed at 1.217 and 1.087 on grades
-3-4, vindicating the 2.5% erosion. The outside gate failed at 2.342, but O2 showed the
-field-of-view shortcut is not supported: **O1 alone (-0.0534) would have triggered a
-needless ~2.7 h remedy.** The coverage-correlation diagnostic is retained for Phase 6
-because O2 only varied extent within EyePACS framing.
+**"Deployable" is not available to this thesis either way** — the model fails the
+screening floor in-domain (0.7360 vs 0.80). Phase 6 answers whether it generalises.
 
-Order: Phase 6 -> 384 (`notebooks/phase4_res384.py`, written and held) -> Phase 7/8.
+Expect a drop; it is the finding. **Balanced accuracy may rise while QWK falls** (APTOS is
+49.3% grade 0 against 73.5%) and that is not evidence of generalisation.
+
+After: 384 (`notebooks/phase4_res384.py`, written and held) -> Phase 7/8.
 **The EyePACS test set opens once, at the end.**
+
+### Fetching analysis artefacts
+
+`fetch_run --run-id` is for TRAINING runs and requires config/metrics/train_log.
+Analysis sets (Phase 5/6/7) have none of those:
+
+    python -m src.data.fetch_run --kernel rah098/<slug> --artefacts phase6_aptos
+
+lands in `analysis/<name>/`, verifies every JSON parses and — when the notebook wrote a
+`MANIFEST.json`, which Phase 6 does — checks sha256 per file.
 
 ---
 

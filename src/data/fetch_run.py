@@ -4,6 +4,13 @@ Six arms in Phase 4, plus re-runs, means doing this a dozen times through the Ou
 otherwise — and the Output tab is where two of this project's three lost sessions ended
 up (DECISION-021).
 
+TWO KINDS OF THING. `--run-id` fetches a TRAINING run and requires config.yaml,
+metrics.json and train_log.csv — those checks are what make a committed run the record of
+a real execution (R4/R6). `--artefacts` fetches an ANALYSIS set (Phase 5/6/7): a directory
+of JSON and figures with none of those files, because nothing was trained. The download
+and auth machinery is shared; only the locating, verification and destination differ.
+See DECISION-055.
+
 WHAT COMES BACK. `runs/<run_id>/config.yaml`, `metrics.json`, `train_log.csv`, plus
 `val_outputs.npz` and `thresholds.json` when the run has them. **Never `*.pth`** — checkpoints are gitignored, they are hundreds of MB, and they are not the
 record of a run. The three text files are (R4/R6).
@@ -309,15 +316,165 @@ def skipped_artefacts(run_dir: Path) -> list[str]:
                   if p.suffix.lower() in NEVER_COPY_SUFFIXES)
 
 
+# ----------------------------------------------------------------------------------
+# ARTEFACT SETS — analysis output, not training runs
+#
+# Phase 5 (and Phase 6, and Phase 7) produce a directory of JSON and figures with NO
+# config.yaml, metrics.json or train_log.csv, because nothing was trained. `find_run_dir`
+# and `verify` both hard-require metrics.json, correctly: those checks are what make a
+# committed run a record of a real execution (R4/R6), and loosening them to admit
+# analysis output would weaken the guarantee for the artefacts that actually need it.
+#
+# So this is a second, parallel path that reuses the download and auth machinery — which
+# is the part that has actually cost sessions (kaggle 2.2.4, the shadowed OAuth
+# credentials) — and applies verification appropriate to what an analysis set IS.
+# ----------------------------------------------------------------------------------
+
+ARTEFACT_ROOT = REPO / "analysis"
+ARTEFACT_MANIFEST = "MANIFEST.json"
+
+
+def find_artefact_dir(root: Path, name: str) -> Path:
+    """Locate an artefact directory by SHAPE, as `find_run_dir` does (DECISION-023).
+
+    A directory named `name` holding at least one `.json`. Requiring JSON rather than
+    "any file" is what stops an empty or half-written output directory being installed
+    and committed as though it were a result.
+    """
+    root = Path(root)
+    candidates = [d for d in root.rglob(name) if d.is_dir()]
+    with_json = [d for d in candidates if any(d.glob("*.json"))]
+
+    if len(with_json) == 1:
+        return with_json[0]
+    if len(with_json) > 1:
+        shallow = sorted(with_json, key=lambda d: len(d.relative_to(root).parts))
+        if len(shallow[0].relative_to(root).parts) < len(shallow[1].relative_to(root).parts):
+            return shallow[0]
+        raise FetchError(
+            f"{len(with_json)} directories named {name!r} contain JSON and none is "
+            f"shallower: {[str(d.relative_to(root)) for d in with_json]}"
+        )
+    if candidates:
+        raise FetchError(
+            f"found {name!r} but it holds no .json: "
+            f"{[sorted(q.name for q in d.iterdir()) for d in candidates]}. An artefact "
+            "set with no JSON is not a result."
+        )
+    raise FetchError(f"no directory named {name!r} in the kernel output.")
+
+
+def verify_artefacts(art_dir: Path) -> dict:
+    """Every JSON parses; checksums match when a MANIFEST is present.
+
+    A figure that cannot be traced to the numbers beside it is decoration, so the JSON
+    is the part that must be intact. `MANIFEST.json` is written by newer notebooks and
+    is verified when present; the Phase 5 set predates it, which is reported rather than
+    treated as a failure.
+    """
+    import hashlib
+
+    art_dir = Path(art_dir)
+    files = sorted(q for q in art_dir.rglob("*") if q.is_file())
+    if not files:
+        raise FetchError(f"{art_dir} is empty")
+
+    problems, parsed = [], {}
+    for q in files:
+        if q.suffix.lower() != ".json" or q.name == ARTEFACT_MANIFEST:
+            continue
+        try:
+            parsed[q.name] = json.loads(q.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            problems.append(f"{q.name} is not valid JSON: {exc}")
+
+    manifest_path = art_dir / ARTEFACT_MANIFEST
+    checked = 0
+    if manifest_path.exists():
+        try:
+            want = json.loads(manifest_path.read_text(encoding="utf-8")).get("files", {})
+        except json.JSONDecodeError as exc:
+            problems.append(f"{ARTEFACT_MANIFEST} is not valid JSON: {exc}")
+            want = {}
+        for rel, digest in want.items():
+            q = art_dir / rel
+            if not q.exists():
+                problems.append(f"{rel} is in the manifest but missing")
+                continue
+            got = hashlib.sha256(q.read_bytes()).hexdigest()
+            if got != digest:
+                problems.append(f"{rel} sha256 {got[:12]} != manifest {digest[:12]}")
+            checked += 1
+
+    if problems:
+        raise FetchError(f"{art_dir} failed verification:\n  - " + "\n  - ".join(problems))
+
+    return {"n_files": len(files), "n_json": len(parsed), "n_checksummed": checked,
+            "has_manifest": manifest_path.exists(),
+            "bytes": sum(q.stat().st_size for q in files),
+            "names": [q.relative_to(art_dir).as_posix() for q in files]}
+
+
+def install_artefacts(art_dir: Path, target: Path, force: bool = False) -> list[str]:
+    """Copy the WHOLE artefact set, minus anything in NEVER_COPY_SUFFIXES.
+
+    Unlike a training run there is no fixed WANTED list — the set is whatever the
+    analysis produced, and an allowlist here would silently drop a new artefact the day
+    it is added.
+    """
+    target = Path(target)
+    if target.exists() and any(target.iterdir()) and not force:
+        raise FetchError(
+            f"{target} already exists and holds "
+            f"{sorted(q.name for q in target.iterdir())}. Pass --force if replacing it "
+            "is what you mean."
+        )
+    target.mkdir(parents=True, exist_ok=True)
+    copied = []
+    for q in sorted(art_dir.rglob("*")):
+        if not q.is_file() or q.suffix.lower() in NEVER_COPY_SUFFIXES:
+            continue
+        dest = target / q.relative_to(art_dir)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(q, dest)
+        copied.append(q.relative_to(art_dir).as_posix())
+    return copied
+
+
+def write_manifest(art_dir: Path) -> Path:
+    """Write `MANIFEST.json` (sha256 per file) so a later fetch can verify the set.
+
+    Called at the END of an analysis notebook. Without it, "verified" means only that
+    the JSON parses.
+    """
+    import hashlib
+
+    art_dir = Path(art_dir)
+    files = {q.relative_to(art_dir).as_posix():
+             hashlib.sha256(q.read_bytes()).hexdigest()
+             for q in sorted(art_dir.rglob("*"))
+             if q.is_file() and q.name != ARTEFACT_MANIFEST}
+    out = art_dir / ARTEFACT_MANIFEST
+    out.write_text(json.dumps({"files": files}, indent=1), encoding="utf-8")
+    return out
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("--kernel", required=True,
                     help="kernel slug, '<username>/<kernel-slug>' from the notebook URL")
-    ap.add_argument("--run-id", required=True, action="append",
+    ap.add_argument("--run-id", action="append", default=[],
                     help="run id to pull; repeatable, for a multi-arm notebook")
     ap.add_argument("--runs-root", type=Path, default=REPO / "runs")
+    ap.add_argument("--artefacts", action="append", default=[], metavar="NAME",
+                    help="an ANALYSIS artefact set (Phase 5/6/7): a directory of JSON "
+                         "and figures with no config.yaml or metrics.json, because "
+                         "nothing was trained. Installed under --analysis-root. "
+                         "Repeatable, and combinable with --run-id.")
+    ap.add_argument("--analysis-root", type=Path, default=ARTEFACT_ROOT,
+                    help="where artefact sets land (default: analysis/)")
     ap.add_argument("--from-dir", type=Path,
                     help="skip the download and read an already-downloaded output "
                          "directory; for re-verifying, and for testing this module")
@@ -333,6 +490,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
+    if not args.run_id and not args.artefacts:
+        build_parser().error("give at least one --run-id or --artefacts")
 
     tmp = None
     try:
@@ -373,6 +532,30 @@ def main() -> int:
                 print(f"  FAILED: {exc}")
                 failures.append(run_id)
 
+        for name in args.artefacts:
+            print(f"\n--- {name} (artefact set) ---")
+            try:
+                art_dir = find_artefact_dir(root, name)
+                print(f"  found   : {art_dir}")
+                summary = verify_artefacts(art_dir)
+                print(f"  verified: {summary['n_files']} file(s), "
+                      f"{summary['n_json']} JSON, "
+                      f"{summary['bytes'] / 1024:.0f} KB")
+                if summary["has_manifest"]:
+                    print(f"  checksums: {summary['n_checksummed']} file(s) match "
+                          f"{ARTEFACT_MANIFEST}")
+                else:
+                    print(f"  checksums: no {ARTEFACT_MANIFEST} in this set — JSON was "
+                          "parsed but bytes were not verified")
+                target = Path(args.analysis_root) / name
+                copied = install_artefacts(art_dir, target, force=args.force)
+                print(f"  copied  : {len(copied)} file(s) -> {target}")
+                for c in copied:
+                    print(f"              {c}")
+            except FetchError as exc:
+                print(f"  FAILED: {exc}")
+                failures.append(name)
+
         if args.keep_download and tmp is not None:
             shutil.copytree(root, args.keep_download, dirs_exist_ok=True)
             print(f"\nraw download kept at {args.keep_download}")
@@ -384,9 +567,13 @@ def main() -> int:
     if failures:
         print(f"FETCH FAILED for {failures}. Nothing partial was written.")
         return 1
-    print(f"FETCH OK - {len(args.run_id)} run(s) installed under {args.runs_root}")
-    print("Commit them: runs/<id>/{config.yaml,metrics.json,train_log.csv} are tracked, "
-          "*.pth is not.")
+    if args.run_id:
+        print(f"FETCH OK - {len(args.run_id)} run(s) installed under {args.runs_root}")
+        print("Commit them: runs/<id>/{config.yaml,metrics.json,train_log.csv} are "
+              "tracked, *.pth is not.")
+    if args.artefacts:
+        print(f"FETCH OK - {len(args.artefacts)} artefact set(s) installed under "
+              f"{args.analysis_root}")
     return 0
 
 

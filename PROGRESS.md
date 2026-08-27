@@ -1,12 +1,12 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **Phase 6 - APTOS external validation** (DECISION-054). Inference
-> only, ~15 min, three seeds over all 3,662 APTOS images. Nothing is built yet:
-> `src/eval/external.py` and `notebooks/phase6_aptos.py` do not exist.
+> **NEXT ACTION:** **RUN Phase 6** — `notebooks/phase6_aptos.py`, three cells, ~15 min,
+> inference only. Built and tested (20 tests in `tests/test_external.py`).
+> Needs BOTH the stage 3 and stage 2 outputs attached for the three checkpoints.
 >
-> **Phase 5 is DONE (DECISION-053).** Rim gate passed (1.217, and 1.087 on grades 3-4);
-> the outside gate failed at 2.342 but O2 showed the field-of-view shortcut is NOT
-> supported - O1 alone would have said otherwise. **No rebuild, no remedy.**
+> The verdict is pre-registered (DECISION-057) and cell 3 APPLIES it. "Deployable" is
+> not a claim available either way — the model fails the screening floor **in-domain**
+> at 0.7360 vs 0.80. Phase 6 answers whether it **generalises**.
 >
 > Order: Phase 6 -> 384 -> Phase 7/8. **Test set opens once, at the end.**
 
@@ -334,7 +334,14 @@ order A→B→C→D→E→F by increasing implementation risk.
       failure was diagnosed to the grey fill being out of distribution, not a
       field-of-view shortcut. Thesis conclusion drafted in DECISIONS.md.
       **No rebuild triggered.**
-- [ ] **← NEXT: Phase 6** - build `src/eval/external.py` + `notebooks/phase6_aptos.py`
+- [x] Phase 5 artefacts committed to `analysis/phase5_gradcam_arm_e_efficientnet_b0/`;
+      `panel.png` TRACKED because it cannot be regenerated from the repo (DECISION-055)
+- [x] `fetch_run --artefacts` — a parallel path for analysis sets, reusing the download
+      and auth machinery without weakening the training-run checks (DECISION-055)
+- [x] Panel provenance VERIFIED by reproducing the seeded draw (DECISION-056)
+- [x] Phase 6 BUILT — `src/eval/external.py`, `tests/test_external.py` (20 pass),
+      `notebooks/phase6_aptos.py`
+- [ ] **← NEXT: RUN Phase 6** and apply the DECISION-057 verdict
       `tests/test_gradcam.py`, `notebooks/phase5_gradcam.py`. Gate in DECISION-046.
 - [ ] Phase 6 APTOS external validation (inference only)
 - [ ] 384 ablation — run `notebooks/phase4_res384.py`, two sessions, ~11 h

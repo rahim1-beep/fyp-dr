@@ -1,0 +1,9 @@
+{
+ "base_sens_full_split": 0.7463556851311953,
+ "base_sens_subset": 0.7463556851311953,
+ "occluded_sens": 0.6929057337220602,
+ "dsens": -0.05344995140913511,
+ "threshold": 0.9487703442573547,
+ "n_analysed": 5267,
+ "n_border_undefined": 1
+}

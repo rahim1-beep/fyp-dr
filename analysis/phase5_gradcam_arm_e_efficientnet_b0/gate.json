@@ -1,0 +1,22 @@
+{
+  "n_images": 200,
+  "n_border_undefined": 0,
+  "rim_median": 1.2173039884844463,
+  "outside_median": 2.3417055785605587,
+  "interior_median": 0.44665856062631015,
+  "rim_median_severe": 1.0871892572932833,
+  "n_severe": 80,
+  "thresholds": {
+    "rim_max": 1.5,
+    "outside_max": 1.0,
+    "randomisation_max": 0.5
+  },
+  "randomisation_median_abs_corr": 0.4098389854063098,
+  "gates": {
+    "rim": true,
+    "outside": false,
+    "rim_severe": true,
+    "randomisation": true
+  },
+  "passed": false
+}

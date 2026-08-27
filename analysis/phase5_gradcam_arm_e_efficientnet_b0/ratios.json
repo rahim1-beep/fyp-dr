@@ -1,0 +1,1602 @@
+[
+ {
+  "outside": 2.470415933775377,
+  "rim": 1.4104662530368965,
+  "interior": 0.5448160596534066,
+  "label": 0,
+  "image_path": "data/data/29325_right.jpeg",
+  "score": 0.28458184003829956
+ },
+ {
+  "outside": 2.814250599918134,
+  "rim": 1.3163615366512627,
+  "interior": 0.4224488897711941,
+  "label": 0,
+  "image_path": "data/data/19130_left.jpeg",
+  "score": 0.293168842792511
+ },
+ {
+  "outside": 2.5873636543358725,
+  "rim": 1.393035570390747,
+  "interior": 0.5189417271593619,
+  "label": 0,
+  "image_path": "data/data/22981_right.jpeg",
+  "score": 0.20249934494495392
+ },
+ {
+  "outside": 3.212952365634326,
+  "rim": 1.361266660525754,
+  "interior": 0.3589121860487451,
+  "label": 0,
+  "image_path": "data/data/21698_right.jpeg",
+  "score": 0.29368430376052856
+ },
+ {
+  "outside": 2.8180350715880014,
+  "rim": 1.3885767877846154,
+  "interior": 0.45594383948788325,
+  "label": 0,
+  "image_path": "data/data/33570_left.jpeg",
+  "score": 0.12152321636676788
+ },
+ {
+  "outside": 2.4912344748308777,
+  "rim": 1.2609178684215092,
+  "interior": 0.3000509061883178,
+  "label": 0,
+  "image_path": "data/data/19945_left.jpeg",
+  "score": 0.6126126646995544
+ },
+ {
+  "outside": 2.366807031864433,
+  "rim": 1.3748944212493586,
+  "interior": 0.43219111979349567,
+  "label": 0,
+  "image_path": "data/data/17449_left.jpeg",
+  "score": 0.1712535172700882
+ },
+ {
+  "outside": 3.0423682179312426,
+  "rim": 1.444889071992153,
+  "interior": 0.3734072422897513,
+  "label": 0,
+  "image_path": "data/data/28095_left.jpeg",
+  "score": 0.09397323429584503
+ },
+ {
+  "outside": 2.596434276998818,
+  "rim": 1.2975827247481377,
+  "interior": 0.4996374070345508,
+  "label": 0,
+  "image_path": "data/data/34338_left.jpeg",
+  "score": 0.5258559584617615
+ },
+ {
+  "outside": 2.6579893536887815,
+  "rim": 1.2848033628950752,
+  "interior": 0.2860784417578209,
+  "label": 0,
+  "image_path": "data/data/4840_left.jpeg",
+  "score": 0.34248027205467224
+ },
+ {
+  "outside": 2.8041954816328762,
+  "rim": 1.4432714220180722,
+  "interior": 0.44418295447913947,
+  "label": 0,
+  "image_path": "data/data/35489_right.jpeg",
+  "score": 0.11592619121074677
+ },
+ {
+  "outside": 3.7945631143493923,
+  "rim": 1.3125438565069825,
+  "interior": 0.1860326241447813,
+  "label": 0,
+  "image_path": "data/data/17639_right.jpeg",
+  "score": 1.4719953536987305
+ },
+ {
+  "outside": 2.7121041776422907,
+  "rim": 1.4252752112544798,
+  "interior": 0.4833761910375856,
+  "label": 0,
+  "image_path": "data/data/42272_right.jpeg",
+  "score": 0.19325296580791473
+ },
+ {
+  "outside": 3.129045429414788,
+  "rim": 1.3908721496071068,
+  "interior": 0.3857748134984655,
+  "label": 0,
+  "image_path": "data/data/20359_right.jpeg",
+  "score": 0.17578481137752533
+ },
+ {
+  "outside": 2.3745572834363378,
+  "rim": 1.358527218403219,
+  "interior": 0.43336122390106563,
+  "label": 0,
+  "image_path": "data/data/6134_left.jpeg",
+  "score": 0.33714085817337036
+ },
+ {
+  "outside": 2.303231829855597,
+  "rim": 1.0154276558009905,
+  "interior": 0.26761922446356995,
+  "label": 0,
+  "image_path": "data/data/25594_right.jpeg",
+  "score": 0.14648966491222382
+ },
+ {
+  "outside": 2.68360827120515,
+  "rim": 0.9609506992462252,
+  "interior": 0.21526541996581852,
+  "label": 0,
+  "image_path": "data/data/14444_right.jpeg",
+  "score": 0.29148349165916443
+ },
+ {
+  "outside": 1.820686751580991,
+  "rim": 1.2768139062121995,
+  "interior": 0.544123128442146,
+  "label": 0,
+  "image_path": "data/data/33210_right.jpeg",
+  "score": 0.2039421945810318
+ },
+ {
+  "outside": 2.790411033751974,
+  "rim": 1.3767027515995365,
+  "interior": 0.46380455587589653,
+  "label": 0,
+  "image_path": "data/data/1480_right.jpeg",
+  "score": 0.2512141466140747
+ },
+ {
+  "outside": 2.3756040591921788,
+  "rim": 1.139747823304062,
+  "interior": 0.3309076310912597,
+  "label": 0,
+  "image_path": "data/data/13821_right.jpeg",
+  "score": 0.3256564438343048
+ },
+ {
+  "outside": 3.0296475887700733,
+  "rim": 1.4377913395320199,
+  "interior": 0.402405812678334,
+  "label": 0,
+  "image_path": "data/data/990_right.jpeg",
+  "score": 0.26475590467453003
+ },
+ {
+  "outside": 2.7466824208017284,
+  "rim": 1.4507909974164417,
+  "interior": 0.45733993786559196,
+  "label": 0,
+  "image_path": "data/data/9101_right.jpeg",
+  "score": 0.14981572329998016
+ },
+ {
+  "outside": 2.952089430114334,
+  "rim": 1.3051544167645794,
+  "interior": 0.4112106136964399,
+  "label": 0,
+  "image_path": "data/data/39150_left.jpeg",
+  "score": 0.401619017124176
+ },
+ {
+  "outside": 1.8396108130849365,
+  "rim": 1.3015554791143105,
+  "interior": 0.6136033217029321,
+  "label": 0,
+  "image_path": "data/data/43529_left.jpeg",
+  "score": 0.3117596209049225
+ },
+ {
+  "outside": 2.9095359178654623,
+  "rim": 1.3230877821809324,
+  "interior": 0.4061842275015564,
+  "label": 0,
+  "image_path": "data/data/22283_left.jpeg",
+  "score": 0.31999123096466064
+ },
+ {
+  "outside": 2.155619665860882,
+  "rim": 1.1982237397524442,
+  "interior": 0.3885469977156084,
+  "label": 0,
+  "image_path": "data/data/10977_right.jpeg",
+  "score": 0.2073165625333786
+ },
+ {
+  "outside": 2.4115974720976814,
+  "rim": 1.2232219599266227,
+  "interior": 0.5316441124615485,
+  "label": 0,
+  "image_path": "data/data/30469_left.jpeg",
+  "score": 0.20040740072727203
+ },
+ {
+  "outside": 2.797358195068672,
+  "rim": 1.4958593552718835,
+  "interior": 0.44977239772090144,
+  "label": 0,
+  "image_path": "data/data/20114_right.jpeg",
+  "score": 0.059272486716508865
+ },
+ {
+  "outside": 2.6535942489846858,
+  "rim": 1.3910927329467315,
+  "interior": 0.4901010374902777,
+  "label": 0,
+  "image_path": "data/data/26637_left.jpeg",
+  "score": 0.1928057223558426
+ },
+ {
+  "outside": 3.0715954431409545,
+  "rim": 1.2623407271736657,
+  "interior": 0.3658266196009049,
+  "label": 0,
+  "image_path": "data/data/24284_right.jpeg",
+  "score": 0.21520085632801056
+ },
+ {
+  "outside": 3.023294400997998,
+  "rim": 1.4729670986782217,
+  "interior": 0.39588653167625276,
+  "label": 0,
+  "image_path": "data/data/39969_left.jpeg",
+  "score": 0.11854933202266693
+ },
+ {
+  "outside": 2.8536054223225227,
+  "rim": 1.3964037493122965,
+  "interior": 0.3792332646930809,
+  "label": 0,
+  "image_path": "data/data/6049_left.jpeg",
+  "score": 0.2092672437429428
+ },
+ {
+  "outside": 3.0769244527769204,
+  "rim": 1.4199705222395984,
+  "interior": 0.37948710338992836,
+  "label": 0,
+  "image_path": "data/data/41947_right.jpeg",
+  "score": 0.15062330663204193
+ },
+ {
+  "outside": 2.5003942390403155,
+  "rim": 1.1923416064301517,
+  "interior": 0.26806610495823496,
+  "label": 0,
+  "image_path": "data/data/42927_right.jpeg",
+  "score": 1.5402469635009766
+ },
+ {
+  "outside": 2.7957269700765184,
+  "rim": 1.3513438577897303,
+  "interior": 0.43997182595985956,
+  "label": 0,
+  "image_path": "data/data/17350_left.jpeg",
+  "score": 0.23752568662166595
+ },
+ {
+  "outside": 2.2674754196686937,
+  "rim": 1.311729709053377,
+  "interior": 0.5797724601359731,
+  "label": 0,
+  "image_path": "data/data/35282_left.jpeg",
+  "score": 0.21737976372241974
+ },
+ {
+  "outside": 3.12033366606819,
+  "rim": 1.3812761017402966,
+  "interior": 0.37004011408411963,
+  "label": 0,
+  "image_path": "data/data/18509_right.jpeg",
+  "score": 0.22322292625904083
+ },
+ {
+  "outside": 2.836181876234629,
+  "rim": 1.4263062133245792,
+  "interior": 0.4240074099844842,
+  "label": 0,
+  "image_path": "data/data/34861_left.jpeg",
+  "score": 0.07541285455226898
+ },
+ {
+  "outside": 2.6752942072326875,
+  "rim": 1.427490613672482,
+  "interior": 0.46467120825201635,
+  "label": 0,
+  "image_path": "data/data/34171_right.jpeg",
+  "score": 0.1200728565454483
+ },
+ {
+  "outside": 1.9717346534912643,
+  "rim": 1.253860960777623,
+  "interior": 0.5348520618675956,
+  "label": 0,
+  "image_path": "data/data/6923_left.jpeg",
+  "score": 0.23863254487514496
+ },
+ {
+  "outside": 2.7530250481454566,
+  "rim": 1.2656858632128967,
+  "interior": 0.46155092861595526,
+  "label": 1,
+  "image_path": "data/data/421_left.jpeg",
+  "score": 2.059539556503296
+ },
+ {
+  "outside": 3.298390496037978,
+  "rim": 1.3641898599536715,
+  "interior": 0.34106137594467634,
+  "label": 1,
+  "image_path": "data/data/25210_left.jpeg",
+  "score": 0.2839765250682831
+ },
+ {
+  "outside": 3.0479488371388106,
+  "rim": 1.4464531158792957,
+  "interior": 0.3740117348019346,
+  "label": 1,
+  "image_path": "data/data/9632_left.jpeg",
+  "score": 0.2236490398645401
+ },
+ {
+  "outside": 3.2605382634091673,
+  "rim": 1.3905830831731714,
+  "interior": 0.3274858545509479,
+  "label": 1,
+  "image_path": "data/data/39111_left.jpeg",
+  "score": 0.1632142812013626
+ },
+ {
+  "outside": 2.039999000100963,
+  "rim": 1.38253533847007,
+  "interior": 0.6755966165113861,
+  "label": 1,
+  "image_path": "data/data/11053_right.jpeg",
+  "score": 0.1697929948568344
+ },
+ {
+  "outside": 1.8457218604520915,
+  "rim": 1.323899919508147,
+  "interior": 0.5622745284065808,
+  "label": 1,
+  "image_path": "data/data/36999_left.jpeg",
+  "score": 0.19725169241428375
+ },
+ {
+  "outside": 2.2534785503260846,
+  "rim": 1.234849994418764,
+  "interior": 0.37106945685524234,
+  "label": 1,
+  "image_path": "data/data/23852_right.jpeg",
+  "score": 0.2640475332736969
+ },
+ {
+  "outside": 2.5300445659212283,
+  "rim": 1.125240466821397,
+  "interior": 0.28388021781483974,
+  "label": 1,
+  "image_path": "data/data/6459_left.jpeg",
+  "score": 0.18231545388698578
+ },
+ {
+  "outside": 2.504993209208716,
+  "rim": 1.2073847588186088,
+  "interior": 0.3199774756754552,
+  "label": 1,
+  "image_path": "data/data/17644_left.jpeg",
+  "score": 1.5330209732055664
+ },
+ {
+  "outside": 2.0032440525193076,
+  "rim": 1.1224749919072683,
+  "interior": 0.5730991630711232,
+  "label": 1,
+  "image_path": "data/data/12798_right.jpeg",
+  "score": 0.21741975843906403
+ },
+ {
+  "outside": 3.216884567234138,
+  "rim": 1.3731785395685034,
+  "interior": 0.3273525199373768,
+  "label": 1,
+  "image_path": "data/data/8660_left.jpeg",
+  "score": 0.32404693961143494
+ },
+ {
+  "outside": 2.761520002625362,
+  "rim": 1.302226924983196,
+  "interior": 0.25726264614866134,
+  "label": 1,
+  "image_path": "data/data/13962_right.jpeg",
+  "score": 0.43700870871543884
+ },
+ {
+  "outside": 2.250365468363876,
+  "rim": 1.1247442108646084,
+  "interior": 0.34418852953864854,
+  "label": 1,
+  "image_path": "data/data/35557_right.jpeg",
+  "score": 0.4554942846298218
+ },
+ {
+  "outside": 2.2347973910694483,
+  "rim": 1.173991721086229,
+  "interior": 0.3957303477630334,
+  "label": 1,
+  "image_path": "data/data/24712_right.jpeg",
+  "score": 0.5552310347557068
+ },
+ {
+  "outside": 2.410869736954924,
+  "rim": 1.4137880622744334,
+  "interior": 0.5759867092658768,
+  "label": 1,
+  "image_path": "data/data/32418_left.jpeg",
+  "score": 0.2595205008983612
+ },
+ {
+  "outside": 3.193441456316999,
+  "rim": 1.3701947943460693,
+  "interior": 0.3476868024584626,
+  "label": 1,
+  "image_path": "data/data/32918_right.jpeg",
+  "score": 0.302072674036026
+ },
+ {
+  "outside": 2.1057638607069347,
+  "rim": 1.2141991005842157,
+  "interior": 0.4041459948555267,
+  "label": 1,
+  "image_path": "data/data/4830_left.jpeg",
+  "score": 0.23501746356487274
+ },
+ {
+  "outside": 2.950421972687956,
+  "rim": 1.3582936712990614,
+  "interior": 0.39805763991186965,
+  "label": 1,
+  "image_path": "data/data/417_left.jpeg",
+  "score": 0.19126029312610626
+ },
+ {
+  "outside": 2.265867850141119,
+  "rim": 1.2929676512557253,
+  "interior": 0.4266613055712578,
+  "label": 1,
+  "image_path": "data/data/25205_right.jpeg",
+  "score": 1.8934690952301025
+ },
+ {
+  "outside": 2.2583652682393898,
+  "rim": 1.2244611210265046,
+  "interior": 0.39696560592664576,
+  "label": 1,
+  "image_path": "data/data/43359_right.jpeg",
+  "score": 0.5161129832267761
+ },
+ {
+  "outside": 2.231553778071985,
+  "rim": 1.2093693221834971,
+  "interior": 0.40613650761508713,
+  "label": 1,
+  "image_path": "data/data/16778_right.jpeg",
+  "score": 0.190040722489357
+ },
+ {
+  "outside": 2.3557686963466167,
+  "rim": 1.1585450416787517,
+  "interior": 0.35679928380683357,
+  "label": 1,
+  "image_path": "data/data/39832_left.jpeg",
+  "score": 0.27875539660453796
+ },
+ {
+  "outside": 2.2992834104136035,
+  "rim": 1.323006082249313,
+  "interior": 0.44707853550610166,
+  "label": 1,
+  "image_path": "data/data/17564_left.jpeg",
+  "score": 0.237906351685524
+ },
+ {
+  "outside": 3.552442381912204,
+  "rim": 1.3817189662979212,
+  "interior": 0.2506832130892108,
+  "label": 1,
+  "image_path": "data/data/17461_left.jpeg",
+  "score": 0.4368317425251007
+ },
+ {
+  "outside": 2.3716406824302676,
+  "rim": 1.2615892996424252,
+  "interior": 0.5909318721154015,
+  "label": 1,
+  "image_path": "data/data/8637_left.jpeg",
+  "score": 2.2965826988220215
+ },
+ {
+  "outside": 3.7369026042063878,
+  "rim": 1.3980796420017934,
+  "interior": 0.21362422955774918,
+  "label": 1,
+  "image_path": "data/data/20115_right.jpeg",
+  "score": 0.6299368143081665
+ },
+ {
+  "outside": 2.764720606827143,
+  "rim": 1.3810309287322928,
+  "interior": 0.4458841524233747,
+  "label": 1,
+  "image_path": "data/data/39009_right.jpeg",
+  "score": 0.20685197412967682
+ },
+ {
+  "outside": 2.5448052766552087,
+  "rim": 1.1864417290739078,
+  "interior": 0.27812015086904446,
+  "label": 1,
+  "image_path": "data/data/38276_right.jpeg",
+  "score": 0.19689251482486725
+ },
+ {
+  "outside": 2.7124141503262367,
+  "rim": 1.3167579432869752,
+  "interior": 0.333967683636017,
+  "label": 1,
+  "image_path": "data/data/9601_right.jpeg",
+  "score": 0.6822481751441956
+ },
+ {
+  "outside": 2.6285055283542675,
+  "rim": 1.4413565431730155,
+  "interior": 0.5030487332661586,
+  "label": 1,
+  "image_path": "data/data/9683_right.jpeg",
+  "score": 0.20720408856868744
+ },
+ {
+  "outside": 2.0203966969160176,
+  "rim": 1.2955934489554697,
+  "interior": 0.5277262445346911,
+  "label": 1,
+  "image_path": "data/data/24237_right.jpeg",
+  "score": 0.17885150015354156
+ },
+ {
+  "outside": 2.059695906740857,
+  "rim": 1.2913072957237832,
+  "interior": 0.4621726573118069,
+  "label": 1,
+  "image_path": "data/data/43030_left.jpeg",
+  "score": 0.23127056658267975
+ },
+ {
+  "outside": 1.9981163214760735,
+  "rim": 1.1764951045327703,
+  "interior": 0.4855463139446321,
+  "label": 1,
+  "image_path": "data/data/30299_right.jpeg",
+  "score": 0.24852557480335236
+ },
+ {
+  "outside": 2.3380272092667336,
+  "rim": 1.2256464685271349,
+  "interior": 0.33730723053584044,
+  "label": 1,
+  "image_path": "data/data/12554_right.jpeg",
+  "score": 0.24193765223026276
+ },
+ {
+  "outside": 3.025087983807233,
+  "rim": 1.3990263894762562,
+  "interior": 0.4065385808368393,
+  "label": 1,
+  "image_path": "data/data/3271_right.jpeg",
+  "score": 0.20445360243320465
+ },
+ {
+  "outside": 2.50137704896337,
+  "rim": 1.1363757778052375,
+  "interior": 0.259423832443627,
+  "label": 1,
+  "image_path": "data/data/2129_right.jpeg",
+  "score": 0.2045857459306717
+ },
+ {
+  "outside": 2.8503314476198987,
+  "rim": 1.406846031629096,
+  "interior": 0.45938216950257865,
+  "label": 1,
+  "image_path": "data/data/10220_left.jpeg",
+  "score": 0.5624940991401672
+ },
+ {
+  "outside": 3.2393132404941394,
+  "rim": 1.359199051852866,
+  "interior": 0.3261450875851065,
+  "label": 1,
+  "image_path": "data/data/18618_right.jpeg",
+  "score": 0.2380683571100235
+ },
+ {
+  "outside": 3.259482927957088,
+  "rim": 1.4446127323142894,
+  "interior": 0.34355162068431183,
+  "label": 1,
+  "image_path": "data/data/25260_right.jpeg",
+  "score": 0.09981288015842438
+ },
+ {
+  "outside": 2.1264947415627486,
+  "rim": 1.0668866382708657,
+  "interior": 0.33287350677590355,
+  "label": 1,
+  "image_path": "data/data/11959_left.jpeg",
+  "score": 0.20614774525165558
+ },
+ {
+  "outside": 2.179874915263277,
+  "rim": 1.1031078748480312,
+  "interior": 0.3814336126279031,
+  "label": 2,
+  "image_path": "data/data/38882_right.jpeg",
+  "score": 0.539085865020752
+ },
+ {
+  "outside": 2.503082734720546,
+  "rim": 1.070572809862701,
+  "interior": 0.2743379676831768,
+  "label": 2,
+  "image_path": "data/data/26194_left.jpeg",
+  "score": 1.8006047010421753
+ },
+ {
+  "outside": 2.151602494373142,
+  "rim": 1.1173821030623907,
+  "interior": 0.4386799433138133,
+  "label": 2,
+  "image_path": "data/data/1107_left.jpeg",
+  "score": 2.5767123699188232
+ },
+ {
+  "outside": 1.2965322312692635,
+  "rim": 1.0721650824437858,
+  "interior": 0.8461427275450719,
+  "label": 2,
+  "image_path": "data/data/8677_left.jpeg",
+  "score": 2.8558802604675293
+ },
+ {
+  "outside": 2.5140766629939453,
+  "rim": 1.216234447031047,
+  "interior": 0.27158800595759447,
+  "label": 2,
+  "image_path": "data/data/27259_left.jpeg",
+  "score": 0.64459627866745
+ },
+ {
+  "outside": 1.809973725163836,
+  "rim": 0.9175785184654998,
+  "interior": 0.36839353684534815,
+  "label": 2,
+  "image_path": "data/data/26864_left.jpeg",
+  "score": 2.1849732398986816
+ },
+ {
+  "outside": 0.5552598796349987,
+  "rim": 0.9320287943535549,
+  "interior": 1.1274785064151587,
+  "label": 2,
+  "image_path": "data/data/16581_left.jpeg",
+  "score": 4.602705478668213
+ },
+ {
+  "outside": 1.1103303254502586,
+  "rim": 1.0787282337124464,
+  "interior": 0.9370304600156472,
+  "label": 2,
+  "image_path": "data/data/6217_left.jpeg",
+  "score": 3.4285802841186523
+ },
+ {
+  "outside": 2.0889129619620195,
+  "rim": 1.1631095643863143,
+  "interior": 0.49262028549499637,
+  "label": 2,
+  "image_path": "data/data/7876_right.jpeg",
+  "score": 1.9163614511489868
+ },
+ {
+  "outside": 2.2123692659544485,
+  "rim": 1.1620280549562847,
+  "interior": 0.4100273428670012,
+  "label": 2,
+  "image_path": "data/data/22589_right.jpeg",
+  "score": 2.285029411315918
+ },
+ {
+  "outside": 2.41839694884457,
+  "rim": 1.1027949336897915,
+  "interior": 0.29359064641469407,
+  "label": 2,
+  "image_path": "data/data/3420_right.jpeg",
+  "score": 2.0060880184173584
+ },
+ {
+  "outside": 2.1584634668203737,
+  "rim": 1.1813023478393234,
+  "interior": 0.5029784245375595,
+  "label": 2,
+  "image_path": "data/data/8740_left.jpeg",
+  "score": 2.300952672958374
+ },
+ {
+  "outside": 2.2478179999907857,
+  "rim": 1.1786402175585426,
+  "interior": 0.3949850451491972,
+  "label": 2,
+  "image_path": "data/data/21149_right.jpeg",
+  "score": 0.23727662861347198
+ },
+ {
+  "outside": 2.5857517650231987,
+  "rim": 1.2934205783340142,
+  "interior": 0.5180608969141646,
+  "label": 2,
+  "image_path": "data/data/38331_left.jpeg",
+  "score": 2.538702964782715
+ },
+ {
+  "outside": 2.6565305985303778,
+  "rim": 1.4079215009294164,
+  "interior": 0.5180382593952538,
+  "label": 2,
+  "image_path": "data/data/3192_right.jpeg",
+  "score": 0.18675823509693146
+ },
+ {
+  "outside": 2.348422737792441,
+  "rim": 1.0506891752505392,
+  "interior": 0.24935305844584404,
+  "label": 2,
+  "image_path": "data/data/3606_right.jpeg",
+  "score": 0.3911292254924774
+ },
+ {
+  "outside": 2.0617097706736223,
+  "rim": 1.0206889806649129,
+  "interior": 0.4479806335537873,
+  "label": 2,
+  "image_path": "data/data/28058_left.jpeg",
+  "score": 2.0809788703918457
+ },
+ {
+  "outside": 3.282608136376902,
+  "rim": 1.3258386831439668,
+  "interior": 0.3217768864354047,
+  "label": 2,
+  "image_path": "data/data/19870_right.jpeg",
+  "score": 2.065314769744873
+ },
+ {
+  "outside": 2.0557960834808022,
+  "rim": 1.1946876166897544,
+  "interior": 0.6221257433834029,
+  "label": 2,
+  "image_path": "data/data/2548_left.jpeg",
+  "score": 2.3502180576324463
+ },
+ {
+  "outside": 1.9360281465845084,
+  "rim": 1.371217827196919,
+  "interior": 0.6883923534998148,
+  "label": 2,
+  "image_path": "data/data/21188_right.jpeg",
+  "score": 1.6405566930770874
+ },
+ {
+  "outside": 2.444600361716762,
+  "rim": 1.1753453703565804,
+  "interior": 0.30940359500927717,
+  "label": 2,
+  "image_path": "data/data/12525_right.jpeg",
+  "score": 2.3636069297790527
+ },
+ {
+  "outside": 2.4862009535391225,
+  "rim": 0.9400149190304963,
+  "interior": 0.19585249443567196,
+  "label": 2,
+  "image_path": "data/data/3682_left.jpeg",
+  "score": 0.48319074511528015
+ },
+ {
+  "outside": 2.965970998285739,
+  "rim": 1.3585873753397764,
+  "interior": 0.40100853383112284,
+  "label": 2,
+  "image_path": "data/data/11387_right.jpeg",
+  "score": 1.6561065912246704
+ },
+ {
+  "outside": 2.1536506019103574,
+  "rim": 1.1538654110022866,
+  "interior": 0.4460976533776768,
+  "label": 2,
+  "image_path": "data/data/5848_right.jpeg",
+  "score": 2.361915111541748
+ },
+ {
+  "outside": 3.2660015249591385,
+  "rim": 1.2164925089857652,
+  "interior": 0.31484931612052114,
+  "label": 2,
+  "image_path": "data/data/16882_right.jpeg",
+  "score": 0.9089241623878479
+ },
+ {
+  "outside": 2.4486061554718597,
+  "rim": 1.1313995955037894,
+  "interior": 0.3472169025422591,
+  "label": 2,
+  "image_path": "data/data/15615_left.jpeg",
+  "score": 1.893007516860962
+ },
+ {
+  "outside": 2.4769203346992037,
+  "rim": 1.3991295061067166,
+  "interior": 0.5347368073111536,
+  "label": 2,
+  "image_path": "data/data/33007_left.jpeg",
+  "score": 0.20312412083148956
+ },
+ {
+  "outside": 2.124533467143854,
+  "rim": 1.191398624252611,
+  "interior": 0.4604361504645468,
+  "label": 2,
+  "image_path": "data/data/19614_right.jpeg",
+  "score": 2.4501953125
+ },
+ {
+  "outside": 3.133686610207952,
+  "rim": 1.3966205253953594,
+  "interior": 0.34964334164100225,
+  "label": 2,
+  "image_path": "data/data/9569_right.jpeg",
+  "score": 0.5798054933547974
+ },
+ {
+  "outside": 3.075834995140519,
+  "rim": 1.3699921786552887,
+  "interior": 0.3635612660349433,
+  "label": 2,
+  "image_path": "data/data/155_right.jpeg",
+  "score": 0.2066594511270523
+ },
+ {
+  "outside": 3.1048716268483636,
+  "rim": 1.3893752716418262,
+  "interior": 0.36882664390642317,
+  "label": 2,
+  "image_path": "data/data/42922_left.jpeg",
+  "score": 0.5114842057228088
+ },
+ {
+  "outside": 2.362331274447691,
+  "rim": 1.2581073913448024,
+  "interior": 0.42469097265167877,
+  "label": 2,
+  "image_path": "data/data/8169_right.jpeg",
+  "score": 2.069626808166504
+ },
+ {
+  "outside": 2.27323346295602,
+  "rim": 1.1284084707205289,
+  "interior": 0.37290413781382625,
+  "label": 2,
+  "image_path": "data/data/7876_left.jpeg",
+  "score": 2.528109073638916
+ },
+ {
+  "outside": 2.7445477475660867,
+  "rim": 1.431703970936367,
+  "interior": 0.45809114967128,
+  "label": 2,
+  "image_path": "data/data/41182_right.jpeg",
+  "score": 1.6071357727050781
+ },
+ {
+  "outside": 3.4727157520644614,
+  "rim": 1.4570171204819595,
+  "interior": 0.30164095442185235,
+  "label": 2,
+  "image_path": "data/data/29516_left.jpeg",
+  "score": 1.7676442861557007
+ },
+ {
+  "outside": 2.479117137961491,
+  "rim": 1.124397613583726,
+  "interior": 0.29245812787640324,
+  "label": 2,
+  "image_path": "data/data/3408_left.jpeg",
+  "score": 1.8435916900634766
+ },
+ {
+  "outside": 3.1648298404336557,
+  "rim": 1.347301442940977,
+  "interior": 0.3651911013220597,
+  "label": 2,
+  "image_path": "data/data/16043_left.jpeg",
+  "score": 2.322483777999878
+ },
+ {
+  "outside": 3.7412261151756017,
+  "rim": 1.3631556093704569,
+  "interior": 0.19233112480421155,
+  "label": 2,
+  "image_path": "data/data/17075_left.jpeg",
+  "score": 1.2216176986694336
+ },
+ {
+  "outside": 3.251237870489511,
+  "rim": 1.3487185607085437,
+  "interior": 0.3317972853035305,
+  "label": 2,
+  "image_path": "data/data/16452_right.jpeg",
+  "score": 1.0684367418289185
+ },
+ {
+  "outside": 2.7505101841210244,
+  "rim": 1.146760377725401,
+  "interior": 0.19858060341251438,
+  "label": 2,
+  "image_path": "data/data/27297_right.jpeg",
+  "score": 1.593893051147461
+ },
+ {
+  "outside": 2.041639734259097,
+  "rim": 1.030507921335999,
+  "interior": 0.3625475538067151,
+  "label": 3,
+  "image_path": "data/data/3523_left.jpeg",
+  "score": 2.3692431449890137
+ },
+ {
+  "outside": 2.327555721183697,
+  "rim": 0.9866589989737254,
+  "interior": 0.20428827031477398,
+  "label": 3,
+  "image_path": "data/data/19522_right.jpeg",
+  "score": 2.1307966709136963
+ },
+ {
+  "outside": 2.3451923811939346,
+  "rim": 1.1669976825956512,
+  "interior": 0.34362740203545433,
+  "label": 3,
+  "image_path": "data/data/20613_right.jpeg",
+  "score": 2.3004531860351562
+ },
+ {
+  "outside": 1.3539648920041703,
+  "rim": 0.9724035235893509,
+  "interior": 0.8583654993117701,
+  "label": 3,
+  "image_path": "data/data/6537_left.jpeg",
+  "score": 2.1944973468780518
+ },
+ {
+  "outside": 3.2508946830531293,
+  "rim": 1.4811841347491894,
+  "interior": 0.3601846882073958,
+  "label": 3,
+  "image_path": "data/data/3192_left.jpeg",
+  "score": 1.8929216861724854
+ },
+ {
+  "outside": 2.7335750267928383,
+  "rim": 1.3097017266244009,
+  "interior": 0.4752702805219524,
+  "label": 3,
+  "image_path": "data/data/30922_left.jpeg",
+  "score": 2.351895332336426
+ },
+ {
+  "outside": 1.3822013638785675,
+  "rim": 1.0887660039084626,
+  "interior": 0.8870981250120746,
+  "label": 3,
+  "image_path": "data/data/29097_left.jpeg",
+  "score": 3.320058584213257
+ },
+ {
+  "outside": 3.2753314800814004,
+  "rim": 1.295610928001013,
+  "interior": 0.3323270190476296,
+  "label": 3,
+  "image_path": "data/data/35368_right.jpeg",
+  "score": 2.514951229095459
+ },
+ {
+  "outside": 1.0353548498730385,
+  "rim": 1.0743705968161414,
+  "interior": 0.9745715798151233,
+  "label": 3,
+  "image_path": "data/data/2532_left.jpeg",
+  "score": 3.4826364517211914
+ },
+ {
+  "outside": 1.913654741735704,
+  "rim": 1.1766147839287506,
+  "interior": 0.7231193658501925,
+  "label": 3,
+  "image_path": "data/data/1471_right.jpeg",
+  "score": 2.9894962310791016
+ },
+ {
+  "outside": 1.9375249993229258,
+  "rim": 1.1596653201182776,
+  "interior": 0.716344433837226,
+  "label": 3,
+  "image_path": "data/data/10606_left.jpeg",
+  "score": 2.9137330055236816
+ },
+ {
+  "outside": 1.3633605812635103,
+  "rim": 1.0507269699805206,
+  "interior": 0.888908330664512,
+  "label": 3,
+  "image_path": "data/data/15954_left.jpeg",
+  "score": 3.095142126083374
+ },
+ {
+  "outside": 1.6698015664482262,
+  "rim": 1.16843678761655,
+  "interior": 0.6501204853114797,
+  "label": 3,
+  "image_path": "data/data/36130_left.jpeg",
+  "score": 3.1781067848205566
+ },
+ {
+  "outside": 1.8410477583574913,
+  "rim": 1.230403729461437,
+  "interior": 0.5560786961677411,
+  "label": 3,
+  "image_path": "data/data/26299_right.jpeg",
+  "score": 2.5836706161499023
+ },
+ {
+  "outside": 2.7009989748601075,
+  "rim": 1.2638104603635436,
+  "interior": 0.4885847342784225,
+  "label": 3,
+  "image_path": "data/data/40366_left.jpeg",
+  "score": 2.6356558799743652
+ },
+ {
+  "outside": 1.025764589623257,
+  "rim": 0.8891125891605198,
+  "interior": 1.0064709106055991,
+  "label": 3,
+  "image_path": "data/data/23369_left.jpeg",
+  "score": 3.679386615753174
+ },
+ {
+  "outside": 2.1674755035085496,
+  "rim": 1.2769743559691231,
+  "interior": 0.6317069923975114,
+  "label": 3,
+  "image_path": "data/data/23787_left.jpeg",
+  "score": 2.483898162841797
+ },
+ {
+  "outside": 2.614121882753404,
+  "rim": 1.127278837794441,
+  "interior": 0.2269411155582297,
+  "label": 3,
+  "image_path": "data/data/8424_left.jpeg",
+  "score": 2.215104579925537
+ },
+ {
+  "outside": 2.9475106929661523,
+  "rim": 1.3733796754102072,
+  "interior": 0.4157797490314068,
+  "label": 3,
+  "image_path": "data/data/32711_left.jpeg",
+  "score": 2.197005271911621
+ },
+ {
+  "outside": 0.730727991367493,
+  "rim": 1.0110225398586172,
+  "interior": 1.1279228307175133,
+  "label": 3,
+  "image_path": "data/data/41566_right.jpeg",
+  "score": 3.600935459136963
+ },
+ {
+  "outside": 1.5282188475506722,
+  "rim": 1.0969684153887505,
+  "interior": 0.6727132258822514,
+  "label": 3,
+  "image_path": "data/data/15388_right.jpeg",
+  "score": 3.249107837677002
+ },
+ {
+  "outside": 2.3382187759271824,
+  "rim": 0.8881738509171511,
+  "interior": 0.17667906275995945,
+  "label": 3,
+  "image_path": "data/data/19522_left.jpeg",
+  "score": 1.0633412599563599
+ },
+ {
+  "outside": 1.431553288122151,
+  "rim": 0.9691600952919627,
+  "interior": 0.805103915267927,
+  "label": 3,
+  "image_path": "data/data/42891_left.jpeg",
+  "score": 3.1126301288604736
+ },
+ {
+  "outside": 0.88646519258269,
+  "rim": 0.999175315873265,
+  "interior": 1.0501569438036729,
+  "label": 3,
+  "image_path": "data/data/23369_right.jpeg",
+  "score": 3.980746269226074
+ },
+ {
+  "outside": 2.1674252039892354,
+  "rim": 1.0308775326672133,
+  "interior": 0.40929867009355136,
+  "label": 3,
+  "image_path": "data/data/20613_left.jpeg",
+  "score": 2.76015043258667
+ },
+ {
+  "outside": 2.9006212116591126,
+  "rim": 1.2877892327025793,
+  "interior": 0.41330504713342936,
+  "label": 3,
+  "image_path": "data/data/28919_left.jpeg",
+  "score": 2.2249834537506104
+ },
+ {
+  "outside": 1.0465471021045967,
+  "rim": 0.9509144696600821,
+  "interior": 0.9947044262330412,
+  "label": 3,
+  "image_path": "data/data/4531_right.jpeg",
+  "score": 3.3851826190948486
+ },
+ {
+  "outside": 2.5720276618678293,
+  "rim": 1.255003608528873,
+  "interior": 0.5244256433432726,
+  "label": 3,
+  "image_path": "data/data/23787_right.jpeg",
+  "score": 2.3016581535339355
+ },
+ {
+  "outside": 1.6450067629641667,
+  "rim": 1.1199935894283939,
+  "interior": 0.6883792249715925,
+  "label": 3,
+  "image_path": "data/data/17749_right.jpeg",
+  "score": 2.8864128589630127
+ },
+ {
+  "outside": 3.678096117779131,
+  "rim": 1.3395966884213906,
+  "interior": 0.21353228477580205,
+  "label": 3,
+  "image_path": "data/data/1196_right.jpeg",
+  "score": 1.9369033575057983
+ },
+ {
+  "outside": 0.7282540703034254,
+  "rim": 1.085612510678104,
+  "interior": 1.0630327446807255,
+  "label": 3,
+  "image_path": "data/data/38198_left.jpeg",
+  "score": 3.433520793914795
+ },
+ {
+  "outside": 0.7608647797164174,
+  "rim": 1.1197512109232803,
+  "interior": 1.048641785359951,
+  "label": 3,
+  "image_path": "data/data/38198_right.jpeg",
+  "score": 3.661620855331421
+ },
+ {
+  "outside": 1.8314988234889267,
+  "rim": 1.095297967137493,
+  "interior": 0.583651726819016,
+  "label": 3,
+  "image_path": "data/data/41566_left.jpeg",
+  "score": 2.382762908935547
+ },
+ {
+  "outside": 2.0865273130537485,
+  "rim": 1.0178932430302898,
+  "interior": 0.3402668372200385,
+  "label": 3,
+  "image_path": "data/data/30349_left.jpeg",
+  "score": 0.19829006493091583
+ },
+ {
+  "outside": 1.99354483911559,
+  "rim": 1.1496024072393813,
+  "interior": 0.4907356530682486,
+  "label": 3,
+  "image_path": "data/data/35966_left.jpeg",
+  "score": 2.3362326622009277
+ },
+ {
+  "outside": 2.2981890754990637,
+  "rim": 1.2574412029886524,
+  "interior": 0.6023801888765968,
+  "label": 3,
+  "image_path": "data/data/5139_right.jpeg",
+  "score": 2.591886043548584
+ },
+ {
+  "outside": 2.676672295023254,
+  "rim": 1.2908781975855845,
+  "interior": 0.4864436826692711,
+  "label": 3,
+  "image_path": "data/data/28919_right.jpeg",
+  "score": 2.4119396209716797
+ },
+ {
+  "outside": 1.2458147143511433,
+  "rim": 1.061673745303936,
+  "interior": 0.9239404116191662,
+  "label": 3,
+  "image_path": "data/data/27224_left.jpeg",
+  "score": 3.2894492149353027
+ },
+ {
+  "outside": 3.5197912080435967,
+  "rim": 1.330019980846887,
+  "interior": 0.25169431855987195,
+  "label": 3,
+  "image_path": "data/data/34690_right.jpeg",
+  "score": 1.9020040035247803
+ },
+ {
+  "outside": 2.456696082928216,
+  "rim": 1.2443077434306593,
+  "interior": 0.5587845827777617,
+  "label": 3,
+  "image_path": "data/data/4366_left.jpeg",
+  "score": 2.8323073387145996
+ },
+ {
+  "outside": 3.041314724060094,
+  "rim": 1.365827933157504,
+  "interior": 0.40918939796029297,
+  "label": 4,
+  "image_path": "data/data/37813_left.jpeg",
+  "score": 0.26867207884788513
+ },
+ {
+  "outside": 0.7230441388646832,
+  "rim": 0.9643237652094657,
+  "interior": 1.1331287859329546,
+  "label": 4,
+  "image_path": "data/data/32846_right.jpeg",
+  "score": 4.2933149337768555
+ },
+ {
+  "outside": 0.6991359490658827,
+  "rim": 1.018936286441056,
+  "interior": 1.106685054905736,
+  "label": 4,
+  "image_path": "data/data/33493_right.jpeg",
+  "score": 4.206597805023193
+ },
+ {
+  "outside": 0.7174219845598037,
+  "rim": 1.0551292830721948,
+  "interior": 1.0684245881451793,
+  "label": 4,
+  "image_path": "data/data/22669_right.jpeg",
+  "score": 3.729255199432373
+ },
+ {
+  "outside": 1.7802325347279362,
+  "rim": 1.1052927929092449,
+  "interior": 0.6047866033799544,
+  "label": 4,
+  "image_path": "data/data/18030_right.jpeg",
+  "score": 3.4905176162719727
+ },
+ {
+  "outside": 1.424148243802904,
+  "rim": 1.0576289009319761,
+  "interior": 0.8054812547857448,
+  "label": 4,
+  "image_path": "data/data/41339_right.jpeg",
+  "score": 3.72027587890625
+ },
+ {
+  "outside": 1.950343228282727,
+  "rim": 1.2181154679831274,
+  "interior": 0.7175616921891699,
+  "label": 4,
+  "image_path": "data/data/10321_left.jpeg",
+  "score": 3.103794813156128
+ },
+ {
+  "outside": 0.5788225417992124,
+  "rim": 0.9140831296225616,
+  "interior": 1.125187397606147,
+  "label": 4,
+  "image_path": "data/data/41174_left.jpeg",
+  "score": 4.1199164390563965
+ },
+ {
+  "outside": 0.6526974021333192,
+  "rim": 0.9092493928706189,
+  "interior": 1.1759556942375653,
+  "label": 4,
+  "image_path": "data/data/43379_left.jpeg",
+  "score": 4.155840873718262
+ },
+ {
+  "outside": 0.63939512901437,
+  "rim": 0.9120712611912729,
+  "interior": 1.2172991923288303,
+  "label": 4,
+  "image_path": "data/data/32149_left.jpeg",
+  "score": 4.057284355163574
+ },
+ {
+  "outside": 0.7435682570006321,
+  "rim": 1.009829340676039,
+  "interior": 1.125451130489927,
+  "label": 4,
+  "image_path": "data/data/18567_right.jpeg",
+  "score": 4.0323638916015625
+ },
+ {
+  "outside": 0.9081067227383124,
+  "rim": 1.0649176363699513,
+  "interior": 1.0331222712552688,
+  "label": 4,
+  "image_path": "data/data/37008_left.jpeg",
+  "score": 3.640127182006836
+ },
+ {
+  "outside": 0.6977283305481732,
+  "rim": 0.9602686866857939,
+  "interior": 1.1137425975690738,
+  "label": 4,
+  "image_path": "data/data/13022_right.jpeg",
+  "score": 3.723313331604004
+ },
+ {
+  "outside": 0.4053277535466874,
+  "rim": 0.7753425875320065,
+  "interior": 1.1941887998283398,
+  "label": 4,
+  "image_path": "data/data/38325_left.jpeg",
+  "score": 4.208494186401367
+ },
+ {
+  "outside": 2.4904343360912957,
+  "rim": 1.3079529914239494,
+  "interior": 0.5449876678485951,
+  "label": 4,
+  "image_path": "data/data/6719_right.jpeg",
+  "score": 2.883791923522949
+ },
+ {
+  "outside": 0.7016548916792449,
+  "rim": 1.0049373587440775,
+  "interior": 1.1460190666673817,
+  "label": 4,
+  "image_path": "data/data/18567_left.jpeg",
+  "score": 4.167225360870361
+ },
+ {
+  "outside": 2.4037598442166006,
+  "rim": 1.2707371039864814,
+  "interior": 0.36444679618905984,
+  "label": 4,
+  "image_path": "data/data/18370_left.jpeg",
+  "score": 2.5371479988098145
+ },
+ {
+  "outside": 2.075949971049111,
+  "rim": 1.134841268024709,
+  "interior": 0.4462385857465186,
+  "label": 4,
+  "image_path": "data/data/36832_right.jpeg",
+  "score": 2.1755118370056152
+ },
+ {
+  "outside": 0.673741688069821,
+  "rim": 0.9232177950745234,
+  "interior": 1.1575645315542076,
+  "label": 4,
+  "image_path": "data/data/3993_left.jpeg",
+  "score": 4.022456645965576
+ },
+ {
+  "outside": 1.978549119425953,
+  "rim": 1.1643576349486868,
+  "interior": 0.5001142230463695,
+  "label": 4,
+  "image_path": "data/data/30303_right.jpeg",
+  "score": 2.58817720413208
+ },
+ {
+  "outside": 0.540564128871948,
+  "rim": 0.9156205894257649,
+  "interior": 1.139607512493776,
+  "label": 4,
+  "image_path": "data/data/7531_right.jpeg",
+  "score": 4.013704299926758
+ },
+ {
+  "outside": 1.97342902090447,
+  "rim": 1.0893919971114268,
+  "interior": 0.5405727831507483,
+  "label": 4,
+  "image_path": "data/data/35323_right.jpeg",
+  "score": 2.667618751525879
+ },
+ {
+  "outside": 0.6717056790694106,
+  "rim": 0.96181262710168,
+  "interior": 1.1265151730103626,
+  "label": 4,
+  "image_path": "data/data/33493_left.jpeg",
+  "score": 4.319762229919434
+ },
+ {
+  "outside": 3.088101415128627,
+  "rim": 1.363202914181902,
+  "interior": 0.36151056687478716,
+  "label": 4,
+  "image_path": "data/data/2031_right.jpeg",
+  "score": 2.2618021965026855
+ },
+ {
+  "outside": 1.1306413615002973,
+  "rim": 1.1327445299621257,
+  "interior": 0.9127726333344384,
+  "label": 4,
+  "image_path": "data/data/5032_right.jpeg",
+  "score": 3.638575553894043
+ },
+ {
+  "outside": 0.5418567267999236,
+  "rim": 0.9616193223493901,
+  "interior": 1.1296168692287967,
+  "label": 4,
+  "image_path": "data/data/40183_right.jpeg",
+  "score": 3.9955880641937256
+ },
+ {
+  "outside": 1.4121217977661942,
+  "rim": 1.0262206841935648,
+  "interior": 0.8118907898415555,
+  "label": 4,
+  "image_path": "data/data/41339_left.jpeg",
+  "score": 2.862502336502075
+ },
+ {
+  "outside": 0.576780246277744,
+  "rim": 0.916276949669059,
+  "interior": 1.192229225402035,
+  "label": 4,
+  "image_path": "data/data/40178_right.jpeg",
+  "score": 4.256696701049805
+ },
+ {
+  "outside": 1.8046967946855978,
+  "rim": 1.1172106507673283,
+  "interior": 0.6149984922347699,
+  "label": 4,
+  "image_path": "data/data/34400_right.jpeg",
+  "score": 2.905296802520752
+ },
+ {
+  "outside": 1.2065777146827776,
+  "rim": 0.6851357604037636,
+  "interior": 0.8713686759373273,
+  "label": 4,
+  "image_path": "data/data/44247_left.jpeg",
+  "score": 3.224100112915039
+ },
+ {
+  "outside": 0.7379564082674488,
+  "rim": 0.9982631124609631,
+  "interior": 1.1282520725256941,
+  "label": 4,
+  "image_path": "data/data/14084_right.jpeg",
+  "score": 3.9517416954040527
+ },
+ {
+  "outside": 1.8636388614377999,
+  "rim": 1.2420285028183637,
+  "interior": 0.6744769008558835,
+  "label": 4,
+  "image_path": "data/data/25181_left.jpeg",
+  "score": 2.5522196292877197
+ },
+ {
+  "outside": 3.3502761308850113,
+  "rim": 1.39902960508804,
+  "interior": 0.3325830974512739,
+  "label": 4,
+  "image_path": "data/data/35766_left.jpeg",
+  "score": 2.1734323501586914
+ },
+ {
+  "outside": 1.1081595829664368,
+  "rim": 1.0616966722228116,
+  "interior": 0.9370674778051002,
+  "label": 4,
+  "image_path": "data/data/4252_left.jpeg",
+  "score": 3.304684638977051
+ },
+ {
+  "outside": 0.6767421822015541,
+  "rim": 1.0301307026764988,
+  "interior": 1.123659239321356,
+  "label": 4,
+  "image_path": "data/data/6017_left.jpeg",
+  "score": 4.219549655914307
+ },
+ {
+  "outside": 2.245303106204044,
+  "rim": 1.0688249336930291,
+  "interior": 0.33450876336758634,
+  "label": 4,
+  "image_path": "data/data/2338_right.jpeg",
+  "score": 1.1999229192733765
+ },
+ {
+  "outside": 0.7602140252175551,
+  "rim": 1.0356953433605827,
+  "interior": 1.0981380536840601,
+  "label": 4,
+  "image_path": "data/data/3993_right.jpeg",
+  "score": 4.181540489196777
+ },
+ {
+  "outside": 2.2208828672306287,
+  "rim": 1.2215350730884658,
+  "interior": 0.3943898766469295,
+  "label": 4,
+  "image_path": "data/data/39772_right.jpeg",
+  "score": 2.6545863151550293
+ },
+ {
+  "outside": 1.459624768822954,
+  "rim": 1.2096103247450096,
+  "interior": 0.7449347974886666,
+  "label": 4,
+  "image_path": "data/data/12419_right.jpeg",
+  "score": 1.7046394348144531
+ },
+ {
+  "outside": 0.4322980950197301,
+  "rim": 0.7313320146632412,
+  "interior": 1.1911588945569314,
+  "label": 4,
+  "image_path": "data/data/38518_left.jpeg",
+  "score": 4.161083221435547
+ }
+]
