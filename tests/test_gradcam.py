@@ -431,3 +431,65 @@ def test_occlusion_delta_refuses_an_unknown_region():
     with pytest.raises(ValueError, match="expected 'rim' or 'outside'"):
         occlusion_delta(ordinal_model(), torch.randn(1, 3, 224, 224),
                         [synthetic_fundus()], region="interior")
+
+
+# ------------------------------------------- the no-retina policy (DECISION-052)
+
+def black_frame(size: int = 224) -> np.ndarray:
+    """The `ok:no-retina` shape: `retina_mask` finds nothing."""
+    return np.zeros((size, size, 3), np.uint8)
+
+
+def test_region_masks_raises_a_precise_type_for_a_no_retina_image():
+    """A distinct type, so a full-split loop can exclude these WITHOUT also swallowing a
+    broken mask, a corrupt decode, or a shape mismatch."""
+    from src.xai.border_check import NoRetinaError
+
+    with pytest.raises(NoRetinaError):
+        region_masks(black_frame())
+    assert issubclass(NoRetinaError, ValueError)
+
+
+def test_partition_borders_separates_usable_from_undefined():
+    from src.xai.border_check import partition_borders
+
+    usable, undefined = partition_borders(
+        [synthetic_fundus(), black_frame(), synthetic_fundus()])
+    assert usable == [0, 2]
+    assert undefined == [1]
+
+
+def test_occlusion_delta_returns_nan_for_a_no_retina_image_not_zero():
+    """THE POINT OF THE POLICY. Skipping the image would leave it untouched and return a
+    delta of exactly 0.0 — indistinguishable from 'occluding this changed nothing', which
+    is the very finding under test. NaN cannot be mistaken for evidence."""
+    from src.xai.border_check import occlusion_delta
+
+    d = occlusion_delta(ordinal_model(), torch.randn(3, 3, 224, 224),
+                        [synthetic_fundus(), black_frame(), synthetic_fundus()],
+                        region="outside")
+    assert np.isnan(d[1])
+    assert np.isfinite(d[0]) and np.isfinite(d[2])
+
+
+def test_shrink_field_of_view_refuses_a_no_retina_image():
+    """Without the check it would return an entirely black frame and the sweep would
+    silently average it in."""
+    from src.xai.border_check import NoRetinaError, shrink_field_of_view
+
+    with pytest.raises(NoRetinaError):
+        shrink_field_of_view(black_frame(), 0.03)
+
+
+def test_the_excluded_count_is_reported_not_hidden():
+    from src.xai.border_check import format_report
+
+    s = summarise(rows(1.0, 0.5), randomisation=[0.1], n_border_undefined=1)
+    assert s["n_border_undefined"] == 1
+    assert "EXCLUDED, no retina" in format_report(s)
+
+
+def test_zero_excluded_images_add_no_noise_to_the_report():
+    from src.xai.border_check import format_report
+
+    assert "EXCLUDED" not in format_report(summarise(rows(1.0, 0.5)))

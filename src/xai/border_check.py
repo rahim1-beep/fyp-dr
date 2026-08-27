@@ -69,6 +69,21 @@ RANDOMISATION_MAX = 0.5
 SEVERE_GRADES = (3, 4)
 
 
+class NoRetinaError(ValueError):
+    """`retina_mask` found no illuminated region, so border regions are undefined.
+
+    A distinct type so callers can exclude these images WITHOUT also swallowing genuine
+    bugs — a bare `except ValueError` around a full-split loop would hide a broken mask,
+    a corrupt decode, and a shape mismatch just as quietly as it handles this.
+
+    These are the four `ok:no-retina` images of DECISION-018. They keep their place in
+    every split and in every PERFORMANCE metric; it is only the BORDER statistics that do
+    not exist for them, because there is no retina to be inside or outside of. They also
+    skipped the surround mask entirely during preprocessing, so including them would
+    average a different image domain into the statistic.
+    """
+
+
 def region_masks(bgr: np.ndarray, rim_fraction: float = RIM_FRACTION) -> dict:
     """`outside` / `rim` / `interior` boolean masks for one cached image.
 
@@ -80,10 +95,35 @@ def region_masks(bgr: np.ndarray, rim_fraction: float = RIM_FRACTION) -> dict:
     """
     m = retina_mask(bgr) > 0
     if not m.any():
-        raise ValueError("retina mask is empty; the image is black or the mask is broken")
+        raise NoRetinaError(
+            "retina mask is empty, so `outside`, `rim` and `interior` are undefined for "
+            "this image. Four cache images are `ok:no-retina` (DECISION-018) and one of "
+            "them, 1986_left, is in the validation split. Catch NoRetinaError, COUNT it, "
+            "and exclude the image from border statistics — see `partition_borders`."
+        )
     dist = cv2.distanceTransform(m.astype(np.uint8), cv2.DIST_L2, 5)
     rim = m & (dist <= dist.max() * rim_fraction)
     return {"outside": ~m, "rim": rim, "interior": m & ~rim}
+
+
+def partition_borders(bgrs, rim_fraction: float = RIM_FRACTION):
+    """Split a batch into images whose border regions are defined, and those that are not.
+
+    Returns `(usable_indices, undefined_indices)` — positions within `bgrs`.
+
+    THE ONE PLACE THE NO-RETINA POLICY LIVES (DECISION-052). Every full-split loop over
+    `region_masks` uses this, so the policy cannot be implemented three different ways in
+    three notebooks.
+    """
+    usable, undefined = [], []
+    for i, bgr in enumerate(bgrs):
+        try:
+            region_masks(bgr, rim_fraction)
+        except NoRetinaError:
+            undefined.append(i)
+        else:
+            usable.append(i)
+    return usable, undefined
 
 
 def mass_ratio(cam: np.ndarray, region: np.ndarray) -> float:
@@ -127,21 +167,33 @@ def occlusion_delta(model, x, bgr_batch, *, region: str = "rim",
     if region not in ("rim", "outside"):
         raise ValueError(f"region={region!r}; expected 'rim' or 'outside'")
     occluded = x.clone()
+    undefined = []
     for i, bgr in enumerate(bgr_batch):
-        regions = region_masks(bgr, rim_fraction)
-        rim = torch.as_tensor(regions[region], device=x.device)
+        try:
+            regions = region_masks(bgr, rim_fraction)
+        except NoRetinaError:
+            # DECISION-052. NOT `continue`: leaving the image untouched would return a
+            # delta of exactly 0.0 for it, which is indistinguishable from "occluding
+            # this image changed nothing" — the very finding under test. NaN cannot be
+            # mistaken for evidence and cannot be silently averaged.
+            undefined.append(i)
+            continue
+        target = torch.as_tensor(regions[region], device=x.device)
         interior = torch.as_tensor(regions["interior"], device=x.device)
         if not interior.any():
+            undefined.append(i)
             continue
         for c in range(occluded.shape[1]):
             plane = occluded[i, c]
-            plane[rim] = plane[interior].mean()
+            plane[target] = plane[interior].mean()
 
     model.eval()
     with torch.no_grad():
         before = scalar_target(model(x)).cpu().numpy()
         after = scalar_target(model(occluded)).cpu().numpy()
-    return after - before
+    delta = after - before
+    delta[undefined] = np.nan
+    return delta
 
 
 def shrink_field_of_view(bgr: np.ndarray, extra_frac: float) -> np.ndarray:
@@ -156,6 +208,12 @@ def shrink_field_of_view(bgr: np.ndarray, extra_frac: float) -> np.ndarray:
     if not 0.0 <= extra_frac < 1.0:
         raise ValueError(f"extra_frac={extra_frac}; expected [0, 1)")
     m = retina_mask(bgr) > 0
+    if not m.any():
+        raise NoRetinaError(
+            "no retina to shrink; the field-of-view sweep is undefined for this image "
+            "(DECISION-018/052). Without this check the function would return an "
+            "entirely black frame and the sweep would silently average it in."
+        )
     if extra_frac > 0:
         dist = cv2.distanceTransform(m.astype(np.uint8), cv2.DIST_L2, 5)
         m = m & (dist > dist.max() * extra_frac)
@@ -164,8 +222,14 @@ def shrink_field_of_view(bgr: np.ndarray, extra_frac: float) -> np.ndarray:
     return out
 
 
-def summarise(rows: list[dict], randomisation: list[float] | None = None) -> dict:
-    """Medians and the pass/fail verdict for every gate. Never partially reports."""
+def summarise(rows: list[dict], randomisation: list[float] | None = None,
+              n_border_undefined: int = 0) -> dict:
+    """Medians and the pass/fail verdict for every gate. Never partially reports.
+
+    `n_border_undefined` counts images excluded because they have no detectable retina
+    (DECISION-052). They are EXCLUDED from the statistics and REPORTED, never silently
+    dropped: a reader must be able to see how many images the number does not cover.
+    """
     def med(key, keep=lambda r: True):
         vals = [r[key] for r in rows if keep(r)]
         return float(np.median(vals)) if vals else float("nan")
@@ -173,6 +237,7 @@ def summarise(rows: list[dict], randomisation: list[float] | None = None) -> dic
     severe = lambda r: int(r.get("label", -1)) in SEVERE_GRADES  # noqa: E731
     out = {
         "n_images": len(rows),
+        "n_border_undefined": int(n_border_undefined),
         "rim_median": med("rim"),
         "outside_median": med("outside"),
         "interior_median": med("interior"),
@@ -205,6 +270,11 @@ def format_report(s: dict) -> str:
     L = ["BORDER-ARTEFACT GATE — thresholds pre-registered in DECISION-046", ""]
     L.append(f"  images analysed            {s['n_images']}  "
              f"(grade 3-4: {s['n_severe']})")
+    nu = s.get("n_border_undefined", 0)
+    if nu:
+        L.append(f"  EXCLUDED, no retina        {nu}  "
+                 f"(DECISION-018/052: border regions undefined; these images keep "
+                 f"their place in every performance metric)")
     L.append("")
     L.append(f"  {'statistic':<34}{'value':>9}{'threshold':>12}{'':>8}")
     def row(name, val, thr, ok, cmp="<"):
@@ -248,6 +318,10 @@ def build_parser() -> argparse.ArgumentParser:
                     help="JSON list of per-image cam correlations against the "
                          "randomised model")
     ap.add_argument("--out", type=Path, help="write the summary as JSON")
+    ap.add_argument("--n-border-undefined", type=int, default=0,
+                    help="images excluded because they have no detectable retina "
+                         "(DECISION-018/052). Reported in the summary so a reader can "
+                         "see how many images the statistics do not cover.")
     ap.add_argument("--gate", action="store_true",
                     help="exit non-zero if any gate fails")
     return ap
@@ -258,7 +332,7 @@ def main() -> int:
     rows = json.loads(Path(args.ratios).read_text(encoding="utf-8"))
     rand = (json.loads(Path(args.randomisation).read_text(encoding="utf-8"))
             if args.randomisation else None)
-    s = summarise(rows, rand)
+    s = summarise(rows, rand, n_border_undefined=args.n_border_undefined)
     print(format_report(s))
     if args.out:
         Path(args.out).write_text(json.dumps(s, indent=2), encoding="utf-8")

@@ -191,7 +191,7 @@ from torch.utils.data import DataLoader
 
 from src.data.dataset import DRDataset
 from src.xai.gradcam import GradCAM, cam_correlation, randomise_last_block
-from src.xai.border_check import image_ratios
+from src.xai.border_check import NoRetinaError, image_ratios
 
 ds = DRDataset(SAMPLE, CACHE, train=False, mean=MEAN, std=STD, image_size=224)
 loader = DataLoader(ds, batch_size=16, shuffle=False, num_workers=2)
@@ -201,7 +201,7 @@ loader = DataLoader(ds, batch_size=16, shuffle=False, num_workers=2)
 # nothing.
 model_rand = randomise_last_block(model, seed=SAMPLE_SEED).eval().to(DEV)
 
-rows, corrs = [], []
+rows, corrs, n_border_undefined = [], [], 0
 t0 = time.time()
 with GradCAM(model) as cam_real, GradCAM(model_rand) as cam_rand:
     for bi, (x, y, idx) in enumerate(loader):
@@ -213,7 +213,14 @@ with GradCAM(model) as cam_real, GradCAM(model_rand) as cam_rand:
             bgr = cv2.imdecode(
                 np.fromfile(str(ds.cache_paths[int(idx[j])]), np.uint8),
                 cv2.IMREAD_COLOR)
-            r = image_ratios(real.cam[j], bgr)
+            try:
+                r = image_ratios(real.cam[j], bgr)
+            except NoRetinaError:
+                # DECISION-052: excluded from the statistic, counted, reported by the
+                # gate. Cell 2's 200-image sample happened never to draw one; cell 3B on
+                # all 5,268 did, which is how this surfaced.
+                n_border_undefined += 1
+                continue
             r["label"] = int(row["label"])
             r["image_path"] = str(row["image_path"])
             r["score"] = float(real.score[j])
@@ -224,6 +231,8 @@ with GradCAM(model) as cam_real, GradCAM(model_rand) as cam_rand:
 print(f"\n{len(rows)} images in {time.time() - t0:.0f}s")
 (OUT / "ratios.json").write_text(json.dumps(rows, indent=1), encoding="utf-8")
 (OUT / "randomisation.json").write_text(json.dumps(corrs, indent=1), encoding="utf-8")
+(OUT / "n_border_undefined.json").write_text(json.dumps(n_border_undefined),
+                                             encoding="utf-8")
 print("wrote ratios.json and randomisation.json")
 '''
 
@@ -236,6 +245,7 @@ GATE_CMD = [sys.executable, "-m", "src.xai.border_check",
             "--ratios", str(OUT / "ratios.json"),
             "--randomisation", str(OUT / "randomisation.json"),
             "--out", str(OUT / "gate.json"),
+            "--n-border-undefined", str(n_border_undefined),
             "--gate"]
 why = validate_argv(GATE_CMD)
 if why:
@@ -280,7 +290,8 @@ CELL_3B = r'''
 from src.data.manifest import load_split
 from src.eval.thresholds import (choose_operating_point, referable_scores,
                                  sensitivity_specificity_curve)
-from src.xai.border_check import occlusion_delta, shrink_field_of_view
+from src.xai.border_check import (occlusion_delta, partition_borders,
+                                  shrink_field_of_view)
 from src.xai.gradcam import scalar_target
 
 FAILED = [k for k in ("rim", "outside") if not gate["gates"].get(k, True)]
@@ -324,9 +335,22 @@ for REGION in FAILED:
             d = occlusion_delta(model, x, bgrs, region=REGION)
             occ.extend((scalar_target(model(x)).cpu().numpy() + d).tolist())
     occ = np.asarray(occ)
-    s_occ, _ = sens_at_spec(occ, ys, THR)
-    dsens = s_occ - base_sens
-    print(f"[O1 {REGION}] sens {base_sens:.4f} -> {s_occ:.4f}   dsens {dsens:+.4f}")
+
+    # DECISION-052: images with no detectable retina come back NaN. They are EXCLUDED and
+    # COUNTED, never silently dropped — and the exclusion is applied to BOTH ARMS. A
+    # baseline over 5,268 against an occluded arm over 5,267 is not a paired comparison,
+    # and the difference would fold the exclusion into the effect being measured.
+    keep = np.isfinite(occ)
+    n_undef = int((~keep).sum())
+    base_sub, _ = sens_at_spec(base_scores[keep], ys[keep], THR)
+    s_occ, _ = sens_at_spec(occ[keep], ys[keep], THR)
+    dsens = s_occ - base_sub
+    print(f"[O1 {REGION}] excluded {n_undef} image(s) with no detectable retina "
+          f"(DECISION-018/052); {int(keep.sum())} of {len(occ)} analysed")
+    if n_undef:
+        print(f"     full-split baseline {base_sens:.4f} -> subset baseline "
+              f"{base_sub:.4f}  (both arms use the subset)")
+    print(f"[O1 {REGION}] sens {base_sub:.4f} -> {s_occ:.4f}   dsens {dsens:+.4f}")
     if abs(dsens) < 0.01:
         print("     < 0.01  -> CORRELATE. Documented limitation, no remedy.")
     elif abs(dsens) < 0.03:
@@ -335,27 +359,38 @@ for REGION in FAILED:
     else:
         print("     >= 0.03 -> REAL DEPENDENCE (subject to O2 for the mechanism).")
     (OUT / f"o1_{REGION}.json").write_text(
-        json.dumps({"base_sens": base_sens, "occluded_sens": s_occ,
-                    "dsens": dsens, "threshold": float(THR)}, indent=1), encoding="utf-8")
+        json.dumps({"base_sens_full_split": base_sens, "base_sens_subset": base_sub,
+                    "occluded_sens": s_occ, "dsens": dsens, "threshold": float(THR),
+                    "n_analysed": int(keep.sum()), "n_border_undefined": n_undef},
+                   indent=1), encoding="utf-8")
 
 # ---- O2: the actual field-of-view test, only when `outside` failed ----
 if "outside" in FAILED:
     print("\n[O2] field-of-view sweep — varies HOW MUCH surround there is, using the")
     print("     pipeline's own erosion, so every pixel stays in distribution.")
-    means = []
+    means, n_undef_o2 = [], None
     for extra in (0.0, 0.03, 0.06, 0.09):
         sc = []
         with torch.no_grad():
             for x, y, idx in vloader:
-                bgrs = [shrink_field_of_view(
-                            cv2.imdecode(np.fromfile(str(vds.cache_paths[int(i)]),
-                                                     np.uint8), cv2.IMREAD_COLOR), extra)
-                        for i in idx]
+                raw = [cv2.imdecode(np.fromfile(str(vds.cache_paths[int(i)]), np.uint8),
+                                    cv2.IMREAD_COLOR) for i in idx]
+                # DECISION-052: same exclusion, and it must be the SAME IMAGES at every
+                # rung. A sweep whose membership changes between rungs would show a
+                # "trend" that is really a change of denominator.
+                usable, undef = partition_borders(raw)
+                bgrs = [shrink_field_of_view(raw[j], extra) for j in usable]
+                if not bgrs:
+                    continue
                 xb = torch.stack([
                     (torch.from_numpy(cv2.cvtColor(b, cv2.COLOR_BGR2RGB))
                      .permute(2, 0, 1).float() / 255 - torch.tensor(MEAN).view(3, 1, 1))
                     / torch.tensor(STD).view(3, 1, 1) for b in bgrs]).to(DEV)
                 sc.extend(scalar_target(model(xb)).cpu().numpy().tolist())
+        if n_undef_o2 is None:
+            n_undef_o2 = len(vds) - len(sc)
+            print(f"     excluded {n_undef_o2} image(s) with no detectable retina; "
+                  f"{len(sc)} analysed at every rung")
         means.append(float(np.mean(sc)))
         print(f"     +{extra:.0%} erosion -> mean predicted grade {means[-1]:.4f}")
 
@@ -374,7 +409,8 @@ if "outside" in FAILED:
         print("        out of distribution. Record as a limitation.")
     (OUT / "o2_fov_sweep.json").write_text(
         json.dumps({"extra_erosion": [0.0, 0.03, 0.06, 0.09], "mean_score": means,
-                    "total": total, "monotone": monotone}, indent=1), encoding="utf-8")
+                    "total": total, "monotone": monotone,
+                    "n_border_undefined": n_undef_o2}, indent=1), encoding="utf-8")
 
 print("""
 Either way, Phase 6 now tests this hypothesis rather than merely reporting a drop

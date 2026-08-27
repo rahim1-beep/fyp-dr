@@ -2863,10 +2863,90 @@ prediction rather than explained after the fact.
 
 ---
 
+## DECISION-052 — No-retina images are excluded from border statistics, counted, and reported
+
+- **Date:** 2026-08-26
+- **Status:** Accepted — **the user's proposed policy, adopted**
+- **Deviates from proposal:** No.
+
+Cell 3B died on the full validation split:
+
+```
+ValueError: retina mask is empty; the image is black or the mask is broken
+  src/xai/border_check.py, region_masks, from occlusion_delta
+```
+
+`1986_left` is one of the four `ok:no-retina` images of DECISION-018, and it is in the
+validation split. Cell 2's stratified 200 never drew it; cell 3B's 5,268 did.
+
+### The policy
+
+**Excluded from border statistics, counted, and reported.** Agreed, and for a reason
+stronger than "the measurement is undefined": those four images took the preprocessing
+fallback and were resized **without the square crop, without Ben Graham, and without the
+surround mask** (DECISION-018). Including them would not merely add noise — it would
+average a **different image domain** into a statistic about surround behaviour.
+
+**They keep their place in every PERFORMANCE metric.** QWK, accuracy, sensitivity,
+specificity and the reported operating point all still include them, because the model
+does produce a prediction for them and dropping a row from those would be the silent
+rebalancing DECISION-018 exists to prevent. It is *only* the border statistics that do not
+exist for them.
+
+### Two refinements the policy needs to be correct
+
+**1. NaN, not skip.** The obvious implementation — `continue` past the image — leaves it
+unoccluded, so `after - before` is exactly **0.0**. That is indistinguishable from
+"occluding this image changed nothing", which is precisely the finding under test. A
+skipped image would have quietly biased `dsens` toward the "it's only a correlate"
+conclusion. `occlusion_delta` returns **NaN**, which cannot be mistaken for evidence and
+cannot be silently averaged.
+
+**2. The exclusion applies to BOTH ARMS.** A baseline over 5,268 images compared against
+an occluded arm over 5,267 is not a paired comparison, and the difference would fold the
+exclusion into the effect. Cell 3B now recomputes the baseline on the same subset and
+prints both, so the reader can see the subsetting cost nothing. The same applies to O2:
+the field-of-view sweep uses **the same images at every rung**, because a sweep whose
+membership changes between rungs shows a "trend" that is really a change of denominator.
+
+### Where it applies
+
+`partition_borders()` is the one place the policy lives, so it cannot be implemented three
+different ways in three notebooks. Applied at every site that runs over a full split:
+
+| site | handling |
+|---|---|
+| cell 2, the gate ratios | caught, counted, passed to the gate CLI as `--n-border-undefined` |
+| cell 3B O1, occlusion | NaN, excluded from **both** arms, count printed |
+| cell 3B O2, FOV sweep | excluded identically at every rung, count printed |
+| `shrink_field_of_view` | raises rather than returning an all-black frame |
+
+`format_report` prints `EXCLUDED, no retina: N` whenever N > 0, so **the count is in the
+gate's own output**, not only in a notebook log.
+
+### The typed exception
+
+`NoRetinaError(ValueError)` rather than a bare `ValueError`, so a full-split loop can
+exclude these images **without also swallowing a broken mask, a corrupt decode, or a shape
+mismatch**. Catching `ValueError` around 5,268 images would hide real bugs at exactly the
+scale where they are hardest to notice.
+
+### The pattern, again
+
+This is the same shape as DECISION-048 and -049: **a case the small fixture never
+contained.** A 200-image stratified sample drew none of the four; the full split has one.
+Six tests now cover it, including the one that matters — that a no-retina image yields NaN
+rather than 0.0.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and
-**remain in their splits** — that is a processing note, not an exclusion.
+**remain in their splits** — that is a processing note, not an exclusion. They are
+excluded from the Phase 5 **border statistics only**, where the measurement is undefined,
+and that exclusion is counted and reported in the gate's own output (DECISION-052). They
+remain in every performance metric.
 
 The Phase 1 reconciliation found the EyePACS dataset completely clean: 35,126 CSV
 rows, 35,126 image files, zero mismatches in either direction, zero duplicates, zero
