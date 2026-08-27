@@ -3284,6 +3284,147 @@ neither of the other two verdicts and must be reported in these words.
 
 ---
 
+## DECISION-058 — A NaN passed a verdict criterion; G4 was reported as passing when it was undecided
+
+- **Date:** 2026-08-28
+- **Status:** Accepted — bugs fixed, criterion ambiguity resolved
+- **Deviates from proposal:** No.
+
+### The NaN
+
+`verdict()` printed `fraction of the drop recovered: nan` and then reported a clean
+verdict. Diagnosis:
+
+```
+drop      = eyepacs_qwk - carried_qwk = 0.7563 - 0.7902 = -0.0339      # NEGATIVE
+recovered = (refit - carried)/drop if drop > 0 else nan                 # -> nan
+usable    = refit >= 0.65 and (not isfinite(recovered) or recovered >= 0.5)
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^ passed THROUGH the NaN
+```
+
+**APTOS QWK came in ABOVE EyePACS**, so the drop was negative and `recovered` was NaN —
+and the usable branch treated "could not compute this" as "criterion satisfied".
+
+**Did it change the determination? No — and that is not a defence.** There genuinely was
+no drop, so there was nothing to recover and the verdict stands on its merits. But it was
+*reached* through a branch that would equally have passed a genuinely unknown value. The
+same code with a missing field would have produced the same clean verdict.
+
+**The fix distinguishes three states, not two:**
+
+| state | meaning | criterion |
+|---|---|---|
+| `measured` | drop > 0, recovery is a real fraction | must be >= 0.5 |
+| `not applicable — QWK did not drop` | drop <= 0, nothing to recover | **vacuously satisfied, and says so** |
+| genuinely unknown | a value is missing | **fails** — never satisfies |
+
+The printed line now reads `not applicable — QWK did not drop` instead of `nan`.
+
+### G4 was reported as `ok` when it had not been computed
+
+`verdict()` took `shortcut_eyepacs=None` and evaluated G4 to `False`, which printed as
+`ok  G4_shortcut_confirmed` — indistinguishable from a criterion that had been checked and
+passed. **The same class of error as the NaN hatch**: an uncomputed check presented as a
+passing one.
+
+G4 now has an explicit `undecided` state, and the verdict carries
+`[PROVISIONAL: G4 is UNDECIDED …]` until both sides exist.
+
+### max vs median — an ambiguity in DECISION-054, resolved
+
+DECISION-054 wrote only "|r| >= 0.2 within grades", which does not say whether the
+statistic is the maximum or the median across the five grades. The code used **max**. That
+ambiguity was mine and it is resolved here rather than silently settled now that the
+numbers exist.
+
+**Resolved to max**, on two grounds:
+
+1. **Max is the conservative choice for a safety check** — it flags more readily, which is
+   the right bias for "is the model taking a shortcut".
+2. The obvious objection — *the maximum of five noisy correlations exceeds 0.2 by chance* —
+   is answered by the criterion already being a **between-dataset comparison on the same
+   statistic**, so a selection effect present on both sides cancels. `G4_MIN_N = 100` is
+   added so a small grade cannot trigger it alone.
+
+**And on this data the objection does not apply anyway.** The maximum is on **grade 0 in
+all three seeds** — n = 1,805, the largest grade — with a consistent negative sign:
+
+| seed | g0 | g1 | g2 | g3 | g4 | max | median |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 42 | **−0.3285** | −0.2032 | −0.0713 | −0.0876 | −0.0858 | 0.3285 | 0.0876 |
+| 43 | **−0.1345** | −0.1275 | +0.0025 | −0.0603 | +0.0096 | 0.1345 | 0.0603 |
+| 44 | **−0.2451** | −0.1530 | −0.0374 | −0.0741 | −0.1169 | 0.2451 | 0.1169 |
+
+That is not the max-of-five artefact. It is a consistent effect on the largest grade,
+which is precisely why the EyePACS comparison decides it rather than the APTOS number
+alone. The direction — more retinal coverage, *lower* predicted grade — has an innocent
+reading (on normal eyes, better framing means a clearer "definitely normal") that would
+show on **both** datasets.
+
+### The gap this exposed in the tooling
+
+`notebook_check` validated every command line and **passed a cell containing a
+SyntaxError**, because the damaged line was not a subprocess invocation and nothing else
+ever parsed the cell. Phase 6 cell 4 shipped broken. `cell_syntax_problems()` now
+`ast.parse`s every cell and `main()` refuses before checking invocations, with two tests —
+one that every real cell parses, one that the checker actually detects a broken cell.
+
+---
+
+## The Phase 6 conclusion, as it goes into the thesis
+
+> **External validation on APTOS.**
+>
+> The selected model (arm E, ordinal-regression head, EfficientNet-B0, 224 px) was
+> evaluated on all 3,662 APTOS images across three training seeds. No APTOS image was seen
+> during training. **The cut points and the referral threshold were carried over from
+> EyePACS validation unchanged**; re-fitting them on APTOS would constitute fitting on the
+> external set and is reported separately and explicitly below.
+>
+> **Headline, carried-over decision rules.** Quadratic weighted kappa was **0.7902**
+> (seeds: 0.7810 / 0.7920 / 0.7976) against **0.7563** on held-out EyePACS validation.
+> Referable sensitivity was **0.990** (0.9926 / 0.9892 / 0.9886) at specificity **0.83**,
+> and overall accuracy **0.58**.
+>
+> **These figures require careful reading, and two of them are not what they appear.**
+>
+> *First, the apparently improved kappa is not evidence that the model performs better
+> externally.* Quadratic weighted kappa is chance-corrected against the marginal label
+> distribution, and the two datasets differ substantially in that distribution — 49.3% of
+> APTOS images are grade 0 against 73.7% of the EyePACS validation split. A more even
+> distribution admits a higher kappa for the same underlying discriminative ability.
+> **Kappa is therefore not directly comparable across the two datasets**, and no claim of
+> improvement is made from it.
+>
+> *Second, the referable sensitivity of 0.990 is over-referral, not superior detection.*
+> The referral threshold was fixed on EyePACS to achieve 95% specificity. Under domain
+> shift the score distribution moves, so on APTOS that same threshold sits far lower
+> within the distribution and the model refers almost every image. Sensitivity rises to
+> 0.99 precisely because specificity falls to 0.83 and accuracy falls to 0.58 — barely
+> above the 49.3% majority-class rate. **This is a mis-set operating point, and it is the
+> clearest single measurement of the calibration shift.**
+>
+> **Secondary, with cut points re-fitted on APTOS.** Kappa **0.8802** and sensitivity at
+> 95% specificity **0.7707**. The gap between the carried-over and re-fitted figures
+> isolates the nature of the domain shift: **discrimination transfers, calibration does
+> not.** The model's ability to rank severity is preserved on unseen data from a different
+> acquisition setting, while the decision thresholds derived on EyePACS are not
+> transferable to it.
+>
+> **Verdict against pre-registered criteria.** Four criteria for failure of
+> generalisation were fixed before the evaluation was run (re-fitted kappa below 0.60;
+> re-fitted sensitivity below 0.60; collapse of grades 3–4 while grade 0 remained intact;
+> and confirmation of a field-of-view shortcut). None was met. The model **generalises,
+> with a domain-shift penalty that is predominantly calibration** — subject to the stated
+> condition that **deployment in a new population would require local recalibration on
+> site data, as the EyePACS thresholds are demonstrably not transferable.**
+>
+> **This is a generalisation result, not a deployment claim.** The system does not meet
+> the 80% sensitivity at 95% specificity screening reference in-domain (0.7360 across
+> three seeds), and external validation does not alter that.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

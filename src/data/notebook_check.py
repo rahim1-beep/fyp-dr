@@ -214,6 +214,31 @@ def collect_invocations(explicit: list[str] | None = None) -> list[Invocation]:
     return out
 
 
+def cell_syntax_problems(explicit: list[str] | None = None) -> list[str]:
+    """Every cell must be valid Python. Returns one message per broken cell.
+
+    A cell is pasted into Kaggle and executed as-is, so a SyntaxError in one is a failed
+    session. This was found the hard way: Phase 6 cell 4 shipped broken -- escaped
+    newlines collapsed inside a `print()` -- and this file passed it, because the damaged
+    line was not a subprocess invocation and nothing else ever parsed the cell.
+    """
+    import ast
+
+    problems = []
+    for name in notebook_names(explicit):
+        mod, err = import_notebook(name)
+        if err:
+            continue
+        for i, cell in enumerate(getattr(mod, "CELLS", []) or [], start=1):
+            try:
+                ast.parse(cell)
+            except SyntaxError as exc:
+                problems.append(
+                    f"{name} cell {i}: SyntaxError line {exc.lineno}: "
+                    f"{(exc.text or '').strip()!r} ({exc.msg})"
+                )
+    return problems
+
 def check(inv: Invocation) -> str | None:
     """None if the invocation is accepted; otherwise the reason it is not."""
     module = inv.module
@@ -496,6 +521,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
+
+    syntax = cell_syntax_problems(getattr(args, "notebook", None) or None)
+    if syntax:
+        print("CELL SYNTAX ERRORS - these cells are not valid Python:")
+        for s in syntax:
+            print(f"  {s}")
+        print("\nA cell is pasted into Kaggle and run as-is, so this is a failed "
+              "session. Fix before anything else; the invocation results below are "
+              "meaningless for a cell that does not parse.")
+        return 1
     if not args.all and not args.notebook:
         args.all = True
 

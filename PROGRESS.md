@@ -1,14 +1,14 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **RUN Phase 6** — `notebooks/phase6_aptos.py`, three cells, ~15 min,
-> inference only. Built and tested (20 tests in `tests/test_external.py`).
-> Needs BOTH the stage 3 and stage 2 outputs attached for the three checkpoints.
+> **NEXT ACTION:** **Phase 6 cell 4** (~3 min) — the EyePACS side of G4, the only piece
+> of Phase 6 still outstanding. The verdict is PROVISIONAL until it runs.
 >
-> The verdict is pre-registered (DECISION-057) and cell 3 APPLIES it. "Deployable" is
-> not a claim available either way — the model fails the screening floor **in-domain**
-> at 0.7360 vs 0.80. Phase 6 answers whether it **generalises**.
+> Phase 6 headline: carried-over QWK **0.7902** vs EyePACS 0.7563, re-fitted **0.8802**.
+> **Discrimination transfers; calibration does not.** Ref sens 0.99 is OVER-REFERRAL from
+> a mis-set threshold (spec 0.83, acc 0.58), not better detection. QWK is **not
+> comparable across the two datasets** — different marginals (DECISION-058).
 >
-> Order: Phase 6 -> 384 -> Phase 7/8. **Test set opens once, at the end.**
+> Order: G4 -> 384 -> Phase 7/8. **Test set opens once, at the end.**
 
 **Current phase:** Phase 4 — Ablation arms A–F. **Phases 1–3 complete.**
 **Last updated:** 2026-08-20
@@ -341,7 +341,11 @@ order A→B→C→D→E→F by increasing implementation risk.
 - [x] Panel provenance VERIFIED by reproducing the seeded draw (DECISION-056)
 - [x] Phase 6 BUILT — `src/eval/external.py`, `tests/test_external.py` (20 pass),
       `notebooks/phase6_aptos.py`
-- [ ] **← NEXT: RUN Phase 6** and apply the DECISION-057 verdict
+- [x] **Phase 6 RUN** — carried-over QWK 0.7902 (3 seeds), re-fitted 0.8802,
+      G1-G3 all pass. Thesis conclusion drafted (DECISION-058).
+- [x] Fixed: a NaN passed a verdict criterion; G4 reported `ok` while undecided;
+      `notebook_check` passed a cell containing a SyntaxError (DECISION-058)
+- [ ] **← NEXT: Phase 6 cell 4** — the EyePACS side of G4
       `tests/test_gradcam.py`, `notebooks/phase5_gradcam.py`. Gate in DECISION-046.
 - [ ] Phase 6 APTOS external validation (inference only)
 - [ ] 384 ablation — run `notebooks/phase4_res384.py`, two sessions, ~11 h

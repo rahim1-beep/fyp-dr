@@ -384,3 +384,27 @@ def test_validate_argv_catches_a_malformed_dynamic_command():
 
     empty_loop = ["python", "-m", "src.eval.predict", "--cache-root", "/cache"]
     assert validate_argv(empty_loop) is not None      # the loop produced no --run-dir
+
+
+def test_every_notebook_cell_is_valid_python():
+    """Phase 6 cell 4 shipped with a SyntaxError and notebook_check PASSED it, because
+    the damaged line was not a subprocess invocation and nothing else parsed the cell.
+    A cell is pasted into Kaggle and run as-is, so that is a failed session."""
+    from src.data.notebook_check import cell_syntax_problems
+
+    problems = cell_syntax_problems()
+    assert not problems, "cells that are not valid Python:\n  " + "\n  ".join(problems)
+
+
+def test_the_cell_syntax_check_actually_detects_a_broken_cell(tmp_path, monkeypatch):
+    """A checker that cannot fail is not a check."""
+    import src.data.notebook_check as nc
+
+    class FakeModule:
+        CELLS = ['print("ok")', 'print("unterminated']
+
+    monkeypatch.setattr(nc, "notebook_names", lambda explicit=None: ["fake"])
+    monkeypatch.setattr(nc, "import_notebook", lambda name: (FakeModule(), None))
+    problems = nc.cell_syntax_problems()
+    assert len(problems) == 1
+    assert "cell 2" in problems[0] and "SyntaxError" in problems[0]

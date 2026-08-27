@@ -1,0 +1,10 @@
+{
+ "files": {
+  "aptos_scores.npz": "506333f195008fd8055966f16aa102a094ec2fff27c9f9a16e30457393f6dfcd",
+  "carried_over.json": "07c9d96a78c1cd552f6d4c2265d10feef72e2e23508244164f14de66d55864a0",
+  "carried_over_rules.json": "27a4195454f60f421a6da5b246a5d87046ebbac0c7a19d346248a4116db078ee",
+  "coverage_correlation.json": "43d28f6a078e3142cb00c0847a8e7bb1f415b446c7320367e9d8c026711651d9",
+  "refit_secondary.json": "09ea8a56609e9820045b17ece336b2e33e9eceec7670e414beb8816ee018a64a",
+  "verdict.json": "2bed34d13f121a5359e185b73dcb039eb2571f39cac6e12233bf3cb9f11bb678"
+ }
+}

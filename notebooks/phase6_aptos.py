@@ -1,6 +1,6 @@
-"""Phase 6 — external validation on APTOS. Three cells, ~15 min. Inference only.
+"""Phase 6 — external validation on APTOS. Four cells, ~18 min. Inference only.
 
-    python -m notebooks.phase6_aptos 1     # or 2, 3
+    python -m notebooks.phase6_aptos 1     # or 2, 3, 4
 
 Arm E on EfficientNet-B0, **all three seeds**, over **all 3,662 APTOS images** pooled
 (DECISION-004: the author-provided split is ignored). Arm F is excluded — APTOS is its
@@ -55,7 +55,11 @@ SESSION SETTINGS
 
 HOW TO RUN
     Cell 1     by hand (~3 min)
-    Cells 2-3  by COMMIT
+    Cells 2-4  by COMMIT
+
+CELL 4 COMPLETES G4. The shortcut criterion is a comparison BETWEEN datasets, so the
+APTOS half alone decides nothing; until cell 4 runs, `verdict()` reports G4 as UNDECIDED
+and marks the verdict PROVISIONAL.
 """
 
 import sys
@@ -339,8 +343,93 @@ Commit this notebook, then locally:
 """)
 '''
 
-CELLS = [CELL_1, CELL_2, CELL_3]
+
+CELL_4 = r'''
+# -- Cell 4 -- G4's EyePACS side, which completes the shortcut criterion ------
+# COMMIT THIS. ~3 min.
+#
+# G4 is a comparison BETWEEN datasets: |r| >= 0.2 on APTOS AND larger than on EyePACS.
+# The APTOS half alone decides nothing — a coverage-score correlation present equally on
+# both datasets is a confound (coverage tracking image quality tracking severity), not a
+# shortcut. Until this cell runs, `verdict()` reports G4 as UNDECIDED rather than as
+# passing, because an uncomputed criterion reported as "ok" is the same class of error as
+# the NaN recovery hatch (DECISION-058).
+from src.data.manifest import load_split
+from src.eval.external import coverage_correlation
+from src.xai.border_check import NoRetinaError, region_masks
+
+VAL = load_split("val")
+vds = DRDataset(VAL, CACHE, train=False, image_size=224,
+                mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
+print(f"EyePACS validation: {len(vds)} images")
+
+vcov, v_undef = [], 0
+for path in vds.cache_paths:
+    bgr = cv2.imdecode(np.fromfile(str(path), np.uint8), cv2.IMREAD_COLOR)
+    try:
+        regions = region_masks(bgr)
+    except NoRetinaError:
+        vcov.append(float("nan"))
+        v_undef += 1
+        continue
+    vcov.append(float((~regions["outside"]).mean()))
+vcov = np.asarray(vcov)
+print(f"coverage: median {np.nanmedian(vcov):.4f}  "
+      f"({v_undef} excluded, no retina — DECISION-052)")
+
+cov_eyepacs = {}
+for seed in SEEDS:
+    cfg = yaml.safe_load((CKPTS[seed].parent / "config.yaml").read_text(encoding="utf-8"))
+    model = build_model(ModelConfig(
+        arch=cfg["model"]["arch"], num_outputs=cfg["model"]["num_outputs"],
+        head=cfg["model"]["head"], pretrained=False))
+    load_checkpoint(CKPTS[seed], model)
+    mean, std = normalisation(model)
+    model.eval().to(DEV)
+    ds_seed = DRDataset(VAL, CACHE, train=False, image_size=224, mean=mean, std=std)
+    loader = DataLoader(ds_seed, batch_size=64, shuffle=False, num_workers=2)
+    sc, ys = [], []
+    with torch.no_grad():
+        for x, y, idx in loader:
+            sc.extend(scalar_target(model(x.to(DEV))).cpu().numpy().tolist())
+            ys.extend(y.numpy().tolist())
+    cov_eyepacs[seed] = coverage_correlation(np.asarray(sc), np.asarray(ys), vcov)
+    pg = cov_eyepacs[seed]["per_grade_r"]
+    print(f"  seed {seed}: " + "  ".join(f"g{g}={pg[g]:+.4f}" for g in range(5))
+          + f"   max {cov_eyepacs[seed]['max_abs_r']:.4f}")
+
+print()
+print("G4 — the comparison, on max |r| across grades (DECISION-058):")
+print(f"{'seed':>5}{'EyePACS':>10}{'APTOS':>10}{'APTOS larger?':>16}")
+for seed in SEEDS:
+    e = cov_eyepacs[seed]["max_abs_r"]
+    a = cov_all[seed]["max_abs_r"]
+    print(f"{seed:>5}{e:>10.4f}{a:>10.4f}{str(a >= 0.2 and a > e):>16}")
+
+mean_e = float(np.mean([cov_eyepacs[s]["max_abs_r"] for s in SEEDS]))
+mean_a = float(np.mean([cov_all[s]["max_abs_r"] for s in SEEDS]))
+print()
+print(f"  seed means: EyePACS {mean_e:.4f}  APTOS {mean_a:.4f}")
+
+v2 = verdict(mean_carried, mean_refit, {"max_abs_r": mean_e}, {"max_abs_r": mean_a},
+             eyepacs_qwk=EYEPACS_QWK_HELD_OUT)
+print()
+print(f"  G4 confirmed: {v2['criteria']['G4_shortcut_confirmed']}")
+print(f"  G4 undecided: {v2['G4_undecided']}")
+print()
+print(f"  FINAL VERDICT: {v2['verdict']}")
+
+(OUT / "coverage_correlation_eyepacs.json").write_text(
+    json.dumps(cov_eyepacs, indent=1, default=float), encoding="utf-8")
+(OUT / "verdict.json").write_text(json.dumps(v2, indent=1, default=float),
+                                  encoding="utf-8")
+write_manifest(OUT)
+print()
+print("verdict.json REPLACED with the G4-complete version; MANIFEST refreshed.")
+'''
+
+CELLS = [CELL_1, CELL_2, CELL_3, CELL_4]
 
 if __name__ == "__main__":
-    for w in (sys.argv[1:] or ["1", "2", "3"]):
+    for w in (sys.argv[1:] or ["1", "2", "3", "4"]):
         print(CELLS[int(w) - 1])

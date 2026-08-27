@@ -136,7 +136,9 @@ def test_the_middle_band_is_named_and_not_rounded_up():
     """0.60-0.65 is the band a motivated reader rounds toward the better neighbour."""
     c = {"qwk": 0.60, "per_grade_recall": GOOD_REC}
     r = {"qwk": 0.63, "sens_at_spec95": 0.65, "per_grade_recall": GOOD_REC}
-    v = verdict(c, r, None, None, eyepacs_qwk=0.7563)
+    # both shortcut sides supplied, so G4 is DECIDED and the verdict carries no
+    # PROVISIONAL suffix — the exact wording is the thing under test here
+    v = verdict(c, r, {"max_abs_r": 0.1}, {"max_abs_r": 0.1}, eyepacs_qwk=0.7563)
     assert v["verdict"] == "GENERALISES WEAKLY; not usable without further work"
 
 
@@ -196,3 +198,56 @@ def test_per_grade_recall_reports_every_grade():
     y = np.repeat(np.arange(5), 10)
     assert set(per_grade_recall(y, y)) == {0, 1, 2, 3, 4}
     assert all(v == 1.0 for v in per_grade_recall(y, y).values())
+
+
+# ------------------------------- the NaN escape hatch, and G4's undecided state
+
+def test_a_negative_drop_is_not_applicable_rather_than_unknown():
+    """REGRESSION (DECISION-058). APTOS QWK came in ABOVE EyePACS, so the drop was
+    negative and `recovered` was NaN — and the usable branch read
+    `not isfinite(recovered) or recovered >= 0.5`, so it passed through the NaN.
+    'Could not compute this' must never satisfy a criterion."""
+    c = {"qwk": 0.7902, "per_grade_recall": GOOD_REC}
+    r = {"qwk": 0.8802, "sens_at_spec95": 0.7707, "per_grade_recall": GOOD_REC}
+    v = verdict(c, r, {"max_abs_r": 0.1}, {"max_abs_r": 0.1}, eyepacs_qwk=0.7563)
+    assert v["drop"] < 0
+    assert v["recovery_state"].startswith("not applicable")
+    assert v["recovery_criterion_satisfied"] is True
+    assert "GENERALISES, with" in v["verdict"]
+
+
+def test_a_real_drop_still_requires_real_recovery():
+    """The vacuous case must not have opened a hole in the case that matters."""
+    c = {"qwk": 0.60, "per_grade_recall": GOOD_REC}
+    r = {"qwk": 0.66, "sens_at_spec95": 0.70, "per_grade_recall": GOOD_REC}
+    v = verdict(c, r, {"max_abs_r": 0.1}, {"max_abs_r": 0.1}, eyepacs_qwk=0.7563)
+    assert v["recovery_state"] == "measured"
+    assert v["recovery_criterion_satisfied"] is False
+    assert "WEAKLY" in v["verdict"]
+
+
+def test_g4_without_the_eyepacs_side_is_undecided_not_passed():
+    """An uncomputed criterion reported as 'ok' is the same class of error as the NaN
+    hatch. The verdict must say so on its face."""
+    c = {"qwk": 0.79, "per_grade_recall": GOOD_REC}
+    r = {"qwk": 0.88, "sens_at_spec95": 0.77, "per_grade_recall": GOOD_REC}
+    v = verdict(c, r, None, {"max_abs_r": 0.3285}, eyepacs_qwk=0.7563)
+    assert v["G4_undecided"] is True
+    assert "PROVISIONAL" in v["verdict"] and "G4 is UNDECIDED" in v["verdict"]
+
+
+def test_g4_is_decided_once_both_sides_exist():
+    c = {"qwk": 0.79, "per_grade_recall": GOOD_REC}
+    r = {"qwk": 0.88, "sens_at_spec95": 0.77, "per_grade_recall": GOOD_REC}
+    v = verdict(c, r, {"max_abs_r": 0.40}, {"max_abs_r": 0.3285}, eyepacs_qwk=0.7563)
+    assert v["G4_undecided"] is False
+    assert v["criteria"]["G4_shortcut_confirmed"] is False   # EyePACS is HIGHER
+    assert "PROVISIONAL" not in v["verdict"]
+
+
+def test_g4_fires_only_when_aptos_exceeds_eyepacs_on_the_same_statistic():
+    c = {"qwk": 0.79, "per_grade_recall": GOOD_REC}
+    r = {"qwk": 0.88, "sens_at_spec95": 0.77, "per_grade_recall": GOOD_REC}
+    fires = verdict(c, r, {"max_abs_r": 0.10}, {"max_abs_r": 0.3285},
+                    eyepacs_qwk=0.7563)
+    assert fires["criteria"]["G4_shortcut_confirmed"] is True

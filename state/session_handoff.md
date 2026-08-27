@@ -10,43 +10,21 @@ the last item in Phase 4.**
 
 ## FIRST ACTION NEXT SESSION
 
-**RUN Phase 6** — `notebooks/phase6_aptos.py`. Three cells, ~15 min, inference only.
-Everything is built and tested.
+**Run Phase 6 cell 4** — `notebooks/phase6_aptos.py 4`, ~3 min. It computes the **EyePACS
+side of G4**, which is the only thing still outstanding from Phase 6. Same four inputs as
+before.
 
-**Inputs: `fyp-dr-eyepacs-224`, `fyp-dr-code`, AND BOTH the stage 3 output (seed 42) and
-the stage 2 output (seeds 43, 44)** — three checkpoints, and `best.pth` is gitignored.
+**Until it runs the verdict is PROVISIONAL.** G4 is a comparison BETWEEN datasets and only
+the APTOS half exists. `verdict()` now reports it as UNDECIDED rather than as passing.
 
-**THE RULE THAT MAKES IT EXTERNAL VALIDATION:** cut points and the operating-point
-threshold are carried over from EyePACS validation **unchanged**. `evaluate_external`
-takes them as required arguments and raises if absent — there is no "fit if missing"
-branch, because that is the easiest way to inflate the number. A re-fitted figure is
-reported as a labelled secondary, since the gap separates calibration from discrimination
-shift.
+**Watch this number:** APTOS max |r| is on **grade 0 in all three seeds** (n=1,805, the
+largest grade), consistently negative: −0.3285 / −0.1345 / −0.2451. That is not a
+max-of-five artefact, so the EyePACS figure genuinely decides it. If EyePACS shows the same
+pattern it is a confound (better framing on normal eyes reads as more clearly normal), not
+a shortcut.
 
-**The verdict is pre-registered (DECISION-057); cell 3 applies it.** G1 re-fit QWK < 0.60,
-G2 re-fit sens < 0.60, G3 grade 3-4 recall < 0.30 while grade 0 > 0.90, G4 coverage
-|r| >= 0.2 and larger on APTOS. Any one means it does not generalise. "Degraded but
-usable" needs re-fit QWK >= 0.65 **and** half the drop recovered **and** none of G1-G4.
-The 0.60-0.65 band is named "generalises weakly" so it cannot be rounded up.
-
-**"Deployable" is not available to this thesis either way** — the model fails the
-screening floor in-domain (0.7360 vs 0.80). Phase 6 answers whether it generalises.
-
-Expect a drop; it is the finding. **Balanced accuracy may rise while QWK falls** (APTOS is
-49.3% grade 0 against 73.5%) and that is not evidence of generalisation.
-
-After: 384 (`notebooks/phase4_res384.py`, written and held) -> Phase 7/8.
+After that: the 384 ablation (`notebooks/phase4_res384.py`, written and held) -> Phase 7/8.
 **The EyePACS test set opens once, at the end.**
-
-### Fetching analysis artefacts
-
-`fetch_run --run-id` is for TRAINING runs and requires config/metrics/train_log.
-Analysis sets (Phase 5/6/7) have none of those:
-
-    python -m src.data.fetch_run --kernel rah098/<slug> --artefacts phase6_aptos
-
-lands in `analysis/<name>/`, verifies every JSON parses and — when the notebook wrote a
-`MANIFEST.json`, which Phase 6 does — checks sha256 per file.
 
 ---
 

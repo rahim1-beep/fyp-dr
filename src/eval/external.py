@@ -37,6 +37,7 @@ G3_GRADE0_RECALL = 0.90
 USABLE_QWK = 0.65
 USABLE_RECOVERY = 0.5                # re-fitting must recover half the drop
 SHORTCUT_R = 0.20                    # G4
+G4_MIN_N = 100                       # a flagged grade must carry this many images
 
 
 def sens_at_fixed_threshold(scores: np.ndarray, y_true: np.ndarray,
@@ -160,17 +161,50 @@ def verdict(carried: dict, refit: dict, shortcut_eyepacs: dict | None,
     Applies the rule rather than interpreting it — the whole point of having fixed it
     before the number existed.
     """
+    # THREE cases, not two. The original code had `recovered = ... if drop > 0 else nan`
+    # and the usable branch then read `not isfinite(recovered) or recovered >= 0.5`,
+    # so an unknown recovery PASSED the criterion. That is the wrong default for a
+    # criterion: "we could not compute this" must never satisfy a requirement.
+    #
+    # Phase 6 exposed it. APTOS QWK came in ABOVE EyePACS (0.7902 vs 0.7563), so the
+    # drop was NEGATIVE and `recovered` was NaN — and the verdict was reached through
+    # the escape hatch rather than on its merits (DECISION-058).
     drop = eyepacs_qwk - carried["qwk"]
-    recovered = (refit["qwk"] - carried["qwk"]) / drop if drop > 0 else float("nan")
+    if drop > 0:
+        recovered = (refit["qwk"] - carried["qwk"]) / drop
+        recovery_state = "measured"
+    elif drop <= 0:
+        # VACUOUS, not unknown: there was no drop, so there is nothing to recover. The
+        # criterion is satisfied because it does not apply, and it says so.
+        recovered = float("nan")
+        recovery_state = "not applicable — QWK did not drop"
+    recovery_ok = (recovery_state.startswith("not applicable")
+                   or (np.isfinite(recovered) and recovered >= USABLE_RECOVERY))
 
     rec = refit["per_grade_recall"]
     severe = [rec[g] for g in (3, 4) if np.isfinite(rec.get(g, float("nan")))]
 
-    g4 = False
-    if shortcut_aptos and shortcut_eyepacs:
+    # G4 uses MAX |r| across grades, compared against the SAME statistic on EyePACS.
+    # DECISION-054 wrote only "|r| >= 0.2 within grades", which is ambiguous between max
+    # and median; the ambiguity is resolved to max in DECISION-058, on two grounds. Max
+    # is the conservative choice for a safety check — it flags more readily. And the
+    # selection-bias worry (the maximum of five noisy correlations exceeds 0.2 by chance)
+    # is answered by requiring the flagged grade to carry `G4_MIN_N` images and by making
+    # the trigger a BETWEEN-DATASET comparison on the same statistic, so a selection
+    # effect present on both sides cancels.
+    #
+    # `g4_undecided` is NOT False. Until the EyePACS side exists this criterion has no
+    # value, and reporting it as "ok" would be the same class of error as the NaN
+    # recovery hatch.
+    g4, g4_undecided = False, False
+    if shortcut_aptos is None or shortcut_eyepacs is None:
+        g4_undecided = True
+    else:
         a, e = shortcut_aptos["max_abs_r"], shortcut_eyepacs["max_abs_r"]
-        g4 = bool(np.isfinite(a) and a >= SHORTCUT_R
-                  and (not np.isfinite(e) or a > e))
+        if not np.isfinite(a) or not np.isfinite(e):
+            g4_undecided = True
+        else:
+            g4 = bool(a >= SHORTCUT_R and a > e)
 
     criteria = {
         "G1_refit_qwk_below_0.60": bool(refit["qwk"] < NOT_GENERALISING_QWK),
@@ -188,18 +222,25 @@ def verdict(carried: dict, refit: dict, shortcut_eyepacs: dict | None,
     if fails:
         v = ("DOES NOT GENERALISE beyond its training population; the in-domain "
              "results should be read as an upper bound")
-    elif (refit["qwk"] >= USABLE_QWK
-          and (not np.isfinite(recovered) or recovered >= USABLE_RECOVERY)):
+    elif refit["qwk"] >= USABLE_QWK and recovery_ok:
         v = ("GENERALISES, with a domain-shift penalty that is predominantly "
              "CALIBRATION. Deployment in a new population would require local "
              "recalibration on site data; the EyePACS thresholds are not transferable")
     else:
         v = "GENERALISES WEAKLY; not usable without further work"
 
+    if g4_undecided:
+        v += (" [PROVISIONAL: G4 is UNDECIDED — the EyePACS side of the coverage "
+              "comparison has not been computed, so the shortcut criterion carries no "
+              "value yet]")
+
     return {"verdict": v, "criteria": criteria, "failed": fails,
+            "G4_undecided": bool(g4_undecided),
             "eyepacs_qwk": float(eyepacs_qwk), "carried_qwk": carried["qwk"],
             "refit_qwk": refit["qwk"], "drop": float(drop),
             "fraction_of_drop_recovered_by_refitting": float(recovered),
+            "recovery_state": recovery_state,
+            "recovery_criterion_satisfied": bool(recovery_ok),
             "note": ("'Deployable' is not available to this thesis in either direction: "
                      "the model fails the screening floor IN-DOMAIN at 0.7360 vs 0.80 "
                      "(DECISION-057).")}
