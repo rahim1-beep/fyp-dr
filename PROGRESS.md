@@ -1,13 +1,14 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **Run `notebooks/phase5_gradcam.py`** (~15 min). Built and tested;
-> 24 tests in `tests/test_gradcam.py`. Needs the stage 3 notebook's OUTPUT attached for
-> `best.pth`.
+> **NEXT ACTION:** **Phase 6 - APTOS external validation** (DECISION-054). Inference
+> only, ~15 min, three seeds over all 3,662 APTOS images. Nothing is built yet:
+> `src/eval/external.py` and `notebooks/phase6_aptos.py` do not exist.
 >
-> It is a GATE (DECISION-046), with a failure path fixed in advance (DECISION-047).
-> A failed rim gate does NOT mean rebuild - run the occlusion test first.
+> **Phase 5 is DONE (DECISION-053).** Rim gate passed (1.217, and 1.087 on grades 3-4);
+> the outside gate failed at 2.342 but O2 showed the field-of-view shortcut is NOT
+> supported - O1 alone would have said otherwise. **No rebuild, no remedy.**
 >
-> Order: Phase 5 -> Phase 6 -> 384 -> Phase 7/8. **Test set opens once, at the end.**
+> Order: Phase 6 -> 384 -> Phase 7/8. **Test set opens once, at the end.**
 
 **Current phase:** Phase 4 — Ablation arms A–F. **Phases 1–3 complete.**
 **Last updated:** 2026-08-20
@@ -329,7 +330,11 @@ order A→B→C→D→E→F by increasing implementation risk.
       Phase 6 (DECISION-045)
 - [x] Phase 5 BUILT — `src/xai/gradcam.py`, `src/xai/border_check.py`,
       `tests/test_gradcam.py` (24 pass), `notebooks/phase5_gradcam.py`
-- [ ] **← NEXT: RUN Phase 5** and apply the gate
+- [x] **Phase 5 RUN and CLOSED (DECISION-053)** - 3 of 4 gates passed; the outside
+      failure was diagnosed to the grey fill being out of distribution, not a
+      field-of-view shortcut. Thesis conclusion drafted in DECISIONS.md.
+      **No rebuild triggered.**
+- [ ] **← NEXT: Phase 6** - build `src/eval/external.py` + `notebooks/phase6_aptos.py`
       `tests/test_gradcam.py`, `notebooks/phase5_gradcam.py`. Gate in DECISION-046.
 - [ ] Phase 6 APTOS external validation (inference only)
 - [ ] 384 ablation — run `notebooks/phase4_res384.py`, two sessions, ~11 h
@@ -464,11 +469,16 @@ point estimates (DECISION-006 — only 133 grade-3 and 98 grade-4 test images).
 
 ---
 
-## Phase 5 — Explainability `[ ]`
+## Phase 5 — Explainability `[x]` — DONE 2026-08-26
 
-- [ ] Grad-CAM + Grad-CAM++ on final conv block
-- [ ] Qualitative panel: correct + misclassified per grade 0–4
-- [ ] **Sanity gate:** heatmaps on lesions/vasculature, not borders or background
+- [x] Grad-CAM + Grad-CAM++ on final conv block, ordinal-head aware
+- [x] Qualitative panel: 20 images, pre-specified by seed 20260825
+- [x] **Sanity gate:** rim 1.217 PASS · outside 2.342 FAIL · rim grades 3-4 1.087 PASS ·
+      randomisation 0.410 PASS
+- [x] Outside failure diagnosed (DECISION-053): O1 -0.0534 crossed the bar but O2's
+      field-of-view sweep moved only 0.0075 grade units. **Shortcut NOT supported.**
+      O1 alone would have triggered a needless ~2.7 h remedy.
+- [x] **7x7 localisation limit stated explicitly** — no lesion-level claim is made.
 
 ---
 

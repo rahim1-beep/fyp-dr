@@ -2940,6 +2940,183 @@ rather than 0.0.
 
 ---
 
+## DECISION-053 — Phase 5 complete. The field-of-view shortcut is NOT supported, and O1 alone would have said otherwise
+
+- **Date:** 2026-08-26
+- **Status:** Accepted — **Phase 5 closed, no rebuild triggered**
+- **Deviates from proposal:** No.
+
+### The numbers
+
+| gate (DECISION-046) | value | threshold | verdict |
+|---|---:|---:|---|
+| median rim mass ratio | 1.217 | < 1.5 | **PASS** |
+| median outside mass ratio | 2.342 | < 1.0 | **FAIL** |
+| median rim ratio, grades 3–4 | 1.087 | < 1.5 | **PASS** |
+| median \|corr\| vs randomised | 0.410 | < 0.5 | **PASS** |
+| interior (context, no gate) | 0.447 | — | — |
+
+Follow-up on the `outside` failure, both arms on the same 5,267 images with one
+`ok:no-retina` image excluded and counted (DECISION-052):
+
+| test | result | pre-registered bar | reading |
+|---|---|---|---|
+| **O1** fill the surround with the interior mean | sens 0.7464 → 0.6929, **Δ −0.0534** | ≥ 0.03 = real dependence | crosses the bar |
+| **O2** vary how *much* surround there is (+0/3/6/9% erosion) | 0.6209 / 0.6200 / 0.6194 / 0.6134, **total −0.0075**, monotone | monotone **and** ≥ 0.10 | **far under — not confirmed** |
+
+### O1 and O2 disagree, and O2 settles it
+
+**The field-of-view shortcut hypothesis is NOT supported.** O1's −0.0534 is the grey fill
+being out of distribution: replacing a black surround with mid-grey across ~25% of the
+frame is a large domain change, and the model's sensitivity to it says nothing about
+whether it reads surround *extent*.
+
+O2 varies exactly the quantity the hypothesis is about, using the pipeline's own erosion
+so every pixel stays in distribution. A 12-percentage-point change in retina coverage
+(69.4% → 61.9%) moves the mean predicted grade by **0.0075 grade units** — detectable,
+monotone, and negligible. A model reading field of view would not behave like that.
+
+**O1 alone would have produced the wrong conclusion.** −0.0534 against the 0.03 bar reads
+as "real dependence", and the pre-registered remedy path would have been entered:
+surround-randomising augmentation, a retrain, and re-running stage 2's three seeds —
+roughly 2.7 hours spent on a premise that is false. The 0.03 bar and O2 existed precisely
+to separate "reacts to a weird fill" from "reads the surround", and they did. This is the
+clearest case so far for pre-registering the interpretation rather than reasoning about a
+number after seeing it.
+
+**Corollary for the write-up:** the `outside` gate as specified does not measure what it
+was meant to. It flags any concentration of CAM mass beyond the disc, and 7×7 CAM cells
+that straddle a high-contrast boundary produce that without any dependence. The gate is
+retained as a **screen**, with O2 as the test that decides. Recorded so the failing number
+is not quoted alone.
+
+### What Phase 5 concluded
+
+**No rebuild. No preprocessing change. No remedy.** DECISION-047's F2/F3 path and
+DECISION-051's augmentation remedy are both **not entered.**
+
+---
+
+## The Phase 5 conclusion, as it goes into the thesis
+
+> **Explainability and border-artefact analysis.**
+>
+> Grad-CAM and Grad-CAM++ were computed for the selected model (arm E, ordinal-regression
+> head, EfficientNet-B0, 224 px, seed 42) over a seed-fixed stratified sample of 200
+> validation images, 40 per grade. Because the head emits a single scalar rather than five
+> class logits, gradients were taken with respect to that scalar, so each map answers what
+> raised the predicted severity.
+>
+> **Resolution limit.** EfficientNet-B0 at 224 px produces a 7×7 final feature map, so one
+> CAM cell corresponds to approximately 32×32 input pixels. **These maps therefore cannot
+> localise individual lesions.** Microaneurysms, the defining lesion of grades 1–2, are
+> sub-pixel at 224 px. The analysis resolves gross spatial attention only — optic disc,
+> macula, vascular arcades, and the peripheral rim — and no lesion-level explanatory claim
+> is made from it.
+>
+> **Method validity.** Before interpreting any map, the target layer's weights were
+> randomised and the maps recomputed. Median absolute correlation between the two was
+> **0.410**, below the pre-registered 0.5 threshold, confirming the maps are a property of
+> the trained model rather than of image structure alone.
+>
+> **Border artefacts.** Attention was quantified as a mass ratio: the share of CAM mass in
+> a region divided by that region's share of image area, so an indifferent model scores
+> 1.0. Thresholds were fixed before any map was generated. Median rim mass ratio was
+> **1.217** (threshold 1.5), and **1.087 on grades 3–4** — lower where peripheral disease
+> appears. The 2.5% mask erosion adopted during preprocessing is therefore supported by
+> evidence: the model is not keying on the vignetted boundary, including in the severity
+> grades where the periphery matters most.
+>
+> Mass beyond the retinal disc measured **2.342**, exceeding its threshold. Two follow-up
+> experiments were run on the full validation split. Replacing the surround with the
+> retinal interior's mean colour reduced sensitivity at 95% specificity from 0.7464 to
+> 0.6929 (Δ = −0.053). However, varying the *amount* of surround — re-eroding the retinal
+> mask by a further 3%, 6% and 9%, which changes retinal coverage from 69.4% to 61.9%
+> while leaving every pixel in distribution — changed the mean predicted grade by only
+> **0.0075 grade units**. The first result therefore reflects the out-of-distribution
+> nature of the substituted fill rather than a dependence on field of view, and **the
+> hypothesis that the model exploits surround extent as a shortcut is not supported on
+> this dataset.** One image with no detectable retina was excluded from all border
+> statistics, counted, and reported; it remains in every performance metric.
+>
+> This conclusion is specific to EyePACS framing. External validation on APTOS
+> (Section 6) retains a coverage-correlation diagnostic to test the same hypothesis under
+> genuinely different acquisition.
+
+---
+
+## DECISION-054 — Phase 6 design, pre-registered: APTOS external validation
+
+- **Date:** 2026-08-26
+- **Status:** Accepted — **pre-registered before any APTOS inference**
+- **Deviates from proposal:** No. §5 scopes APTOS as external validation for arms A–E.
+
+Inference only, **~15 minutes**, no training. The EyePACS test set is **not** opened.
+
+### What runs
+
+**Arm E on EfficientNet-B0, all three seeds (42/43/44)**, over **all 3,662 APTOS images**
+pooled (DECISION-004: `aptos_train` + `aptos_val` + `aptos_test` are one external set here;
+the author-provided split is ignored). Three seeds because it is inference and costs
+minutes, and because DECISION-042 is the standing reminder that a single seed is a draw —
+the domain-shift drop is reported as a **range**, never a point.
+
+**Arm F is excluded.** APTOS is its training data and cannot also be its external
+validation set (DECISION-007).
+
+### The rule that makes this external validation rather than a second fit
+
+**The cut points and the operating-point threshold are carried over from EyePACS
+validation, unchanged.** Re-fitting either on APTOS would be fitting on the external set,
+which destroys the claim the phase exists to make. This is the single easiest way to
+inflate the number, so it is fixed here in advance.
+
+A **secondary** figure — APTOS QWK with cut points re-fitted on APTOS — is reported
+alongside and clearly labelled, because the gap between the two separates **calibration**
+shift from **discrimination** shift. That decomposition is genuinely useful and it is
+never the headline.
+
+### What is expected
+
+**A drop is expected and is itself the finding.** No "acceptable" threshold is set,
+because there is nothing here to accept or reject. The expectation is recorded only so it
+is on the record: **QWK drops 0.05–0.15**, driven more by calibration than by
+discrimination, so the re-fitted secondary figure should recover part of the gap.
+
+APTOS is imbalanced in the same direction as EyePACS but less extremely — **49.3% grade 0
+against 73.5%** — so "worse everywhere" is the wrong naive expectation: **balanced accuracy
+may well rise while QWK falls.** Recorded so that outcome is not mistaken for a bug.
+
+### The shortcut diagnostic — retained, and precisely why
+
+DECISION-053 found no field-of-view shortcut, but **O2 varied surround extent on EyePACS
+images only**. APTOS has genuinely different acquisition and framing, so the hypothesis is
+**unsupported in-domain, not dead**. The diagnostic is inference-only and costs nothing.
+
+For each true grade, correlate the predicted score against the image's retina-coverage
+fraction:
+
+| result | reading |
+|---|---|
+| |r| < 0.2 within grades, on both datasets | consistent with DECISION-053; the shortcut hypothesis is closed |
+| **|r| >= 0.2 within grades AND larger on APTOS than on EyePACS validation** | the shortcut is real but invisible within one dataset's framing — reopen DECISION-051's remedy |
+| |r| >= 0.2 on both, similar magnitude | coverage correlates with grade for a reason that is not a shortcut (e.g. acquisition quality tracks severity); report as a confound, not a defect |
+
+The third row is why the test is a **comparison between datasets** rather than an absolute
+threshold on APTOS alone.
+
+### Deliverables
+
+1. `src/eval/external.py` — carried-over-threshold evaluation plus the coverage
+   diagnostic, with DECISION-052's no-retina policy applied.
+2. `notebooks/phase6_aptos.py` — three cells, ~15 min.
+3. Per-seed and pooled results in `runs/phase6_aptos_*/metrics.json`.
+4. A limitations paragraph: APTOS `id_code` values carry no patient linkage, so each image
+   is its own patient (DECISION-004). That is an APTOS-internal caveat, **not** a leakage
+   risk for this evaluation, since no APTOS image was trained on under arm E.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

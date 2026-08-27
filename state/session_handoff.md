@@ -10,43 +10,29 @@ the last item in Phase 4.**
 
 ## FIRST ACTION NEXT SESSION
 
-**Run `notebooks/phase5_gradcam.py`** — Grad-CAM on arm E seed 42, B0 at 224. ~15 min.
-Cell 1 by hand, cells 2–4 by commit. Everything is built and tested (24 tests).
+**Phase 6 — APTOS external validation (DECISION-054).** Inference only, ~15 min. Nothing
+is built: `src/eval/external.py` and `notebooks/phase6_aptos.py` do not exist yet.
 
-**Inputs: `fyp-dr-eyepacs-224`, `fyp-dr-code`, AND the stage 3 notebook's OUTPUT** — the
-gate needs `best.pth`, which is gitignored and not fetched by `fetch_run`.
+Arm E on B0, **all three seeds**, over **all 3,662 APTOS images** pooled. Arm F excluded —
+APTOS is its training data (DECISION-007).
 
-Order (DECISION-045): **Phase 5 → Phase 6 → 384 → Phase 7/8.** `notebooks/phase4_res384.py`
-is written and held until after Phase 6, because Phase 5's rim gate can invalidate the
-preprocessing its cache would use.
+**THE RULE THAT MAKES IT EXTERNAL VALIDATION:** cut points and the operating-point
+threshold are **carried over from EyePACS validation unchanged**. Re-fitting either on
+APTOS is fitting on the external set and destroys the claim. A re-fitted figure is reported
+as a clearly-labelled secondary, because the gap separates calibration shift from
+discrimination shift.
 
-**The EyePACS test set opens exactly once, on the selected model, after the 384 decision
-is final.** `BOOTSTRAP.md` R3 has been amended to say so — the two contracts now agree
-rather than CLAUDE.md silently overriding.
+A drop is expected and is the finding. **Balanced accuracy may rise while QWK falls** —
+APTOS is 49.3% grade 0 against EyePACS's 73.5% — and that is not an error.
 
-### The gate (DECISION-046), thresholds fixed before any heatmap existed
+**Phase 5 is closed (DECISION-053); no rebuild.** Rim passed at 1.217 and 1.087 on grades
+3-4, vindicating the 2.5% erosion. The outside gate failed at 2.342, but O2 showed the
+field-of-view shortcut is not supported: **O1 alone (-0.0534) would have triggered a
+needless ~2.7 h remedy.** The coverage-correlation diagnostic is retained for Phase 6
+because O2 only varied extent within EyePACS framing.
 
-| statistic | PASS | FAIL |
-|---|---|---|
-| median **rim** mass ratio (outer 10% of retinal radius) | < 1.5 | ≥ 1.5 |
-| median **outside** mass ratio (beyond the disc) | < 0.5 | ≥ 0.5 |
-| median rim ratio, **grades 3–4 only** | < 1.5 | ≥ 1.5 |
-| median **\|corr\| vs randomised model** | < 0.5 | ≥ 0.5 |
-
-`src/xai/border_check.py --gate` exits non-zero on failure.
-
-### The failure path (DECISION-047) — do NOT rebuild on a failed rim gate alone
-
-- **randomisation fails** → TOOLING bug. Fix `gradcam.py`. No rebuild, and no heatmap
-  enters the write-up until it passes. It is checked first because it invalidates the
-  other three.
-- **outside fails** → `retina_mask` is under-segmenting. A preprocessing **bug**, not an
-  erosion parameter.
-- **rim fails** → **F1 occlusion test first** (cell 3B). A high CAM ratio is
-  correlational. Only `|Δsens| ≥ 0.02` justifies F2 (measure the annulus ratio at 5% and
-  10%, take the smallest that works) and F3 (rebuild ~9 h + retrain 40 min + **re-run
-  stage 2's three seeds** ~2 h). Full 0.9r masking is **not** an option — DECISION-016
-  rejected it and a rim failure does not change that reasoning.
+Order: Phase 6 -> 384 (`notebooks/phase4_res384.py`, written and held) -> Phase 7/8.
+**The EyePACS test set opens once, at the end.**
 
 ---
 
