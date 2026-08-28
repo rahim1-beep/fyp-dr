@@ -130,23 +130,55 @@ RUN_ID = {s: f"phase6_remedy_arm_e_{ARCH}_s{s}" for s in SEEDS}
 # MEASURED baselines, arm E, EfficientNet-B0, committed artefacts (R4).
 BASE_VAL_QWK = {42: 0.7615, 43: 0.7534, 44: 0.7560}      # mean 0.7570, range 0.0081
 
-CODE = None
-for cand in (Path("/kaggle/input/datasets/rah098/fyp-dr-code"),
-             Path("/kaggle/input/fyp-dr-code")):
-    if (cand / "src").is_dir():
-        CODE = cand
-        break
-if CODE is None:
-    hits = list(Path("/kaggle/input").rglob("src/data/preprocess.py"))
-    if not hits:
-        raise SystemExit("fyp-dr-code not found. + Add Input -> Your Datasets.")
-    CODE = hits[0].parents[2]
+# CODE resolution goes through resolve_input, NOT a hand-rolled candidate list with an
+# rglob fallback over all of /kaggle/input. Attached NOTEBOOK OUTPUTS carry their own copy
+# of the repo under /kaggle/working/fyp-dr, so a first-hit rglob can silently select a
+# STALE repo. resolve_input knows the doubled-directory mount layout and refuses to guess.
+#
+# Bootstrapping is the awkward part: resolve_input lives in the code being located. So
+# find kaggle_paths.py directly, EXCLUDING /kaggle/input/notebooks for exactly the reason
+# above, hand over to resolve_input, then UNDO the bootstrap import so every later
+# `import src.*` comes from the copy under REPO rather than from the read-only mount.
+_boot = [h for h in Path("/kaggle/input").rglob("src/data/kaggle_paths.py")
+         if "notebooks" not in h.parts]
+if not _boot:
+    raise SystemExit("fyp-dr-code not found. + Add Input -> Your Datasets.")
+_boot_root = str(_boot[0].parents[2])
+sys.path.insert(0, _boot_root)
+from src.data.kaggle_paths import resolve_input
+
+CODE = resolve_input("fyp-dr-code", owner="rah098", must_contain="src/data/preprocess.py")
+print("code:", CODE)
+
+sys.path.remove(_boot_root)
+for _m in [k for k in sys.modules if k == "src" or k.startswith("src.")]:
+    del sys.modules[_m]
 
 if REPO.exists():
     shutil.rmtree(REPO)
 shutil.copytree(CODE, REPO)
 os.chdir(REPO)
 sys.path.insert(0, str(REPO))
+
+# ALL SIX SPLIT CSVs MUST BE HERE. On 2026-08-28 the three EyePACS splits were absent from
+# the copied repo while the three APTOS ones were present; the leakage gate SKIPPED the
+# tests needing them, reported "33 passed, 5 skipped", the notebook's `assert rc == 0` was
+# satisfied, and the run continued for ten more minutes before dying in cell 4 on the same
+# missing file. Checked here, at the copy, where the error names the actual cause.
+FYP_SPLITS = ["train", "val", "test", "aptos_train", "aptos_val", "aptos_test"]
+_absent = [n for n in FYP_SPLITS if not (REPO / "data" / "splits" / f"{n}.csv").exists()]
+if _absent:
+    _have = sorted(q.name for q in (REPO / "data" / "splits").glob("*.csv"))
+    raise SystemExit(
+        f"the copied repo is missing split CSV(s): {_absent}\n"
+        f"  present    : {_have}\n"
+        f"  copied from: {CODE}\n"
+        "A PARTIAL partition is never legitimate. Re-upload fyp-dr-code as a New "
+        "Version, confirm the notebook's input is pinned to that version, and re-run.")
+print(f"splits: all {len(FYP_SPLITS)} present")
+
+# Real run: the leakage gate must not fail open by skipping absent splits.
+os.environ["FYP_REQUIRE_SPLITS"] = "1"
 OUT.mkdir(parents=True, exist_ok=True)
 
 from src.data.archive_cache import resolve_cache

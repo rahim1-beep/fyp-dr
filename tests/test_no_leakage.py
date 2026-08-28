@@ -25,6 +25,42 @@ CONFIG = REPO / "configs" / "base.yaml"
 EXPECTED_COLUMNS = ["image_path", "patient_id", "eye", "label", "dataset", "split"]
 SPLITS = ("train", "val", "test")
 
+
+def _missing_split_is_fatal(path: Path) -> str | None:
+    """Why a missing split CSV must FAIL rather than skip — or None if skipping is right.
+
+    THIS GATE ONCE PASSED WHILE CHECKING NOTHING. On Kaggle, 2026-08-28, the three
+    EyePACS split CSVs were absent from the copied repo while the three APTOS ones were
+    present. Every test needing them SKIPPED, pytest reported `33 passed, 5 skipped`,
+    the notebook's `assert rc == 0` was satisfied, and the run continued for ten more
+    minutes before dying on the same missing file in cell 4. A gate that reports success
+    when its subject is absent is worse than no gate — the same failure mode as a NaN
+    passing a verdict criterion (DECISION-058).
+
+    Skipping is legitimate in exactly one situation: a fresh clone before Phase 1 has
+    generated any splits at all.
+
+      * NO split CSV exists anywhere      -> skip. Nothing generated yet.
+      * SOME exist and this one does not  -> FAIL. A partial partition is never a
+        legitimate state; it means a broken copy, a truncated upload or a stale mount.
+      * FYP_REQUIRE_SPLITS is set         -> FAIL regardless. Real runs set this, so the
+        gate cannot fail open whatever the directory looks like.
+    """
+    import os
+
+    if os.environ.get("FYP_REQUIRE_SPLITS"):
+        return (f"{path} is missing and FYP_REQUIRE_SPLITS is set. This is a real run: "
+                "the committed partition must be present, and skipping here would let "
+                "the gate pass without checking anything.")
+    present = sorted(q.name for q in SPLIT_DIR.glob("*.csv")) if SPLIT_DIR.is_dir() else []
+    if present:
+        return (f"{path} is missing, but {len(present)} other split CSV(s) ARE present: "
+                f"{present}. A PARTIAL partition is never legitimate — it means a broken "
+                "copy, a truncated upload or a stale dataset mount. Refusing to skip: "
+                "this gate reporting 'passed' with its subject half-absent is how a run "
+                "proceeds against splits nobody checked.")
+    return None
+
 # Ground truth, established by the Phase 1 reconciliation (docs/data_report_eyepacs.json).
 EYEPACS_TOTAL_IMAGES = 35_126
 EYEPACS_TOTAL_PATIENTS = 17_563
@@ -35,6 +71,9 @@ def _read(name: str) -> pd.DataFrame:
     """Split CSVs carry a '#' provenance header — readers MUST pass comment='#'."""
     path = SPLIT_DIR / f"{name}.csv"
     if not path.exists():
+        fatal = _missing_split_is_fatal(path)
+        if fatal:
+            pytest.fail(fatal)
         pytest.skip(f"{path} not generated yet")
     return pd.read_csv(path, comment="#", dtype={"patient_id": "string"})
 
@@ -187,6 +226,9 @@ def test_seed_recorded_in_csv_header(name):
     """The seed must be traceable from the artefact itself, not just from config."""
     path = SPLIT_DIR / f"{name}.csv"
     if not path.exists():
+        fatal = _missing_split_is_fatal(path)
+        if fatal:
+            pytest.fail(fatal)
         pytest.skip(f"{path} not generated yet")
     header = [l for l in path.read_text(encoding="utf-8").splitlines() if l.startswith("#")]
     assert any("RNG seed" in l for l in header), f"{name}.csv header records no seed"
@@ -337,3 +379,50 @@ def test_split_is_reproducible(tmp_path):
         fresh = pd.read_csv(tmp_path / f"{name}.csv", comment="#",
                             dtype={"patient_id": "string"})
         pd.testing.assert_frame_equal(committed, fresh, check_like=False)
+
+
+# ---------------------------------------------------------------------------------
+# The gate must not fail open
+# ---------------------------------------------------------------------------------
+
+def test_a_partial_partition_is_fatal_rather_than_skipped(tmp_path, monkeypatch):
+    """The Kaggle failure of 2026-08-28, as a test.
+
+    Three EyePACS splits absent, three APTOS splits present, gate reports
+    `33 passed, 5 skipped`, notebook continues. Never again.
+    """
+    import tests.test_no_leakage as gate
+
+    d = tmp_path / "splits"
+    d.mkdir()
+    for n in ("aptos_train", "aptos_val", "aptos_test"):
+        (d / f"{n}.csv").write_text("# seed\nimage_path\n", encoding="utf-8")
+    monkeypatch.setattr(gate, "SPLIT_DIR", d)
+    monkeypatch.delenv("FYP_REQUIRE_SPLITS", raising=False)
+
+    why = gate._missing_split_is_fatal(d / "val.csv")
+    assert why and "PARTIAL" in why, "a half-present partition was treated as skippable"
+
+
+def test_a_fresh_clone_with_no_splits_at_all_still_skips(tmp_path, monkeypatch):
+    """The one legitimate skip: Phase 1 has not run yet. Keep it working, so the fix
+    above does not turn a clean checkout into a wall of red for a new reader."""
+    import tests.test_no_leakage as gate
+
+    d = tmp_path / "splits"
+    d.mkdir()
+    monkeypatch.setattr(gate, "SPLIT_DIR", d)
+    monkeypatch.delenv("FYP_REQUIRE_SPLITS", raising=False)
+    assert gate._missing_split_is_fatal(d / "val.csv") is None
+
+
+def test_require_splits_env_var_forbids_skipping_entirely(tmp_path, monkeypatch):
+    """Real runs set FYP_REQUIRE_SPLITS=1, and then even an empty directory is fatal."""
+    import tests.test_no_leakage as gate
+
+    d = tmp_path / "splits"
+    d.mkdir()
+    monkeypatch.setattr(gate, "SPLIT_DIR", d)
+    monkeypatch.setenv("FYP_REQUIRE_SPLITS", "1")
+    why = gate._missing_split_is_fatal(d / "val.csv")
+    assert why and "FYP_REQUIRE_SPLITS" in why
