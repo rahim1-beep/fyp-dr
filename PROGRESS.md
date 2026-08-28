@@ -1,14 +1,17 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **Phase 6 cell 4** (~3 min) — the EyePACS side of G4, the only piece
-> of Phase 6 still outstanding. The verdict is PROVISIONAL until it runs.
+> **NEXT ACTION:** **Fetch and commit the Phase 6 cell-4 artefacts.** They are NOT in
+> the repo — `coverage_correlation_eyepacs.json` is missing and `verdict.json` still
+> holds the pre-cell-4 state. R4 is broken until then.
 >
-> Phase 6 headline: carried-over QWK **0.7902** vs EyePACS 0.7563, re-fitted **0.8802**.
-> **Discrimination transfers; calibration does not.** Ref sens 0.99 is OVER-REFERRAL from
-> a mis-set threshold (spec 0.83, acc 0.58), not better detection. QWK is **not
-> comparable across the two datasets** — different marginals (DECISION-058).
+>     python -m src.data.fetch_run --kernel rah098/<slug> --artefacts phase6_aptos --force
 >
-> Order: G4 -> 384 -> Phase 7/8. **Test set opens once, at the end.**
+> Then **decide DECISION-061**: run the surround-randomisation remedy (~3 h) and drop the
+> 384 ablation (~11 h), or report the shortcut as found.
+>
+> **HEADLINE CONCLUSION CHANGED.** The model **does not generalise** — G4 fired. Note
+> this does NOT mean performance collapsed: G1-G3 all passed. It fired on a demonstrated
+> framing dependence that is stronger out-of-domain (DECISION-060).
 
 **Current phase:** Phase 4 — Ablation arms A–F. **Phases 1–3 complete.**
 **Last updated:** 2026-08-20
@@ -345,7 +348,13 @@ order A→B→C→D→E→F by increasing implementation risk.
       G1-G3 all pass. Thesis conclusion drafted (DECISION-058).
 - [x] Fixed: a NaN passed a verdict criterion; G4 reported `ok` while undecided;
       `notebook_check` passed a cell containing a SyntaxError (DECISION-058)
-- [ ] **← NEXT: Phase 6 cell 4** — the EyePACS side of G4
+- [x] **Phase 6 cell 4 RUN** — G4 CONFIRMED. APTOS mean max |r| 0.2360 vs EyePACS
+      0.1367; fires in 2 of 3 seeds, modest (r^2 6-11%) and seed-dependent
+      (DECISION-059). **The seed-aggregation rule was NOT pre-registered** — said so.
+- [ ] **← NEXT: fetch + commit the cell-4 artefacts** (R4 — not in the repo yet)
+- [ ] **DECIDE (DECISION-061):** remedy (~3 h) displacing 384 (~11 h), or report as found
+- [ ] Phase 7 — app must carry the specific disclaimer AND a coverage guard (DECISION-060)
+- [ ] Phase 8 — the Phase 5 vs Phase 6 sequence is a methodological contribution
       `tests/test_gradcam.py`, `notebooks/phase5_gradcam.py`. Gate in DECISION-046.
 - [ ] Phase 6 APTOS external validation (inference only)
 - [ ] 384 ablation — run `notebooks/phase4_res384.py`, two sessions, ~11 h

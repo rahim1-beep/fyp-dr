@@ -3425,6 +3425,276 @@ one that every real cell parses, one that the checker actually detects a broken 
 
 ---
 
+## DECISION-059 — G4's seed-aggregation rule was NOT pre-registered. Said plainly.
+
+- **Date:** 2026-08-28
+- **Status:** Accepted — with the weakness stated rather than smoothed
+- **Deviates from proposal:** No.
+
+### What was actually applied, and it is not 2-of-3
+
+`notebooks/phase6_aptos.py` cell 4 computes the **seed means** and passes those to
+`verdict()`:
+
+```
+mean EyePACS 0.1367   mean APTOS 0.2360   ->  0.2360 >= 0.2 and 0.2360 > 0.1367  -> FIRES
+```
+
+So the criterion fired on **the mean across seeds**, not on a 2-of-3 vote. The per-seed
+"APTOS larger?" column printed beside it is informational and does not enter the decision.
+
+### Was it pre-registered? No.
+
+DECISION-054 wrote the criterion as "|r| >= 0.2 within grades AND larger on APTOS than
+on EyePACS validation". DECISION-058 resolved the ambiguity **across grades** (max, not
+median). **Neither said how to aggregate across seeds.** That rule is being settled now,
+after seeing the numbers, and this decision exists so that is on the record rather than
+absorbed silently.
+
+**What limits the damage, and it is not nothing:** DECISION-042 is a standing project rule
+— *report the mean across seeds, never the best seed* — and it points at the mean. So the
+aggregation used is the one existing policy already implied, not one selected because it
+gave a result. But it was not fixed **for G4** in advance, and that is a real gap in a
+project whose whole method is pre-registration.
+
+### Robustness — the conclusion under every plausible rule
+
+| aggregation | EyePACS | APTOS | fires? |
+|---|---:|---:|---|
+| **mean** (applied) | 0.1367 | 0.2360 | **yes** |
+| median | 0.1418 | 0.2451 | yes |
+| majority of seeds | — | 2 of 3 | yes |
+| **unanimity** | — | 2 of 3 | **no** |
+
+Three of four fire. Only unanimity does not. The verdict does not hinge on the
+undocumented choice — but it does hinge on not requiring unanimity, which is itself an
+aggregation choice nobody wrote down.
+
+### The honest strength of the claim
+
+| seed | EyePACS | APTOS | difference | clears 0.2? | r² |
+|---|---:|---:|---:|---|---:|
+| 42 | 0.1418 | 0.3285 | +0.1867 | yes | 0.108 |
+| 43 | 0.1265 | 0.1345 | **+0.0080** | **no** | 0.018 |
+| 44 | 0.1419 | 0.2451 | +0.1032 | yes | 0.060 |
+
+**The claim that survives scrutiny is narrower than "the model uses a shortcut":**
+
+> Shortcut-like dependence on retinal framing is present in **two of three training runs**
+> and effectively absent in the third. Averaged over seeds it exceeds the pre-registered
+> threshold. Where present it is **modest**, explaining **6–11%** of within-grade-0 score
+> variance; in the third run it explains 1.8% and sits below the threshold, with an
+> APTOS-over-EyePACS margin of **+0.008**, which is nothing.
+
+The direction is consistent — APTOS exceeds EyePACS in all three seeds — but seed 43's
+margin is small enough that "3 of 3 on direction" would be a misleading way to put it, and
+it is not put that way anywhere in the write-up.
+
+**The most defensible framing, and the more interesting one:** because the effect varies
+this much by seed, it is a property of the **training procedure** — which sometimes
+produces a framing-dependent model — rather than a fixed property of the architecture or
+the data. That is a stronger claim about method than about this particular checkpoint.
+
+### R4 note
+
+At the time of writing, `analysis/phase6_aptos/coverage_correlation_eyepacs.json` is
+**not in the repository** and `verdict.json` still holds the pre-cell-4 state. The numbers
+above are as reported from the console. **They must be fetched and committed before any of
+this enters the thesis** (R4: every number traces to a committed artefact).
+
+---
+
+## DECISION-060 — The Phase 6 conclusion, and what the shortcut finding does to Phases 7 and 8
+
+- **Date:** 2026-08-28
+- **Status:** Accepted
+- **Deviates from proposal:** No.
+
+### The project's headline conclusion changes
+
+It was: *a validated, imbalance-aware, explainable DR grading system, below the screening
+sensitivity floor.* It is now that **plus a demonstrated generalisation defect**.
+
+**State the verdict precisely, because the wording invites a wrong reading.** "Does not
+generalise" here does **not** mean performance collapsed externally — it did not. G1, G2
+and G3 all passed comfortably. It fired on **G4 alone**: the model shows a dependence on
+retinal framing that is stronger out-of-domain than in-domain, and DECISION-057 fixed in
+advance that this invalidates the generalisation claim *regardless of the headline
+numbers*, because a model working partly for a reason that does not transfer cannot be
+said to generalise on the strength of numbers that reason inflates.
+
+---
+
+## The Phase 6 conclusion, as it goes into the thesis
+
+> **External validation on APTOS.**
+>
+> The selected model (arm E, ordinal-regression head, EfficientNet-B0, 224 px) was
+> evaluated on all 3,662 APTOS images across three training seeds, with **cut points and
+> the referral threshold carried over unchanged from EyePACS validation**. No APTOS image
+> was seen during training.
+>
+> **Headline.** Quadratic weighted kappa **0.7902** (0.7810 / 0.7920 / 0.7976) against
+> 0.7563 on held-out EyePACS validation; referable sensitivity **0.990** at specificity
+> **0.83**; accuracy **0.58**.
+>
+> **Two of those figures are not what they appear.** Kappa is chance-corrected against the
+> marginal label distribution, and the datasets differ substantially — 49.3% of APTOS
+> images are grade 0 against 73.7% of EyePACS validation — so **kappa is not directly
+> comparable across them** and the apparent improvement is not evidence of better external
+> performance. The sensitivity of 0.990 is **over-referral, not superior detection**: the
+> threshold was fixed on EyePACS for 95% specificity, and under domain shift it sits far
+> lower in the APTOS score distribution, so the model refers almost every image.
+> Sensitivity rises precisely because specificity falls to 0.83 and accuracy to 0.58,
+> barely above the 49.3% majority rate. That is the clearest single measurement of the
+> calibration shift.
+>
+> **With cut points re-fitted on APTOS** (secondary, never the headline): kappa **0.8802**,
+> sensitivity at 95% specificity **0.7707**. The gap between carried-over and re-fitted
+> isolates the shift: **discrimination transfers; calibration does not.** The ability to
+> rank severity survives the change of acquisition setting; the decision thresholds derived
+> on EyePACS do not.
+>
+> **The field-of-view diagnostic, and the methodological finding.** Within each true grade,
+> the predicted score was correlated against the fraction of the frame occupied by retina.
+> On APTOS the maximum within-grade correlation was 0.3285 / 0.1345 / 0.2451 across seeds
+> (mean 0.2360); on EyePACS validation, 0.1418 / 0.1265 / 0.1419 (mean 0.1367). The
+> dependence is therefore **stronger on the external dataset than on the training
+> distribution**, which was the pre-registered criterion for a framing shortcut.
+>
+> The effect is **modest and seed-dependent**: it clears the threshold in two of three
+> training runs and explains 6–11% of within-grade score variance where present, against
+> 1.8% in the third run. It is best characterised as a property of the **training
+> procedure**, which sometimes produces a framing-dependent model, rather than as a fixed
+> property of the architecture.
+>
+> **This is the methodological point of the chapter.** The same hypothesis was tested
+> in-domain during Phase 5 and found *unsupported*: varying how much surround an EyePACS
+> image contained, by re-eroding the retinal mask by up to 9%, moved the mean predicted
+> grade by 0.0075 grade units — an order of magnitude below the threshold for a real
+> dependence. **The shortcut was invisible within the training distribution and became
+> visible only under the between-dataset comparison.** An in-domain perturbation test can
+> only vary framing across the range that dataset happens to contain; a second dataset
+> with genuinely different acquisition supplies variation the first cannot. Single-dataset
+> shortcut analysis is therefore not conservative — it is systematically blind to precisely
+> the dependencies that matter for deployment, because those are the ones that only differ
+> across populations.
+>
+> **Verdict.** Of four pre-registered criteria for failure of generalisation, three passed:
+> discrimination did not collapse, sensitivity did not collapse, and the severe grades did
+> not degrade while the normal grade held. The fourth — confirmation of a framing shortcut
+> — was met. Under the rule fixed before the evaluation, **the model does not generalise
+> beyond its training population, and the in-domain results should be read as an upper
+> bound.** This reflects a demonstrated dependence that does not transfer, not a collapse
+> in measured performance.
+
+---
+
+### What it does to Phase 7 — the web application
+
+The app now deploys a model with a **measured** defect, and the interface must reflect
+that rather than presenting a grade with unqualified confidence.
+
+**The disclaimer must state, specifically and not in general terms:**
+
+1. Research prototype. **Not a medical device**; not for clinical use.
+2. **Below the screening reference in-domain**: referable sensitivity 0.7360 at 95%
+   specificity, against a 0.80 reference that is itself provisional (DECISION-032).
+3. **Demonstrated dependence on image framing**, stronger on external data than on the
+   training distribution (DECISION-059), present in two of three training runs.
+4. **Thresholds are not transferable.** Any use on a new population requires local
+   recalibration; the shipped thresholds were fitted on EyePACS.
+
+**Beyond a disclaimer — a guard, which is the better engineering answer.** The failure
+mode is now *known and measurable*, so the app should not merely warn in the abstract: on
+upload it computes the retina-coverage fraction and **flags an image whose framing falls
+outside the range the model was trained on**. That converts a finding into a control, and
+it is a stronger Phase 7 contribution than a paragraph of text. The same
+`region_masks`/coverage code from Phases 5 and 6 is reused, so it costs little.
+
+### What it does to Phase 8 — the write-up
+
+- The limitations section gains a **measured, quantified** entry in place of the usual
+  boilerplate about generalisation.
+- The Phase 5 → Phase 6 sequence becomes a **methodological contribution in its own
+  right**, not a footnote: an in-domain perturbation test cleared the model, and only the
+  between-dataset comparison exposed the dependence.
+- The honest overall claim: **a rigorously validated system that does not meet the
+  screening reference and shows a demonstrated generalisation defect** — which is a
+  stronger thesis than an unexamined system reporting a better number, and should be
+  presented as such rather than apologised for.
+
+---
+
+## DECISION-061 — The remedy is triggered, and it should DISPLACE the 384 ablation
+
+- **Date:** 2026-08-28
+- **Status:** **Proposed — needs your decision.** The trigger is automatic; the
+  re-prioritisation is not.
+- **Deviates from proposal:** No. 384 was always optional (DECISION-005/044).
+
+### Is it triggered? Yes, formally
+
+DECISION-051 fixed the remedy in advance: **randomise the surround as a train-only
+augmentation**, which breaks the correlation between surround appearance and label without
+discarding retina, and needs **no cache rebuild** because augmentation is applied at load
+time.
+
+| step | cost |
+|---|---|
+| Implement + smoke the augmentation | ~30 min local |
+| Retrain arm E, 3 seeds | ~2.0 h |
+| Re-run Phase 6 to test whether it worked | ~18 min |
+| **Total** | **~3 h** |
+
+### The recommendation: it displaces 384, not adds to it
+
+| | cost | what it buys now |
+|---|---:|---|
+| **Remedy** | ~3 h | tests whether the demonstrated defect is fixable; converts a correlational finding into a causal one **either way** |
+| **384 ablation** | ~11 h | in-domain sensitivity, on a headline that the proposal fixes at 224 so it **cannot become the headline** without a supervisor deviation |
+
+The priorities inverted the moment G4 fired. Before it, the open problem was the
+sensitivity floor and 384 was the last untested lever. Now there is a **demonstrated
+generalisation defect**, and spending 11 hours squeezing in-domain sensitivity while
+leaving it untested would be optimising the number that Phase 6 just showed is an upper
+bound. **Net effect of the swap: 8 hours saved and a better thesis.**
+
+### Pre-registering the remedy's outcome, before it runs
+
+The effect being remedied is **modest and seed-dependent** (DECISION-059: two of three
+seeds, r² 6–11% where present). A three-seed test of a three-seed effect is **underpowered
+by construction**, and that is stated now rather than discovered afterwards.
+
+| outcome | reading |
+|---|---|
+| APTOS max \|r\| drops below EyePACS **and** below 0.2, in ≥ 2 of 3 seeds | **remedy works.** The causal story is confirmed: the model was reading the surround. |
+| \|r\| unchanged within seed noise | **remedy fails, and the shortcut interpretation weakens** — the correlation may be a confound the augmentation cannot touch. Report both. |
+| \|r\| drops but external QWK/sensitivity drops with it | the framing signal carried real information; report the trade-off honestly rather than as a fix |
+
+**Every outcome is publishable**, which is what makes the 3 hours worth spending: a failed
+remedy falsifies the shortcut interpretation, which is itself a result and one this project
+would otherwise have no way to obtain.
+
+### Stronger demonstrated-and-remedied, or demonstrated-and-reported?
+
+**Remedied, if the remedy is pre-registered as above** — because an intervention that
+changes the measured dependence is the only evidence available that the correlation is
+causal rather than coincidental. Reported-only leaves the thesis's central negative finding
+resting on a correlation in two of three runs.
+
+But this holds **only** with the outcomes fixed in advance. Running it, getting an
+ambiguous result, and then deciding what counts as success would be worse than not running
+it — it would convert a clean finding into a muddy one.
+
+### If time is short
+
+**Report-only is a complete and defensible thesis.** The finding stands on its own, the
+methodological point (Phase 5 in-domain vs Phase 6 between-dataset) is intact, and the
+limitations section is concrete. The remedy strengthens it; it is not load-bearing.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

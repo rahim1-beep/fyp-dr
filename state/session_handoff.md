@@ -10,21 +10,40 @@ the last item in Phase 4.**
 
 ## FIRST ACTION NEXT SESSION
 
-**Run Phase 6 cell 4** — `notebooks/phase6_aptos.py 4`, ~3 min. It computes the **EyePACS
-side of G4**, which is the only thing still outstanding from Phase 6. Same four inputs as
-before.
+**1. Fetch and commit the Phase 6 cell-4 artefacts.** They are NOT in the repo:
+`coverage_correlation_eyepacs.json` is absent and `verdict.json` still holds the
+pre-cell-4 state, so the G4 numbers in the decisions trace to console output rather than
+to a committed artefact. **R4 is broken until this is done.**
 
-**Until it runs the verdict is PROVISIONAL.** G4 is a comparison BETWEEN datasets and only
-the APTOS half exists. `verdict()` now reports it as UNDECIDED rather than as passing.
+    python -m src.data.fetch_run --kernel rah098/<slug> --artefacts phase6_aptos --force
 
-**Watch this number:** APTOS max |r| is on **grade 0 in all three seeds** (n=1,805, the
-largest grade), consistently negative: −0.3285 / −0.1345 / −0.2451. That is not a
-max-of-five artefact, so the EyePACS figure genuinely decides it. If EyePACS shows the same
-pattern it is a confound (better framing on normal eyes reads as more clearly normal), not
-a shortcut.
+**2. Decide DECISION-061** — run the surround-randomisation remedy (~3 h) and drop the
+384 ablation (~11 h), or report the shortcut as found. Recommendation: the swap. The
+priorities inverted when G4 fired; 384 optimises an in-domain number that Phase 6 showed
+is an upper bound, and it cannot become the headline anyway.
 
-After that: the 384 ablation (`notebooks/phase4_res384.py`, written and held) -> Phase 7/8.
-**The EyePACS test set opens once, at the end.**
+## THE HEADLINE CONCLUSION CHANGED
+
+**The model does not generalise beyond its training population** (DECISION-060).
+
+**Read that precisely — performance did not collapse.** G1, G2 and G3 all passed
+comfortably. It fired on **G4 alone**: a demonstrated dependence on retinal framing,
+stronger out-of-domain than in-domain. DECISION-057 fixed in advance that this invalidates
+the generalisation claim regardless of the headline numbers.
+
+**And the claim is narrower than "the model uses a shortcut"** (DECISION-059): present in
+**2 of 3 seeds**, r² 6-11% where present and 1.8% in the third, and the
+**seed-aggregation rule was never pre-registered** — the code used the mean. It fires under
+mean, median and majority; not under unanimity. Best characterised as a property of the
+**training procedure**, which sometimes produces a framing-dependent model.
+
+**The methodological finding is the strongest part.** Phase 5 tested the same hypothesis
+in-domain and found it unsupported (0.0075 grade units). Only the between-dataset
+comparison exposed it. Single-dataset shortcut analysis is blind to exactly the
+dependencies that matter for deployment.
+
+**Phase 7 must carry** the four specific disclaimer points AND a coverage guard that flags
+uploads whose framing falls outside the training range — a control, not just a warning.
 
 ---
 
