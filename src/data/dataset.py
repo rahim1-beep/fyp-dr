@@ -55,6 +55,10 @@ class AugmentConfig:
     contrast: float = 0.15
     scale: tuple[float, float] = (0.9, 1.1)
     shift: float = 0.05
+    # DECISION-063 — the surround-randomisation remedy. Probability that one training
+    # image has its masked-out surround replaced by a per-image random constant colour.
+    # DEFAULT 0.0 = OFF, so every run predating the remedy reproduces bit-for-bit.
+    surround_randomisation: float = 0.0
 
     @classmethod
     def from_yaml(cls, cfg: dict) -> "AugmentConfig":
@@ -183,13 +187,23 @@ class DRDataset(Dataset):
                     break
         return out
 
-    def _augment(self, img: torch.Tensor) -> torch.Tensor:
+    def _augment(self, img: torch.Tensor,
+                 retina: torch.Tensor | None = None) -> torch.Tensor:
         """Geometry then photometry, on a [3,H,W] float tensor in [0,1].
 
         Rotation and shift are safe here in a way they would not be on a raw fundus: the
         image is already square-cropped and centred on the retina with a black surround,
         so a 20-degree rotation moves black into black. Fill is 0 for the same reason —
         it matches the masked surround the model already sees everywhere else.
+
+        `retina` is an optional [H,W] float indicator of the retinal disc, supplied only
+        when `surround_randomisation` is on. It rides through the SAME geometry as the
+        image, stacked as a fourth channel, rather than being recomputed afterwards:
+        re-thresholding a rotated, scaled, colour-jittered image would disagree with the
+        mask at exactly the boundary the remedy is about. Riding along also means the
+        affine's own zero-fill wedges land OUTSIDE the indicator and get filled too —
+        otherwise the remedy would leave fresh black corners for the model to read, which
+        is the cue it exists to remove.
         """
         from torchvision.transforms import v2
         from torchvision.transforms.v2 import functional as F
@@ -199,10 +213,12 @@ class DRDataset(Dataset):
         if not a.enabled:
             return img
 
+        x = img if retina is None else torch.cat([img, retina[None]], 0)
+
         if torch.rand(1).item() < a.horizontal_flip:
-            img = F.horizontal_flip(img)
+            x = F.horizontal_flip(x)
         if torch.rand(1).item() < a.vertical_flip:
-            img = F.vertical_flip(img)
+            x = F.vertical_flip(x)
 
         if a.rotation_degrees or a.shift or a.scale != (1.0, 1.0):
             affine = v2.RandomAffine(
@@ -211,11 +227,42 @@ class DRDataset(Dataset):
                 scale=a.scale if a.scale else None,
                 fill=0.0,
             )
-            img = affine(img)
+            x = affine(x)
+
+        # ColorJitter is photometric and must not see the indicator channel.
+        img, mask = (x, None) if retina is None else (x[:3], x[3] > 0.5)
 
         if a.brightness or a.contrast:
             img = v2.ColorJitter(brightness=a.brightness, contrast=a.contrast)(img)
-        return img.clamp_(0.0, 1.0)
+        img = img.clamp_(0.0, 1.0)
+
+        # Surround randomisation goes LAST, so the fill is exactly the sampled colour and
+        # not a jittered version of it — the point is that surround appearance carries no
+        # stable signal, and a jitter applied on top would reintroduce a weak one.
+        if mask is not None and torch.rand(1).item() < a.surround_randomisation:
+            img = torch.where(mask.unsqueeze(0), img, torch.rand(3, 1, 1))
+        return img
+
+    def _retina_indicator(self, rgb: np.ndarray) -> torch.Tensor | None:
+        """[H,W] float 1.0-inside-retina indicator, or None when it is not needed or not
+        defined.
+
+        Returns None — leaving the image untouched — for the four `ok:no-retina` cache
+        images of DECISION-018, one of which (1986_left) is in the validation split. An
+        empty mask would make `~mask` the WHOLE FRAME, and the remedy would replace the
+        entire image with a flat random colour and train on it. That is a silent,
+        catastrophic version of the augmentation, and it is why this returns None rather
+        than trusting the mask to be non-empty.
+        """
+        a = self.augment
+        if a is None or not a.enabled or a.surround_randomisation <= 0:
+            return None
+        from src.data.preprocess import retina_mask
+
+        m = retina_mask(np.ascontiguousarray(rgb[:, :, ::-1])) > 0
+        if not m.any():
+            return None
+        return torch.from_numpy(m.astype(np.float32))
 
     def __getitem__(self, i: int) -> tuple[torch.Tensor, int, int]:
         path = self.cache_paths[i]
@@ -237,7 +284,7 @@ class DRDataset(Dataset):
 
         img = torch.from_numpy(np.ascontiguousarray(rgb)).permute(2, 0, 1).float() / 255.0
         if self.augment is not None:
-            img = self._augment(img)
+            img = self._augment(img, self._retina_indicator(rgb))
         img = (img - self.mean) / self.std
 
         return img, int(self.df.at[i, "label"]), i

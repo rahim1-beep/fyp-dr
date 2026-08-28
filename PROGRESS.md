@@ -1,17 +1,17 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **Fetch and commit the Phase 6 cell-4 artefacts.** They are NOT in
-> the repo — `coverage_correlation_eyepacs.json` is missing and `verdict.json` still
-> holds the pre-cell-4 state. R4 is broken until then.
+> **NEXT ACTION:** **(1)** Fetch and commit the Phase 6 cell-4 artefacts — still not
+> in the repo, R4 is broken until then:
 >
 >     python -m src.data.fetch_run --kernel rah098/<slug> --artefacts phase6_aptos --force
 >
-> Then **decide DECISION-061**: run the surround-randomisation remedy (~3 h) and drop the
-> 384 ablation (~11 h), or report the shortcut as found.
+> **(2)** Then run the remedy on Kaggle — `notebooks/phase6_remedy.py`, ~2.5 h. Cell 1
+> by hand, cells 2-4 by commit. It refuses to start without the Phase 6 artefacts, so
+> (1) comes first.
 >
-> **HEADLINE CONCLUSION CHANGED.** The model **does not generalise** — G4 fired. Note
-> this does NOT mean performance collapsed: G1-G3 all passed. It fired on a demonstrated
-> framing dependence that is stronger out-of-domain (DECISION-060).
+> **384 is deliberately not run** (DECISION-062) — logged as skipped and why, never as
+> a null. **HEADLINE CONCLUSION CHANGED:** the model does not generalise — G4 fired.
+> This does NOT mean performance collapsed; G1-G3 all passed (DECISION-060).
 
 **Current phase:** Phase 4 — Ablation arms A–F. **Phases 1–3 complete.**
 **Last updated:** 2026-08-20
@@ -351,8 +351,13 @@ order A→B→C→D→E→F by increasing implementation risk.
 - [x] **Phase 6 cell 4 RUN** — G4 CONFIRMED. APTOS mean max |r| 0.2360 vs EyePACS
       0.1367; fires in 2 of 3 seeds, modest (r^2 6-11%) and seed-dependent
       (DECISION-059). **The seed-aggregation rule was NOT pre-registered** — said so.
-- [ ] **← NEXT: fetch + commit the cell-4 artefacts** (R4 — not in the repo yet)
-- [ ] **DECIDE (DECISION-061):** remedy (~3 h) displacing 384 (~11 h), or report as found
+- [ ] **← NEXT (1): fetch + commit the cell-4 artefacts** (R4 — not in the repo yet)
+- [x] **DECISION-061 DECIDED: swap approved.** Remedy in (~3 h), 384 out (~11 h)
+- [x] Remedy IMPLEMENTED and pre-registered — `augment.surround_randomisation`,
+      `configs/remedy_surround.yaml`, `notebooks/phase6_remedy.py`, 6 new tests
+- [ ] **← NEXT (2): run `notebooks/phase6_remedy.py` on Kaggle** (~2.5 h)
+- [x] **384 ablation: deliberately NOT run** (DECISION-062) — reported as skipped, with
+      the reason, never as a null result
 - [ ] Phase 7 — app must carry the specific disclaimer AND a coverage guard (DECISION-060)
 - [ ] Phase 8 — the Phase 5 vs Phase 6 sequence is a methodological contribution
       `tests/test_gradcam.py`, `notebooks/phase5_gradcam.py`. Gate in DECISION-046.

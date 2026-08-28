@@ -15,8 +15,11 @@ import pandas as pd
 import pytest
 import torch
 
+import yaml
+
 from src.data.dataset import AugmentConfig, DRDataset, load_cached_image
 from src.data.manifest import class_counts
+from src.data.preprocess import retina_mask
 from src.data.sampler import build_loaders, build_sampler, describe_balance
 
 REPO = Path(__file__).resolve().parents[1]
@@ -134,7 +137,6 @@ def test_augment_config_rejects_an_unknown_key():
 
 
 def test_base_config_augment_block_loads():
-    import yaml
     cfg = yaml.safe_load((REPO / "configs" / "base.yaml").read_text(encoding="utf-8"))
     a = AugmentConfig.from_yaml(cfg)
     assert a.enabled and a.scale == (0.9, 1.1)
@@ -444,3 +446,147 @@ def test_arm_f_pooled_train_is_still_accepted(tmp_path):
                       dataset="aptos")
     pooled = pd.concat([eye, ap], ignore_index=True)
     assert build_sampler(pooled, "weighted_random") is not None
+
+
+# ----------------------------------------------------------------------------------
+# Surround randomisation — the DECISION-063 remedy
+#
+# Every test here fixes the geometry (no flip, no rotation, no shift, unit scale) unless
+# it is specifically testing the interaction with geometry, so that a failure names one
+# thing.
+# ----------------------------------------------------------------------------------
+def _still(**kw) -> AugmentConfig:
+    """An AugmentConfig with all the existing randomness switched off."""
+    base = dict(horizontal_flip=0.0, vertical_flip=0.0, rotation_degrees=0.0,
+                shift=0.0, scale=(1.0, 1.0), brightness=0.0, contrast=0.0)
+    return AugmentConfig(**{**base, **kw})
+
+
+def _disc_cache(tmp_path: Path, *, blank: bool = False) -> tuple[pd.DataFrame, Path]:
+    """One cached image holding a retinal disc on a black surround.
+
+    The other fixtures write uniform noise, which `retina_mask` correctly reports as
+    retina everywhere — there would be no surround to randomise and the tests would pass
+    while measuring nothing.
+    """
+    root = tmp_path / "cache"
+    (root / "eyepacs").mkdir(parents=True, exist_ok=True)
+    img = np.zeros((224, 224, 3), np.uint8)
+    if not blank:
+        cv2.circle(img, (112, 112), 100, (60, 90, 140), -1)
+    cv2.imwrite(str(root / "eyepacs" / "0_left.jpg"), img)
+    df = pd.DataFrame([{"image_path": "data/data/0_left.jpeg", "patient_id": "0",
+                        "eye": "left", "label": 2, "dataset": "eyepacs",
+                        "split": "train"}])
+    return df, root
+
+
+def test_surround_randomisation_is_off_by_default():
+    """Every run predating the remedy must reproduce bit-for-bit (R6)."""
+    assert AugmentConfig().surround_randomisation == 0.0
+    cfg = yaml.safe_load((REPO / "configs/base.yaml").read_text(encoding="utf-8"))
+    assert AugmentConfig.from_yaml(cfg).surround_randomisation == 0.0
+
+
+def test_surround_randomisation_replaces_the_surround_and_leaves_the_retina_alone(tmp_path):
+    df, root = _disc_cache(tmp_path)
+    plain = DRDataset(df, root, train=True, augment=_still(surround_randomisation=0.0))
+    remedy = DRDataset(df, root, train=True, augment=_still(surround_randomisation=1.0))
+
+    torch.manual_seed(0)
+    a, _, _ = plain[0]
+    torch.manual_seed(0)
+    b, _, _ = remedy[0]
+
+    rgb = load_cached_image(root / "eyepacs" / "0_left.jpg")
+    m = torch.from_numpy(retina_mask(np.ascontiguousarray(rgb[:, :, ::-1])) > 0)
+    assert m.any() and not m.all(), "fixture has no surround to randomise"
+
+    assert torch.allclose(a[:, m], b[:, m]), "the retina itself was modified"
+    assert not torch.allclose(a[:, ~m], b[:, ~m]), "the surround was left as it was"
+    for c in range(3):
+        assert b[c][~m].unique().numel() == 1, "surround fill is not one constant colour"
+
+
+def test_the_surround_fill_is_redrawn_per_image(tmp_path):
+    """A fill that were constant across images would be a new fixed cue, not the removal
+    of one."""
+    df, root = _disc_cache(tmp_path)
+    ds = DRDataset(df, root, train=True, augment=_still(surround_randomisation=1.0))
+    fills = set()
+    for seed in range(6):
+        torch.manual_seed(seed)
+        x, _, _ = ds[0]
+        fills.add(tuple(round(float(x[c, 0, 0]), 6) for c in range(3)))
+    assert len(fills) >= 5, f"fill barely varies across draws: {fills}"
+
+
+def test_the_affine_fill_wedges_are_randomised_too(tmp_path):
+    """The indicator rides through the geometry, so the affine's own zero-fill lands
+    outside it and is filled. Otherwise the remedy would leave fresh black corners —
+    exactly the cue it exists to remove.
+
+    MEASURED at 0.7x scale: near-black goes from 0.688 of the frame to 0.016, and the
+    residue is entirely the bilinear INTERPOLATION RIM (708 px inside the warped mask,
+    70 px within 2 px of it, 0 px beyond). The remedy does not remove the boundary
+    itself and was never meant to — DECISION-051 says so explicitly. It removes the
+    surround's appearance as a stable cue.
+    """
+    df, root = _disc_cache(tmp_path)
+    aug = _still(surround_randomisation=1.0, rotation_degrees=20.0, scale=(0.7, 0.7))
+    ds = DRDataset(df, root, train=True, augment=aug)
+    # _augment directly, not ds[0]: __getitem__ normalises, and "near-black" is not a
+    # meaningful test on a normalised tensor.
+    rgb = load_cached_image(root / "eyepacs" / "0_left.jpg")
+    img = torch.from_numpy(np.ascontiguousarray(rgb)).permute(2, 0, 1).float() / 255.0
+    ind = ds._retina_indicator(rgb)
+
+    torch.manual_seed(3)
+    plain = DRDataset(df, root, train=True,
+                      augment=_still(rotation_degrees=20.0, scale=(0.7, 0.7)))
+    before = (plain._augment(img.clone(), ind).max(0).values < 10 / 255).float().mean()
+    torch.manual_seed(3)
+    x = ds._augment(img.clone(), ind)
+    after = (x.max(0).values < 10 / 255).float().mean()
+    assert before > 0.4, "fixture leaves no fill wedges to cover"
+    assert after < 0.05, f"near-black only fell from {before:.3f} to {after:.3f}"
+
+    # the strong claim: nothing near-black survives away from the boundary
+    from torchvision.transforms import v2 as T
+
+    torch.manual_seed(3)
+    warped = T.RandomAffine(degrees=20.0, translate=None, scale=(0.7, 0.7),
+                            fill=0.0)(torch.cat([img, ind[None]], 0))
+    m = (warped[3] > 0.5).numpy()
+    nb = (x.max(0).values < 10 / 255).numpy()
+    rim = cv2.distanceTransform((~m).astype(np.uint8), cv2.DIST_L2, 5) <= 2
+    leak = int((nb & ~m & ~rim).sum())
+    assert leak == 0, f"{leak} near-black pixels survive outside the retina and its rim"
+
+
+def test_a_no_retina_image_is_left_untouched_rather_than_wholly_replaced(tmp_path):
+    """The four `ok:no-retina` images of DECISION-018. An empty mask makes `~mask` the
+    WHOLE FRAME: without the guard the remedy replaces the entire image with a flat
+    random colour and trains on it, silently."""
+    df, root = _disc_cache(tmp_path, blank=True)
+    plain = DRDataset(df, root, train=True, augment=_still(surround_randomisation=0.0))
+    remedy = DRDataset(df, root, train=True, augment=_still(surround_randomisation=1.0))
+    torch.manual_seed(0)
+    a, _, _ = plain[0]
+    torch.manual_seed(0)
+    b, _, _ = remedy[0]
+    assert torch.allclose(a, b), "a no-retina image was overwritten by the surround fill"
+    # per channel, because __getitem__ normalises and each channel gets its own constant
+    for c in range(3):
+        assert b[c].unique().numel() == 1, "fixture is not blank"
+
+
+def test_surround_randomisation_never_reaches_val_or_test(tmp_path):
+    """R2 again, for the new knob specifically: the guard is on `train`, and the
+    indicator is not even computed for an evaluation split."""
+    df, root = _disc_cache(tmp_path)
+    with pytest.raises(ValueError, match="train-only"):
+        DRDataset(df, root, train=False, augment=_still(surround_randomisation=1.0))
+    ds = DRDataset(df, root, train=False)
+    rgb = load_cached_image(root / "eyepacs" / "0_left.jpg")
+    assert ds._retina_indicator(rgb) is None

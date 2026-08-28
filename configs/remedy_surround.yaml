@@ -1,0 +1,20 @@
+# Remedy overlay — surround randomisation (DECISION-051 pre-registered, DECISION-063
+# designed and pre-registered in detail).
+#
+#     python -m src.train.train --arm E --config configs/remedy_surround.yaml ...
+#
+# MERGE ORDER is base.yaml <- this file <- configs/arm_e.yaml, and the merge updates
+# nested keys per top-level block. arm_e.yaml carries no `augment:` block, so this
+# survives the arm file. Nothing else about arm E changes: same head, same loss, same
+# schedule, same seeds. ONE factor moves (DECISION-063).
+augment:
+  # Probability that a training image has its masked-out surround replaced by a
+  # per-image random constant colour, sampled per channel from U(0,1).
+  #
+  # 0.75, NOT 1.0. Validation and test are never augmented, so their surround is always
+  # black; a model that never saw a black surround in training would be evaluated
+  # slightly out of distribution, and an in-domain drop caused by THAT would be
+  # indistinguishable from an in-domain drop caused by removing the shortcut. Keeping a
+  # quarter of draws black keeps the evaluation condition inside the training
+  # distribution.
+  surround_randomisation: 0.75

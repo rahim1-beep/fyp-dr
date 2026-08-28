@@ -10,17 +10,39 @@ the last item in Phase 4.**
 
 ## FIRST ACTION NEXT SESSION
 
-**1. Fetch and commit the Phase 6 cell-4 artefacts.** They are NOT in the repo:
-`coverage_correlation_eyepacs.json` is absent and `verdict.json` still holds the
-pre-cell-4 state, so the G4 numbers in the decisions trace to console output rather than
-to a committed artefact. **R4 is broken until this is done.**
+**1. Fetch and commit the Phase 6 cell-4 artefacts.** Still NOT in the repo:
+`coverage_correlation_eyepacs.json` is absent and `verdict.json` holds the pre-cell-4
+state, so the G4 numbers trace to console output, not to a committed artefact. **R4 is
+broken until this is done**, and `phase6_remedy` cell 1 refuses to start without them.
 
     python -m src.data.fetch_run --kernel rah098/<slug> --artefacts phase6_aptos --force
 
-**2. Decide DECISION-061** — run the surround-randomisation remedy (~3 h) and drop the
-384 ablation (~11 h), or report the shortcut as found. Recommendation: the swap. The
-priorities inverted when G4 fired; 384 optimises an in-domain number that Phase 6 showed
-is an upper bound, and it cannot become the headline anyway.
+**2. Run the remedy.** `notebooks/phase6_remedy.py` — cell 1 by hand (~4 min), cells 2-4
+by commit (~2.5 h). Everything it needs is implemented, tested and committed.
+
+## THE REMEDY IS BUILT AND PRE-REGISTERED — DO NOT REDESIGN IT MID-RUN
+
+One knob: `augment.surround_randomisation: 0.75` (`configs/remedy_surround.yaml`). Cell 1
+asserts exactly one config key differs from the baseline.
+
+**Why appearance and not extent** — both were measured first (DECISION-063). The existing
+affine ALREADY moves coverage over 0.611-0.864 (sd 0.075), wider than the whole Phase 5
+erosion sweep, so an extent remedy would add nothing. The surround stays black in 96% of
+draws, so appearance is genuinely absent. **The first probe of this got it backwards** by
+indexing the surround with the unrotated mask; the corrected one warps an indicator
+channel, which is how the augmentation itself works.
+
+**Every outcome is reported, whichever way it goes.** That was the condition for running
+it. A FAILED remedy is the more interesting result — it falsifies the shortcut
+interpretation, and nothing else in this project can. Do not quietly reframe a null.
+
+**The test is underpowered and that is on the record.** Baseline APTOS |r| ranged 0.194
+across seeds; a drop to ~0.15 is inside that range and proves nothing. The decisive
+readings are the DIRECTION count (3/3 -> at most 1/3) and agreement across all four
+aggregation rules — not the magnitude. Ambiguous is reported as ambiguous.
+
+**384 is deliberately not run** (DECISION-062). Write it up as skipped, with the reason.
+Never as a null result — it was never run, so nothing is known about it.
 
 ## THE HEADLINE CONCLUSION CHANGED
 

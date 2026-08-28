@@ -3495,6 +3495,23 @@ this much by seed, it is a property of the **training procedure** — which some
 produces a framing-dependent model — rather than a fixed property of the architecture or
 the data. That is a stronger claim about method than about this particular checkpoint.
 
+### For the thesis, not only for this log
+
+The methods chapter states this in its own words rather than leaving it here:
+
+> The rule for aggregating the field-of-view diagnostic across training seeds was **not
+> fixed in advance**. The criterion (DECISION-054) and its resolution across grades
+> (DECISION-058) were pre-registered; the seed rule was settled after the numbers were
+> seen. The rule applied is the **mean across seeds**, which is the project's standing
+> reporting rule (DECISION-042) and therefore the one existing policy already implied.
+> The criterion fires under three of the four plausible rules — mean, median and
+> majority — and not under unanimity. The finding does not depend on the undocumented
+> choice, but it does depend on not requiring unanimity, which is itself a choice that
+> was never written down.
+
+An examiner who finds this unaided reads it as a result selected to fire. Stated plainly
+it is a limitation with its robustness already measured, which is what it actually is.
+
 ### R4 note
 
 At the time of writing, `analysis/phase6_aptos/coverage_correlation_eyepacs.json` is
@@ -3692,6 +3709,155 @@ it — it would convert a clean finding into a muddy one.
 **Report-only is a complete and defensible thesis.** The finding stands on its own, the
 methodological point (Phase 5 in-domain vs Phase 6 between-dataset) is intact, and the
 limitations section is concrete. The remedy strengthens it; it is not load-bearing.
+
+---
+
+## DECISION-062 — The 384 ablation is deliberately NOT run
+
+- **Date:** 2026-08-29
+- **Status:** Accepted — the swap is approved; 384 is dropped, the remedy takes its slot
+- **Deviates from proposal:** No. 384 was always optional (DECISION-005/044).
+
+### Not run, and this is the reason
+
+| | cost | what it would buy |
+|---|---:|---|
+| 384 ablation | **~11 h** | in-domain sensitivity on a headline fixed at 224 |
+| surround remedy | **~3 h** | a causal test of the one demonstrated defect |
+
+**It optimises a number Phase 6 has already shown is an upper bound.** G4 fired: the
+in-domain figures are inflated by a dependence that does not transfer (DECISION-060).
+Spending eleven hours raising in-domain sensitivity, while leaving untested the finding
+that in-domain sensitivity overstates the model, is work aimed at the wrong quantity.
+
+**And it could not have become the headline anyway.** The proposal fixes 224 for all
+headline results. A 384 win would have needed supervisor sign-off as a deviation before
+it could be reported as the main result; without that it is an appendix table.
+
+**This is not a null result and must not be written up as one.** 384 was never run, so
+nothing is known about it. The write-up says it was **not run, and why** — a resolution
+ablation that is skipped and reported as skipped is honest; one that is skipped and
+quietly implied to have been a tie is not.
+
+**Cost of being wrong:** if 384 would have cleared the 0.80 screening floor, that is
+missed. Judged unlikely — stage 3.5 moved B0→B2 (a capacity increase of the same kind)
+without clearing it — but it is a real risk and it is recorded here rather than
+discovered later.
+
+**Net:** 8 hours returned to the project, and the remaining GPU budget spent on the open
+problem rather than on the closed one.
+
+---
+
+## DECISION-063 — The remedy runbook, pre-registered before it runs
+
+- **Date:** 2026-08-29
+- **Status:** Accepted — **pre-registered**. Written before a single remedy epoch.
+- **Deviates from proposal:** No.
+- **Implements:** DECISION-051's remedy, DECISION-061's approved swap.
+
+### What is manipulated — exactly one thing
+
+`configs/remedy_surround.yaml`, an overlay on arm E:
+
+```
+augment:
+  surround_randomisation: 0.75
+```
+
+On 75% of **training** draws, the masked-out surround is replaced by a per-image random
+constant colour, sampled per channel from U(0,1). Head, loss, schedule, epochs, seeds,
+splits and cache are untouched. Cell 1 **asserts** that exactly one config key differs
+between the baseline and remedy merges, rather than trusting it.
+
+**0.75 and not 1.0.** Validation and test are never augmented, so their surround is
+always black. A model that never saw a black surround in training would be evaluated
+slightly out of distribution, and an in-domain drop caused by *that* would be
+indistinguishable from an in-domain drop caused by removing the shortcut. A quarter of
+draws stay black to keep the evaluation condition inside the training distribution.
+
+**No cache rebuild; negligible cost.** Applied at load time. The extra mask costs a
+measured **1.19 ms/image** — about 29 s per epoch on one worker against a ~76 s epoch,
+fully hidden by two workers.
+
+### Two measurements made before choosing the factor, and one correction
+
+DECISION-051 pre-registered *appearance* randomisation. Before implementing it, both
+candidate manipulations were measured locally on a synthetic disc:
+
+| candidate | measured | verdict |
+|---|---|---|
+| **extent** — how much surround | the existing affine already moves coverage over **0.611–0.864, sd 0.075** — a *wider* range than the entire Phase 5 erosion sweep (0.694 → 0.619) | **rejected as primary.** Already present; a null from it would mean nothing |
+| **appearance** — what it looks like | the surround stays essentially black in **96%** of draws (mean surround value 0.011 after jitter) | **chosen.** Genuinely absent from training |
+
+**A correction on the record.** The first appearance probe indexed the surround with the
+**unrotated** disc mask, so retina rotated into that region counted as "lifted" surround
+and the probe reported the surround was already randomised in 89% of draws. That was
+wrong, and it pointed at the opposite conclusion. The corrected probe warps an indicator
+channel through the same geometry — which is also how the augmentation itself is
+implemented, for the same reason.
+
+**A side finding worth keeping.** Because the existing augmentation already jitters
+coverage substantially, a coverage→label association cannot be *eliminated* by that
+jitter, only **attenuated** — per-image baseline coverage differences survive random
+scaling in expectation. That is consistent with the effect actually observed being
+modest and seed-dependent rather than strong.
+
+### What the remedy does NOT do
+
+It does not remove the boundary. A random constant still marks exactly where the retina
+ends — DECISION-051 says so outright. Measured on the fixture at 0.7× scale, near-black
+falls from 0.688 of the frame to 0.016, and the residue is **entirely the bilinear
+interpolation rim**: 708 px inside the warped mask, 70 px within 2 px of it, **0 px
+beyond**. What is removed is the surround's appearance as a stable, noise-free cue —
+"fraction of the frame that is black" is a feature a global pool computes for free, and
+after this it is not.
+
+### The prediction, fixed in advance
+
+**Primary endpoint:** G4 recomputed on the remedied model — the seed **mean** of the max
+within-grade |r|, on APTOS and on EyePACS validation. **The aggregation rule is fixed HERE, in
+advance, this time** (DECISION-042); all four rules are printed alongside.
+
+| outcome | criterion | reading |
+|---|---|---|
+| **WORKS** | APTOS mean < 0.20 **and** ≤ EyePACS mean **and** direction ≤ 1/3 | the shortcut reading is supported **causally**, not only correlationally |
+| **FAILS** | APTOS mean ≥ 0.20 **and** > EyePACS mean | **the shortcut reading weakens.** Most likely a confound — coverage tracking acquisition quality, which tracks severity. Phase 6's generalisation finding stands; the word "shortcut" comes out of the write-up |
+| **TRADE-OFF** | |r| falls **and** external QWK or sensitivity falls with it | the framing signal carried real information. Report both, claim neither |
+| **AMBIGUOUS** | anything else | three seeds were not enough. Reported as ambiguous |
+
+**Secondary** (DECISION-051's own paired test): the remedied model should **lose less on
+APTOS** than the baseline, even if equal or slightly worse on EyePACS. Worse in-domain,
+better out-of-domain is the signature of removing a shortcut.
+
+**In-domain cost, against a measured noise scale:** baseline arm E validation QWK is
+0.7615 / 0.7534 / 0.7560 — mean **0.7570**, range **0.0081**. Inside ±0.0081 is not a
+detectable cost. Below **0.7489** it is a real one, and it is the pre-registered *price*
+of the remedy, not a failure of it: the endpoint is external.
+
+### Power — the part that is not reassuring
+
+The baseline APTOS |r| ranged **0.194 across seeds** (0.3285 / 0.1345 / 0.2451). A three-seed
+test of an effect with that seed range **cannot** separate "the remedy removed a modest
+dependence" from "the seeds landed differently".
+
+> A drop from 0.2360 to 0.15 is **inside the baseline's own seed range** and proves
+> nothing on its own.
+
+So the decisive readings are the ones that do not rest on magnitude: the **direction
+count** (3/3 baseline → at most 1/3) and **agreement across all four aggregation rules**.
+Both are reported. An ambiguous landing is **reported as ambiguous** — no re-analysis
+until something crosses a line.
+
+**Every outcome is reported**, whichever way it goes. That was the condition for running
+it at all, and a failed remedy is the more interesting result: it falsifies the shortcut
+interpretation, which nothing else in this project can do.
+
+### How to run it
+
+`notebooks/phase6_remedy.py`, four cells, ~2.5 h. Cell 1 refuses to start unless the
+Phase 6 artefacts are attached, so the baseline it compares against is read from
+committed files rather than retyped from a console log (R4).
 
 ---
 
