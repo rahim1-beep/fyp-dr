@@ -3907,12 +3907,96 @@ This is deliberately not silent. A run should not lose two hours to an unexplain
 disappearance, but a self-healing step that hid the anomaly would be worse than the
 anomaly.
 
+### Version #3 (2026-09-03): it happened again, and the workaround held
+
+The run completed. The restore fired between cell 3 and cell 4:
+
+```
+[splits @ cell 4] !! 6 split CSV(s) VANISHED since cell 1: [train, val, test, aptos_*]
+    still present: []
+    restored train.csv  sha 7f42cf0ba8e8cf9c  (matches cell 1)   ... all six matched
+```
+
+**All six, not one.** The whole directory emptied — Version #2's `val.csv` error was
+simply the first file cell 4 happened to ask for. Every restored file's hash matched its
+cell-1 value, so the partition cell 4 used is provably the one the leakage gate checked.
+
+Independently verified: the six CSVs are **byte-identical across local repo, bundle, and
+Kaggle** (sha-256 and size), so nothing is being corrupted in transit — they exist, then
+they are gone.
+
+**Still not explained.** Nothing in `src/` deletes anything (`write_manifest` only writes
+into the artefact dir; the only `rmtree` is `smoke.py` on its own workdir), so it is
+Kaggle-side. The next run carries a **repo-integrity probe** that prints whether `src/`,
+`configs/` and `notebooks/` also vanished. That distinguishes "the whole copied tree is
+being pruned" — plausible, since already-imported modules keep working from memory, which
+would explain how cell 4 ran at all — from "something specific to `data/splits`". One
+print settles it; the cause is not guessed at in the meantime.
+
+**Hardening for the remedy:** cell 2 of `phase6_remedy` now checks and restores before
+**every seed**, not once. That cell is ~2.1 h across three subprocesses and each re-reads
+the splits at startup; a disappearance between seed 42 and seed 43 would otherwise kill
+the remaining seeds two hours in.
+
 ### The gate fix of `c876706` stands anyway
 
 `_missing_split_is_fatal` was written for a cause that turned out not to be the one here.
 It stays: a gate that skips its subject and reports success is a real hazard, it is the
 same shape as DECISION-058's NaN, and it costs nothing. Its commit message overstates
 what happened, and this decision is the correction of record.
+
+---
+
+## DECISION-065 — Phase 6 is complete. Every G4 number now traces to a committed artefact.
+
+- **Date:** 2026-09-03
+- **Status:** Accepted — R4 satisfied
+- **Deviates from proposal:** No.
+
+### The R4 hole is closed
+
+`analysis/phase6_aptos/` now holds **eight** files including
+`coverage_correlation_eyepacs.json`, and `verdict.json` has been replaced with the
+G4-complete version. The artefact previously in the repo said **GENERALISES** with
+`G4_shortcut_confirmed: false`; it now reads:
+
+```
+verdict              : DOES NOT GENERALISE beyond its training population;
+                       the in-domain results should be read as an upper bound
+G4_shortcut_confirmed: true
+G4_undecided         : false
+```
+
+The contradiction between the repo's own artefact and DECISION-060 is gone.
+
+### Every number in DECISION-059/060 is confirmed, to four decimals
+
+| seed | EyePACS | APTOS | APTOS larger? |
+|---|---:|---:|---|
+| 42 | 0.1418 | 0.3285 | yes |
+| 43 | 0.1265 | 0.1345 | yes (by +0.008) |
+| 44 | 0.1419 | 0.2451 | yes |
+| **mean** | **0.1367** | **0.2360** | **fires** |
+
+Claimed from the console in DECISION-059: EyePACS 0.1367, APTOS 0.2360. From the
+committed artefact: **identical**. Nothing written into the decisions from console output
+has had to be corrected.
+
+This also confirms the per-seed reading that keeps the claim narrow: seed 43 clears the
+threshold by **+0.008**, which is nothing, and the "2 of 3 seeds" framing of DECISION-059
+stands exactly as written.
+
+### The run was only completed by a workaround, and that is on the record
+
+Cell 4 ran **only because the restore of DECISION-064 fired** — all six split CSVs had
+vanished between cells. The numbers are sound (hashes verified against the cell-1
+snapshot, which is byte-identical to the committed files), but the run is not
+reproducible on a clean Kaggle session without that workaround, and the cause is still
+open. Anyone re-running Phase 6 must expect the restore to fire.
+
+### Phase 6 is now closed
+
+The remedy (DECISION-063) is the next and last piece of Phase 4/6 work.
 
 ---
 

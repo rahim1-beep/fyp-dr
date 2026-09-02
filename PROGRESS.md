@@ -1,17 +1,15 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **(1)** Re-upload `dist/fyp-dr-code.zip` as a New Version AND
-> **re-paste cell 1** — the last run used the old pasted cells. **(2)** Re-run
-> `fyp-dr-phase6-aptos` (Save & Run All, ~18 min). **(3)** Fetch + commit:
+> **NEXT ACTION:** **Run the remedy** — `notebooks/phase6_remedy.py`, ~2.5 h. Re-upload
+> `dist/fyp-dr-code.zip` as a New Version first (it carries the per-seed split guard),
+> paste cell 1 by hand, then cells 2-4 by commit.
 >
->     python -m src.data.fetch_run --kernel rah098/fyp-dr-phase6-aptos --artefacts phase6_aptos --force
+> **Phase 6 is COMPLETE and R4 is satisfied** (DECISION-065): `verdict.json` now says
+> DOES NOT GENERALISE with `G4_shortcut_confirmed: true`, and every G4 number in the
+> decisions matches the artefact to four decimals.
 >
-> **(4)** Then the remedy (~2.5 h).
->
-> **The committed `verdict.json` currently says GENERALISES with G4 false** — the
-> opposite of DECISION-060 — because cell 4 has never completed. **Splits vanish
-> mid-run, cause unknown** (DECISION-064); cell 1 now snapshots them and cell 4
-> restores with hash verification.
+> **The splits still vanish mid-run** (DECISION-064) — the restore fired and saved the
+> run. Cell 2 of the remedy now re-checks before every seed.
 
 **Current phase:** Phase 4 — Ablation arms A–F. **Phases 1–3 complete.**
 **Last updated:** 2026-08-20

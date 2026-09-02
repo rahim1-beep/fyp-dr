@@ -10,35 +10,34 @@ the last item in Phase 4.**
 
 ## FIRST ACTION NEXT SESSION
 
-**1. Re-upload `dist/fyp-dr-code.zip` as a New Version of `fyp-dr-code`, then RE-PASTE
-cell 1 into the Kaggle notebook.** The last run still used the OLD pasted cells — its log
-has no `code:` or `[splits @ cell 1]` line. Updating the dataset is not enough; the cell
-text lives in the notebook.
+**Run the remedy.** Re-upload `dist/fyp-dr-code.zip` as a New Version of `fyp-dr-code`
+(it carries the per-seed split guard), paste `python -m notebooks.phase6_remedy 1` by
+hand, then cells 2-4 by commit. ~2.5 h.
 
-**2. Re-run `fyp-dr-phase6-aptos` (Save & Run All), ~18 min, inference only.**
+## PHASE 6 IS COMPLETE — R4 SATISFIED (DECISION-065)
 
-**3. Fetch and commit:**
+`analysis/phase6_aptos/verdict.json` now reads **DOES NOT GENERALISE**, with
+`G4_shortcut_confirmed: true` and `G4_undecided: false`. The artefact that used to
+contradict DECISION-060 is gone.
 
-    python -m src.data.fetch_run --kernel rah098/fyp-dr-phase6-aptos --artefacts phase6_aptos --force
+**Every G4 number in the decisions matches the artefact to four decimals** — EyePACS
+0.1367, APTOS 0.2360, per-seed 0.1418/0.1265/0.1419 vs 0.3285/0.1345/0.2451. Nothing
+written from console output needed correcting. Seed 43 still clears by only +0.008, so
+the narrow "2 of 3 seeds" framing stands exactly as written.
 
-**4. Then the remedy** — `notebooks/phase6_remedy.py`, ~2.5 h.
+## THE SPLITS STILL VANISH MID-RUN (DECISION-064)
 
-## THE COMMITTED verdict.json CURRENTLY CONTRADICTS THE HEADLINE
+Version #3: **all six** CSVs gone between cell 3 and cell 4, `still present: []`. The
+restore fired, every hash matched cell 1, and the run completed. Version #2's `val.csv`
+error was just the first file cell 4 asked for.
 
-`analysis/phase6_aptos/verdict.json` says **GENERALISES** with `G4_shortcut_confirmed:
-false` — the opposite of DECISION-060 — because cell 4 has never completed. Anyone reading
-the artefact today gets the wrong answer. Fixing this is the whole point of steps 1-3.
+Verified byte-identical local == bundle == Kaggle, so nothing is corrupted in transit —
+they exist, then they are gone. Nothing in `src/` deletes anything. **Cause still open.**
+The next run prints a repo-integrity probe (does `src/` vanish too?) which distinguishes
+"the whole copied tree is pruned" from "specific to data/splits". Report what it prints.
 
-## THE SPLITS VANISH MID-RUN AND THE CAUSE IS UNKNOWN (DECISION-064)
-
-Present at cell 1 (the gate ran every split test and passed), absent at cell 4. **Do not
-repeat my first diagnosis** — I claimed the gate "passed while checking nothing"; it did
-not. `36 passed, 5 skipped` reproduces exactly with the splits INTACT and only the
-gitignored `trainLabels.csv` hidden. All five skips are that file.
-
-Cell 1 now snapshots the CSVs outside the repo with hashes; cell 4 restores and verifies
-if they vanish, printing loudly. **If the restore fires, report it** — it is a workaround,
-not a fix, and the cause is still open.
+Cell 2 of the remedy now checks before **every seed** — that cell is 2.1 h across three
+subprocesses and each re-reads the splits at startup.
 
 ## THE REMEDY IS BUILT AND PRE-REGISTERED — DO NOT REDESIGN IT MID-RUN
 

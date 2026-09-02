@@ -1,16 +1,21 @@
 {
- "verdict": "GENERALISES, with a domain-shift penalty that is predominantly CALIBRATION. Deployment in a new population would require local recalibration on site data; the EyePACS thresholds are not transferable",
+ "verdict": "DOES NOT GENERALISE beyond its training population; the in-domain results should be read as an upper bound",
  "criteria": {
   "G1_refit_qwk_below_0.60": false,
   "G2_refit_sens_below_0.60": false,
   "G3_severe_collapse_with_intact_grade0": false,
-  "G4_shortcut_confirmed": false
+  "G4_shortcut_confirmed": true
  },
- "failed": [],
+ "failed": [
+  "G4_shortcut_confirmed"
+ ],
+ "G4_undecided": false,
  "eyepacs_qwk": 0.7563,
  "carried_qwk": 0.7902059767852304,
  "refit_qwk": 0.8802001508579361,
  "drop": -0.03390597678523044,
  "fraction_of_drop_recovered_by_refitting": NaN,
+ "recovery_state": "not applicable \u2014 QWK did not drop",
+ "recovery_criterion_satisfied": true,
  "note": "'Deployable' is not available to this thesis in either direction: the model fails the screening floor IN-DOMAIN at 0.7360 vs 0.80 (DECISION-057)."
 }

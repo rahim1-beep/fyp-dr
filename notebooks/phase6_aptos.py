@@ -172,8 +172,25 @@ def check_splits(where):
         return
     print(f"[splits @ {where}] !! {len(gone)} split CSV(s) VANISHED since cell 1: {gone}")
     print(f"    still present: {sorted(q.name for q in d.glob('*.csv'))}")
-    print("    THIS IS THE UNEXPLAINED FAILURE OF VERSION #2. Restoring from the "
-          "cell-1 snapshot and verifying hashes.")
+    # WHICH files vanish is the diagnostic. Version #3 lost ALL SIX at once, i.e. the
+    # whole directory, not one file. REPO is a copy of the input dataset, so if the code
+    # files are gone too then something is pruning the copy wholesale (already-imported
+    # modules keep working from memory, which is why cell 4 got as far as it did). If
+    # ONLY data/splits is gone, it is specific to that directory. One cheap print settles
+    # it, so the next run does not have to guess either.
+    probe = {
+        "src/data/manifest.py": (REPO / "src/data/manifest.py").exists(),
+        "src/train/train.py": (REPO / "src/train/train.py").exists(),
+        "configs/base.yaml": (REPO / "configs/base.yaml").exists(),
+        "configs/arm_e.yaml": (REPO / "configs/arm_e.yaml").exists(),
+        "notebooks/phase6_aptos.py": (REPO / "notebooks/phase6_aptos.py").exists(),
+    }
+    print("    repo integrity probe (is the whole copy being pruned, or just splits?):")
+    for k, ok in probe.items():
+        print(f"      {'present' if ok else 'GONE   '}  {k}")
+    print(f"      REPO itself exists: {REPO.exists()}   "
+          f"top-level entries: {sorted(q.name for q in REPO.iterdir())[:12] if REPO.exists() else '-'}")
+    print("    Restoring the splits from the cell-1 snapshot and verifying hashes.")
     for n in gone:
         shutil.copy2(SPLIT_BACKUP / f"{n}.csv", d / f"{n}.csv")
         got = _sha(d / f"{n}.csv")
