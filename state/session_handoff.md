@@ -10,15 +10,35 @@ the last item in Phase 4.**
 
 ## FIRST ACTION NEXT SESSION
 
-**1. Fetch and commit the Phase 6 cell-4 artefacts.** Still NOT in the repo:
-`coverage_correlation_eyepacs.json` is absent and `verdict.json` holds the pre-cell-4
-state, so the G4 numbers trace to console output, not to a committed artefact. **R4 is
-broken until this is done**, and `phase6_remedy` cell 1 refuses to start without them.
+**1. Re-upload `dist/fyp-dr-code.zip` as a New Version of `fyp-dr-code`, then RE-PASTE
+cell 1 into the Kaggle notebook.** The last run still used the OLD pasted cells — its log
+has no `code:` or `[splits @ cell 1]` line. Updating the dataset is not enough; the cell
+text lives in the notebook.
 
-    python -m src.data.fetch_run --kernel rah098/<slug> --artefacts phase6_aptos --force
+**2. Re-run `fyp-dr-phase6-aptos` (Save & Run All), ~18 min, inference only.**
 
-**2. Run the remedy.** `notebooks/phase6_remedy.py` — cell 1 by hand (~4 min), cells 2-4
-by commit (~2.5 h). Everything it needs is implemented, tested and committed.
+**3. Fetch and commit:**
+
+    python -m src.data.fetch_run --kernel rah098/fyp-dr-phase6-aptos --artefacts phase6_aptos --force
+
+**4. Then the remedy** — `notebooks/phase6_remedy.py`, ~2.5 h.
+
+## THE COMMITTED verdict.json CURRENTLY CONTRADICTS THE HEADLINE
+
+`analysis/phase6_aptos/verdict.json` says **GENERALISES** with `G4_shortcut_confirmed:
+false` — the opposite of DECISION-060 — because cell 4 has never completed. Anyone reading
+the artefact today gets the wrong answer. Fixing this is the whole point of steps 1-3.
+
+## THE SPLITS VANISH MID-RUN AND THE CAUSE IS UNKNOWN (DECISION-064)
+
+Present at cell 1 (the gate ran every split test and passed), absent at cell 4. **Do not
+repeat my first diagnosis** — I claimed the gate "passed while checking nothing"; it did
+not. `36 passed, 5 skipped` reproduces exactly with the splits INTACT and only the
+gitignored `trainLabels.csv` hidden. All five skips are that file.
+
+Cell 1 now snapshots the CSVs outside the repo with hashes; cell 4 restores and verifies
+if they vanish, printing loudly. **If the restore fires, report it** — it is a workaround,
+not a fix, and the cause is still open.
 
 ## THE REMEDY IS BUILT AND PRE-REGISTERED — DO NOT REDESIGN IT MID-RUN
 

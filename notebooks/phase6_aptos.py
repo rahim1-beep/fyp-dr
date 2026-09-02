@@ -113,22 +113,80 @@ shutil.copytree(CODE, REPO)
 os.chdir(REPO)
 sys.path.insert(0, str(REPO))
 
-# ALL SIX SPLIT CSVs MUST BE HERE. On 2026-08-28 the three EyePACS splits were absent from
-# the copied repo while the three APTOS ones were present; the leakage gate SKIPPED the
-# tests needing them, reported "33 passed, 5 skipped", the notebook's `assert rc == 0` was
-# satisfied, and the run continued for ten more minutes before dying in cell 4 on the same
-# missing file. Checked here, at the copy, where the error names the actual cause.
+# THE SPLIT CSVs DISAPPEAR MID-RUN. MEASURED, NOT GUESSED — AND SURVIVED.
+#
+# 2026-08-29, Version #2: the leakage gate in THIS cell reported "36 passed, 5 skipped".
+# Reproduced locally with the splits INTACT and only the gitignored trainLabels.csv
+# hidden: 36 passed, 5 skipped, the same five source-label skips. So every split test RAN
+# and PASSED here — data/splits was complete at cell 1. Cell 4 then died on
+# `data/splits/val.csv does not exist`. Present at cell 1, absent at cell 4, with nothing
+# in between that writes to that directory.
+#
+# The cause is NOT established. Rather than guess at it, this does three things:
+#   1. records the exact state (names + sizes + hashes) at cell 1,
+#   2. keeps a copy OUTSIDE the repo tree, in WORK, and
+#   3. lets cell 4 re-check, and restore from that copy if files have vanished — loudly,
+#      verifying the hashes so a restored file is provably the same bytes the gate saw.
+# A run should not lose two hours to this while the cause is still unknown, and a silent
+# restore would be worse than the bug, so it prints everything it does.
+import hashlib
+
 FYP_SPLITS = ["train", "val", "test", "aptos_train", "aptos_val", "aptos_test"]
-_absent = [n for n in FYP_SPLITS if not (REPO / "data" / "splits" / f"{n}.csv").exists()]
-if _absent:
-    _have = sorted(q.name for q in (REPO / "data" / "splits").glob("*.csv"))
-    raise SystemExit(
-        f"the copied repo is missing split CSV(s): {_absent}\n"
-        f"  present    : {_have}\n"
-        f"  copied from: {CODE}\n"
-        "A PARTIAL partition is never legitimate. Re-upload fyp-dr-code as a New "
-        "Version, confirm the notebook's input is pinned to that version, and re-run.")
-print(f"splits: all {len(FYP_SPLITS)} present")
+SPLIT_BACKUP = WORK / "splits_backup"
+
+
+def _sha(p):
+    return hashlib.sha256(p.read_bytes()).hexdigest()[:16]
+
+
+def snapshot_splits():
+    """Copy the six split CSVs somewhere outside REPO, and record their hashes."""
+    d = REPO / "data" / "splits"
+    absent = [n for n in FYP_SPLITS if not (d / f"{n}.csv").exists()]
+    if absent:
+        have = sorted(q.name for q in d.glob("*.csv")) if d.is_dir() else []
+        raise SystemExit(
+            f"[splits @ cell 1] MISSING: {absent}\n"
+            f"  present    : {have}\n"
+            f"  copied from: {CODE}\n"
+            "The upload or the mount is incomplete. Re-upload fyp-dr-code as a New "
+            "Version and confirm the notebook's input is pinned to it.")
+    SPLIT_BACKUP.mkdir(parents=True, exist_ok=True)
+    sums = {}
+    print("[splits @ cell 1] all 6 present; snapshotting to", SPLIT_BACKUP)
+    for n in FYP_SPLITS:
+        src = d / f"{n}.csv"
+        shutil.copy2(src, SPLIT_BACKUP / f"{n}.csv")
+        sums[n] = _sha(src)
+        print(f"    {n:<14} {src.stat().st_size:>9,} B  sha {sums[n]}")
+    return sums
+
+
+def check_splits(where):
+    """Re-check, and restore from the cell-1 snapshot if anything has vanished."""
+    d = REPO / "data" / "splits"
+    d.mkdir(parents=True, exist_ok=True)
+    gone = [n for n in FYP_SPLITS if not (d / f"{n}.csv").exists()]
+    if not gone:
+        print(f"[splits @ {where}] all 6 still present")
+        return
+    print(f"[splits @ {where}] !! {len(gone)} split CSV(s) VANISHED since cell 1: {gone}")
+    print(f"    still present: {sorted(q.name for q in d.glob('*.csv'))}")
+    print("    THIS IS THE UNEXPLAINED FAILURE OF VERSION #2. Restoring from the "
+          "cell-1 snapshot and verifying hashes.")
+    for n in gone:
+        shutil.copy2(SPLIT_BACKUP / f"{n}.csv", d / f"{n}.csv")
+        got = _sha(d / f"{n}.csv")
+        if got != SPLIT_SUMS[n]:
+            raise SystemExit(
+                f"restored {n}.csv but its hash {got} != the cell-1 hash "
+                f"{SPLIT_SUMS[n]}. Refusing to continue against a partition that is not "
+                "the one the leakage gate checked.")
+        print(f"    restored {n}.csv  sha {got}  (matches cell 1)")
+    print("    REPORT THIS in the run notes: the restore is a workaround, not a fix.")
+
+
+SPLIT_SUMS = snapshot_splits()
 
 # Real run: the leakage gate must not fail open by skipping absent splits.
 os.environ["FYP_REQUIRE_SPLITS"] = "1"
@@ -390,6 +448,7 @@ from src.data.manifest import load_split
 from src.eval.external import coverage_correlation
 from src.xai.border_check import NoRetinaError, region_masks
 
+check_splits("cell 4")
 VAL = load_split("val")
 vds = DRDataset(VAL, CACHE, train=False, image_size=224,
                 mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))

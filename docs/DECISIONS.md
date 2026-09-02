@@ -3861,6 +3861,61 @@ committed files rather than retyped from a console log (R4).
 
 ---
 
+## DECISION-064 — The splits vanish mid-run. Recorded as unexplained, and survived.
+
+- **Date:** 2026-08-29
+- **Status:** Accepted — a workaround with the cause **not** established
+- **Deviates from proposal:** No.
+
+### The observation, and a correction to my own first diagnosis
+
+Phase 6 Version #2 failed in cell 4: `data/splits/val.csv does not exist`. Cells 1–3 had
+run and written their artefacts.
+
+**My first reading of this was wrong and is corrected here.** I claimed the leakage gate
+had "passed while checking nothing" — that the split CSVs were absent at cell 1 and the
+gate had skipped every test needing them. That is not what happened.
+
+| | Kaggle | local, splits intact, `trainLabels.csv` hidden |
+|---|---|---|
+| result | `36 passed, 5 skipped` | **`36 passed, 5 skipped`** |
+
+Reproduced exactly. All five skips are the gitignored `data/raw/eyepacs/trainLabels.csv`
+(four parametrised cases plus one), which is correctly absent from the Kaggle bundle.
+**Every split test ran and passed.** `data/splits` was complete at cell 1, and `val.csv`
+was gone by cell 4, with nothing in between that writes to that directory.
+
+The earlier count of `33 passed, 5 skipped` was the *previous* code version; the
+difference of three is exactly the three tests added in `c876706`.
+
+### What is NOT established
+
+**Why the file disappears.** The dataset listing shows all six CSVs at the right sizes;
+they survive the copy; the gate reads them. Nothing in cells 2–3 touches
+`REPO/data/splits`. I could not determine the cause from the logs and am not going to
+invent one — a plausible-sounding guess in this log would be worse than the gap.
+
+### What was done instead
+
+Cell 1 now **snapshots** the six CSVs to `WORK/splits_backup` with SHA-256 prefixes
+recorded, and cell 4 re-checks. If a file has vanished it is **restored from the snapshot
+and its hash verified against the cell-1 value**, so a restored file is provably the same
+bytes the leakage gate checked; a mismatch aborts. Every step prints, including a line
+saying the restore is a workaround and must be reported.
+
+This is deliberately not silent. A run should not lose two hours to an unexplained
+disappearance, but a self-healing step that hid the anomaly would be worse than the
+anomaly.
+
+### The gate fix of `c876706` stands anyway
+
+`_missing_split_is_fatal` was written for a cause that turned out not to be the one here.
+It stays: a gate that skips its subject and reports success is a real hazard, it is the
+same shape as DECISION-058's NaN, and it costs nothing. Its commit message overstates
+what happened, and this decision is the correction of record.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

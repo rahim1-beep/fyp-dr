@@ -1,17 +1,17 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **(1)** Fetch and commit the Phase 6 cell-4 artefacts — still not
-> in the repo, R4 is broken until then:
+> **NEXT ACTION:** **(1)** Re-upload `dist/fyp-dr-code.zip` as a New Version AND
+> **re-paste cell 1** — the last run used the old pasted cells. **(2)** Re-run
+> `fyp-dr-phase6-aptos` (Save & Run All, ~18 min). **(3)** Fetch + commit:
 >
->     python -m src.data.fetch_run --kernel rah098/<slug> --artefacts phase6_aptos --force
+>     python -m src.data.fetch_run --kernel rah098/fyp-dr-phase6-aptos --artefacts phase6_aptos --force
 >
-> **(2)** Then run the remedy on Kaggle — `notebooks/phase6_remedy.py`, ~2.5 h. Cell 1
-> by hand, cells 2-4 by commit. It refuses to start without the Phase 6 artefacts, so
-> (1) comes first.
+> **(4)** Then the remedy (~2.5 h).
 >
-> **384 is deliberately not run** (DECISION-062) — logged as skipped and why, never as
-> a null. **HEADLINE CONCLUSION CHANGED:** the model does not generalise — G4 fired.
-> This does NOT mean performance collapsed; G1-G3 all passed (DECISION-060).
+> **The committed `verdict.json` currently says GENERALISES with G4 false** — the
+> opposite of DECISION-060 — because cell 4 has never completed. **Splits vanish
+> mid-run, cause unknown** (DECISION-064); cell 1 now snapshots them and cell 4
+> restores with hash verification.
 
 **Current phase:** Phase 4 — Ablation arms A–F. **Phases 1–3 complete.**
 **Last updated:** 2026-08-20
