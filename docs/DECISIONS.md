@@ -4000,6 +4000,82 @@ The remedy (DECISION-063) is the next and last piece of Phase 4/6 work.
 
 ---
 
+## DECISION-066 — The remedy run is INCOMPLETE. No outcome is claimed.
+
+- **Date:** 2026-09-03
+- **Status:** Accepted — the run is void as a test of DECISION-063; re-run pending
+- **Deviates from proposal:** No.
+
+### What happened
+
+Seeds 42 and 43 trained to completion. **Seed 44 hit the notebook's 60-minute per-run
+timeout** at epoch 23 of 30 (exit 124), with its best checkpoint at epoch 19 and val QWK
+0.7603 still improving. Two of three seeds.
+
+### The pre-registered rule was NOT met, and cell 4 applied it anyway — that was a bug
+
+Cell 2 prints, correctly, that a partial result "is reported as partial and the
+pre-registered rule is **NOT** applied to it". Cell 4 then applied it to two seeds and
+printed `OUTCOME: AMBIGUOUS`. **That label is void** and is retracted here:
+
+- a **two-seed** comparison against a **three-seed** baseline is not the registered test;
+- the "majority" rule is **undefined on an even number of seeds** — and it duly
+  disagreed with every other rule (majority `True`, mean/median/unanimity `False`),
+  which is an artefact of the tie, not a finding;
+- "median" on two seeds is just the mean, so the four-rule agreement check collapses to
+  two independent rules.
+
+The notebook now **refuses** to evaluate WORKS/FAILS/AMBIGUOUS unless all three seeds
+completed, and writes `"complete": false` into the verdict. The refusal is enforced in
+code rather than left to whoever reads the output.
+
+### Why it timed out: my runtime estimate was wrong by ~2x
+
+| | s/epoch | vs baseline |
+|---|---:|---|
+| baseline arm E | 76 | — |
+| remedy, seed 42 | 148.3 | 1.95x |
+| remedy, seed 43 | 147.8 | 1.94x |
+| remedy, seed 44 | 150.0 | 1.97x |
+
+DECISION-063 budgeted "~29 s/epoch, fully hidden by two workers", from a measurement of
+`retina_mask` alone. That measurement was correct and the **estimate built on it was
+not**: it ignored that the affine now warps **four channels instead of three**, and that
+the fill costs a full-frame `torch.where`, all per-sample on the CPU. The true overhead is
+~74 s/epoch. Consistent to within 1.5% across three independent runs, so it is the
+augmentation, not a noisy machine.
+
+**Fixed:** timeout raised to 95 min, and the docstring now carries the measured 148
+s/epoch instead of the estimate. Budget ~50 min per seed, ~2.6 h for three.
+
+### Descriptive numbers only — NOT a result
+
+From `analysis/phase6_remedy/` (committed, 2 seeds):
+
+| | APTOS | EyePACS | direction |
+|---|---:|---:|---|
+| baseline (3 seeds) | 0.2360 | 0.1367 | 3/3 |
+| remedied (**2 seeds**) | 0.1796 | 0.1411 | 1/2 |
+
+**In-domain cost: none detectable.** Remedied mean val QWK **0.7551** against baseline
+**0.7570**, a delta of **-0.0019**, well inside the baseline's own 0.0081 seed range. That
+much is a real reading and does not depend on the third seed, because it is a
+seed-by-seed comparison rather than an aggregate against a threshold.
+
+**Everything else waits.** DECISION-063's power section already said a drop to ~0.15 sits
+inside the baseline's 0.194 seed range and proves nothing; reading a two-seed 0.1796 as
+progress would be exactly the error that section was written to prevent.
+
+### Cost control for the re-run
+
+Re-running all three seeds to recover one costs ~1.7 h of quota for nothing. Cell 2 now
+**reuses a completed run** found in an attached input, but only if that run's own
+`config.yaml` proves it is this experiment: matching run id, matching backbone, and
+`surround_randomisation` actually 0.75. A checkpoint that cannot prove it is ignored
+rather than trusted. So the re-run trains **seed 44 only**, ~50 min.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

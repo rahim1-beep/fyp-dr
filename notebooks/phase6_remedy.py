@@ -5,8 +5,13 @@
 Arm E on EfficientNet-B0, three seeds, retrained with ONE factor changed: the masked-out
 surround is replaced by a per-image random constant colour on 75% of training draws
 (`configs/remedy_surround.yaml`). Nothing else moves — same head, loss, schedule, epochs,
-seeds, splits, and cache. No cache rebuild: the augmentation is applied at load time, and
-the extra mask costs 1.19 ms/image, ~29 s per epoch on one worker against a ~76 s epoch.
+seeds, splits, and cache. No cache rebuild: the augmentation is applied at load time.
+
+RUNTIME, MEASURED, and it is NOT what was estimated. The remedy roughly DOUBLES epoch
+time: 148 s/epoch against the baseline's 76 s (1.95x, consistent across all three seeds).
+The pre-run estimate of ~29 s/epoch counted only `retina_mask`; it missed that the affine
+now warps FOUR channels instead of three and that the fill costs a full-frame `where`,
+all per-sample on the CPU. Budget ~50 min per seed, ~2.6 h for three (DECISION-066).
 
 =============================================================================
  WHAT IS BEING MANIPULATED, AND WHY THIS ONE THING
@@ -375,8 +380,39 @@ CELL_2 = r'''
 # Per-run isolation: a failure is recorded and the sweep continues, so one bad seed does
 # not cost the whole session.
 RUNS.mkdir(parents=True, exist_ok=True)
+import yaml as _yaml
+
+
+def find_completed(seed):
+    """A COMPLETED remedy run for this seed in an attached input, or None.
+
+    The first attempt lost seed 44 to a timeout after seeds 42 and 43 had finished
+    (DECISION-066). Re-running all three to recover one costs ~1.7 h of quota for nothing,
+    so a finished run is reused if its own config proves it is the same experiment:
+    the same run id, the same backbone, and surround_randomisation ACTUALLY 0.75. A
+    checkpoint that cannot prove that is ignored rather than trusted.
+    """
+    rid = RUN_ID[seed]
+    for cand in Path("/kaggle/input").rglob(f"{rid}/best.pth"):
+        d = cand.parent
+        if not ((d / "config.yaml").exists() and (d / "metrics.json").exists()):
+            continue
+        c = _yaml.safe_load((d / "config.yaml").read_text(encoding="utf-8"))
+        if (c.get("augment", {}).get("surround_randomisation") == 0.75
+                and c.get("model", {}).get("arch") == ARCH):
+            return d
+        print(f"  ignoring {d}: config does not match this experiment")
+    return None
+
+
 results = {}
 for seed in SEEDS:
+    prior = find_completed(seed)
+    if prior is not None:
+        shutil.copytree(prior, RUNS / RUN_ID[seed], dirs_exist_ok=True)
+        results[seed] = {"rc": 0, "minutes": 0.0, "reused": True}
+        print(f"\n[seed {seed}] REUSED a completed run from {prior} — not retrained.")
+        continue
     # Before EVERY seed, not just once. Cell 2 is ~2.1 h across three subprocesses, and
     # each `src.train.train` re-reads the split CSVs at startup. Version #3 showed the
     # whole splits directory can empty mid-run, so a disappearance between seed 42 and
@@ -388,8 +424,8 @@ for seed in SEEDS:
                     "--config", OVERLAY,
                     "--cache-root", CACHE, "--runs-root", RUNS,
                     "--run-id", RUN_ID[seed], "--epochs", EPOCHS, "--seed", seed,
-                    "--num-workers", 2], timeout_min=60)
-    results[seed] = {"rc": rc, "minutes": round(mins, 1)}
+                    "--num-workers", 2], timeout_min=95)
+    results[seed] = {"rc": rc, "minutes": round(mins, 1), "reused": False}
     if rc != 0:
         print(f"!! seed {seed} FAILED (exit {rc}) — continuing")
 
@@ -528,7 +564,15 @@ for seed in ok:
     print(f"  seed {seed}: EyePACS max|r| {rem_e[seed]['max_abs_r']:.4f}   "
           f"APTOS max|r| {rem_a[seed]['max_abs_r']:.4f}")
 
-# ---- the pre-registered rule, applied ------------------------------------------
+# ---- the pre-registered rule, applied ONLY to a complete run --------------------
+#
+# Cell 2 states that a partial result "is reported as partial and the pre-registered rule
+# is NOT applied to it". The first attempt then applied it anyway to two seeds, and
+# printed an OUTCOME. That was a bug in this notebook, not a result (DECISION-066): a
+# two-seed comparison against a three-seed baseline is not the pre-registered test, and
+# "majority" is undefined on an even number of seeds. The refusal is enforced here rather
+# than left to whoever reads the output.
+COMPLETE = len(ok) == len(SEEDS)
 E = [rem_e[s]["max_abs_r"] for s in ok]
 A = [rem_a[s]["max_abs_r"] for s in ok]
 mean_e, mean_a = float(np.mean(E)), float(np.mean(A))
@@ -558,7 +602,13 @@ print(f"  remedied  APTOS {mean_a:.4f}  EyePACS {mean_e:.4f}  "
 
 works = mean_a < 0.20 and mean_a <= mean_e and direction <= 1
 fails = mean_a >= 0.20 and mean_a > mean_e
-if works:
+if not COMPLETE:
+    outcome = (f"INCOMPLETE — {len(ok)} of {len(SEEDS)} seeds. The pre-registered rule is "
+               "NOT applied and no outcome is claimed. The numbers above are descriptive "
+               "only: a two-seed comparison against a three-seed baseline is not the "
+               "registered test, and the majority rule is undefined on an even number of "
+               "seeds. Re-run the missing seed(s) and evaluate then.")
+elif works:
     outcome = ("REMEDY WORKS — G4 no longer fires and the per-seed direction collapsed. "
                "The shortcut reading is supported causally, not only correlationally.")
 elif fails:
@@ -572,6 +622,8 @@ else:
                "0.194 seed range. Report as ambiguous; do not re-analyse until it "
                "crosses a line.")
 print("\n  OUTCOME: " + outcome)
+if not COMPLETE:
+    print("  (the WORKS/FAILS/AMBIGUOUS labels are deliberately not evaluated here)")
 
 # ---- the secondary, paired endpoint ---------------------------------------------
 print("\nSecondary (DECISION-051): does the remedied model LOSE LESS on APTOS?")
@@ -588,7 +640,7 @@ json.dump({"remedied": {"eyepacs": rem_e, "aptos": rem_a,
                         "direction": f"{BASE_DIR}/{len(SEEDS)}"},
            "rules": {k: {"aptos": v[0], "eyepacs": v[1], "fires": bool(v[2])}
                      for k, v in rules.items()},
-           "outcome": outcome, "seeds": ok},
+           "outcome": outcome, "seeds": ok, "complete": COMPLETE},
           open(OUT / "remedy_verdict.json", "w"), indent=1, default=float)
 np.savez(OUT / "remedy_aptos_scores.npz", y_true=base_npz["y_true"],
          **{f"seed_{s}": rem_scores[s] for s in ok})

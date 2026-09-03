@@ -1,0 +1,20 @@
+{
+ "in_domain": [
+  {
+   "seed": 42,
+   "qwk": 0.7554497004293272,
+   "balanced_accuracy": 0.4895842723615484,
+   "sensitivity": 0.652089407191448,
+   "specificity": 0.979240386883699
+  },
+  {
+   "seed": 43,
+   "qwk": 0.7547499507393687,
+   "balanced_accuracy": 0.49742007941127986,
+   "sensitivity": 0.6229348882410107,
+   "specificity": 0.9834866713847605
+  }
+ ],
+ "mean_qwk": 0.755099825584348,
+ "baseline_mean_qwk": 0.757
+}

@@ -10,9 +10,34 @@ the last item in Phase 4.**
 
 ## FIRST ACTION NEXT SESSION
 
-**Run the remedy.** Re-upload `dist/fyp-dr-code.zip` as a New Version of `fyp-dr-code`
-(it carries the per-seed split guard), paste `python -m notebooks.phase6_remedy 1` by
-hand, then cells 2-4 by commit. ~2.5 h.
+**Re-run the remedy for seed 44 only.** Upload the new `dist/fyp-dr-code.zip` as a New
+Version, **attach the `fyp-dr-phase6-remedy` output as an input** so cell 2 reuses the
+finished seeds 42/43, paste cell 1 by hand, then cells 2-4 by commit. ~50 min.
+
+## THE REMEDY RUN IS INCOMPLETE — NO OUTCOME IS CLAIMED (DECISION-066)
+
+Seed 44 hit the 60-min timeout at epoch 23/30 (best 0.7603 at epoch 19, still improving).
+Two of three seeds.
+
+**Cell 4 printed `OUTCOME: AMBIGUOUS` on two seeds. That is a BUG and is retracted.** Cell
+2 says a partial result must not have the rule applied; cell 4 applied it anyway. Do not
+quote that label. A two-seed comparison against a three-seed baseline is not the
+registered test, "majority" is undefined on an even count (it fired while every other rule
+did not — an artefact of the tie), and "median" on two seeds is just the mean. The
+notebook now refuses to evaluate unless all three seeds completed.
+
+**My runtime estimate was wrong by ~2x.** Measured 148 s/epoch against the baseline's 76
+(1.95x, consistent across all three runs). DECISION-063 budgeted ~29 s/epoch from
+`retina_mask` alone and missed that the affine now warps FOUR channels and the fill costs
+a full-frame `where`, per-sample on CPU. Timeout raised to 95 min.
+
+**The one real reading: no detectable in-domain cost.** Remedied mean val QWK 0.7551 vs
+baseline 0.7570, delta -0.0019, inside the 0.0081 seed range. This one holds without seed
+44 because it is a seed-by-seed comparison, not an aggregate against a threshold.
+
+**Everything else waits for seed 44.** A two-seed APTOS mean of 0.1796 sits inside the
+baseline's own 0.194 seed range; reading it as progress is exactly the error DECISION-063's
+power section was written to prevent.
 
 ## PHASE 6 IS COMPLETE — R4 SATISFIED (DECISION-065)
 

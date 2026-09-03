@@ -1,15 +1,15 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **Run the remedy** — `notebooks/phase6_remedy.py`, ~2.5 h. Re-upload
-> `dist/fyp-dr-code.zip` as a New Version first (it carries the per-seed split guard),
-> paste cell 1 by hand, then cells 2-4 by commit.
+> **NEXT ACTION:** **Re-run the remedy to get seed 44.** Upload the new
+> `dist/fyp-dr-code.zip`, attach THIS run's output as an input so seeds 42/43 are reused,
+> paste cell 1 by hand, cells 2-4 by commit. ~50 min (one seed), not 2.6 h.
 >
-> **Phase 6 is COMPLETE and R4 is satisfied** (DECISION-065): `verdict.json` now says
-> DOES NOT GENERALISE with `G4_shortcut_confirmed: true`, and every G4 number in the
-> decisions matches the artefact to four decimals.
+> **The remedy run is INCOMPLETE and no outcome is claimed** (DECISION-066). Seed 44
+> timed out at epoch 23/30; cell 4 printed `AMBIGUOUS` on two seeds, which was a bug and
+> is retracted. The notebook now refuses to evaluate the rule unless all three seeds ran.
 >
-> **The splits still vanish mid-run** (DECISION-064) — the restore fired and saved the
-> run. Cell 2 of the remedy now re-checks before every seed.
+> **The one real reading so far: no detectable in-domain cost** — remedied mean val QWK
+> 0.7551 vs baseline 0.7570, inside the 0.0081 seed range.
 
 **Current phase:** Phase 4 — Ablation arms A–F. **Phases 1–3 complete.**
 **Last updated:** 2026-08-20
