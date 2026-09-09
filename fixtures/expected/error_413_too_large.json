@@ -1,0 +1,4 @@
+{
+ "status_code": 413,
+ "detail": "upload is 20971521 bytes; the limit is 20971520"
+}

@@ -35,8 +35,8 @@ DEPLOY = dict(run_id="phase4_stage3_arm_e_efficientnet_b0", seed=42,
               arch="efficientnet_b0", head="ordinal_regression", num_outputs=1,
               image_size=224, cuts=[0.5, 1.62164, 2.17199, 3.272691],
               referral_threshold=0.9487713575363159,
-              seed_val_qwk=0.7615, seed_val_sens_at_spec95=0.7464,
-              reported_val_qwk=0.7570, reported_val_sens_at_spec95=0.7360,
+              seed_val_qwk=0.7614671328146116, seed_val_sens_at_spec95=0.7464,
+              reported_val_qwk=0.7569412145586636, reported_val_sens_at_spec95=0.7360,
               source="analysis/phase6_aptos/carried_over_rules.json")
 
 CAL = dict(split="train", n_images=24586, n_no_retina=3, low=0.55, high=0.90,
@@ -253,4 +253,7 @@ def test_provenance_states_both_numbers_side_by_side(tmp_path):
     p = tmp_path / "d.json"
     p.write_text(json.dumps(DEPLOY), encoding="utf-8")
     line = Deployment.load(p).provenance()
-    assert "0.7570" in line and "0.7615" in line and "seed 42" in line
+    # 0.7569, not 0.7570: the mean of the three per-seed QWKs at full precision is
+    # 0.75694. The earlier 0.7570 came from averaging values already rounded to 4 dp
+    # (DECISION-069) and this fixture now carries the same numbers as the real manifest.
+    assert "0.7569" in line and "0.7615" in line and "seed 42" in line

@@ -1,0 +1,29 @@
+{
+ "graded": true,
+ "grade": 0,
+ "grade_name": "No DR",
+ "score": -6.037356797605753e-06,
+ "referable": false,
+ "referral_threshold": 0.9487713575363159,
+ "cuts": [
+  0.5,
+  1.62164,
+  2.17199,
+  3.272691
+ ],
+ "guard": {
+  "status": "framing_above_training_range",
+  "coverage": 1.0,
+  "low": 0.6138193558673469,
+  "high": 0.8172433035714286,
+  "message": "The retina fills 100.0% of this image, above the 81.7% that 99% of training images stayed below. The image may be cropped more tightly than the model was trained on, and its score is known to depend partly on framing (Phase 6), so treat any grade with extra caution."
+ },
+ "run_id": "phase4_stage3_arm_e_efficientnet_b0",
+ "disclaimer": [
+  "Research prototype. NOT a medical device, and not for clinical use.",
+  "Below the screening reference in-domain: referable sensitivity 0.7360 at 95% specificity, against a 0.80 reference that is itself provisional.",
+  "Demonstrated dependence on image framing, stronger on external data than on the training distribution. Present in two of three training runs.",
+  "The decision thresholds are NOT transferable. They were fitted on EyePACS; any use on a new population requires local recalibration."
+ ],
+ "_note": "SHAPE ONLY. Produced with an UNTRAINED checkpoint so that key sets and types are exact; `score`, `grade`, `grade_name` and `referable` are NOT real predictions. Build the UI against the shape, never quote these values."
+}

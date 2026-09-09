@@ -1,0 +1,22 @@
+{
+ "run_id": "phase4_stage3_arm_e_efficientnet_b0",
+ "seed": 42,
+ "arch": "efficientnet_b0",
+ "head": "ordinal_regression",
+ "image_size": 224,
+ "provenance": "phase4_stage3_arm_e_efficientnet_b0 (seed 42). Reported performance is the 3-seed mean: QWK 0.7569, referable sensitivity 0.7360 at 95% specificity. This seed's own validation QWK is 0.7615.",
+ "reported_val_qwk": 0.7569412145586636,
+ "reported_val_sens_at_spec95": 0.736,
+ "disclaimer": [
+  "Research prototype. NOT a medical device, and not for clinical use.",
+  "Below the screening reference in-domain: referable sensitivity 0.7360 at 95% specificity, against a 0.80 reference that is itself provisional.",
+  "Demonstrated dependence on image framing, stronger on external data than on the training distribution. Present in two of three training runs.",
+  "The decision thresholds are NOT transferable. They were fitted on EyePACS; any use on a new population requires local recalibration."
+ ],
+ "coverage_calibration": {
+  "split": "train",
+  "n_images": 24586,
+  "low": 0.6138193558673469,
+  "high": 0.8172433035714286
+ }
+}

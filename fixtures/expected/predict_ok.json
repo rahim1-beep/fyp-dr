@@ -1,0 +1,29 @@
+{
+ "graded": true,
+ "grade": 0,
+ "grade_name": "No DR",
+ "score": 7.980102964211255e-06,
+ "referable": false,
+ "referral_threshold": 0.9487713575363159,
+ "cuts": [
+  0.5,
+  1.62164,
+  2.17199,
+  3.272691
+ ],
+ "guard": {
+  "status": "ok",
+  "coverage": 0.6986407844387755,
+  "low": 0.6138193558673469,
+  "high": 0.8172433035714286,
+  "message": "Framing is within the range the model was trained on (retina fills 69.9%; training range 61.4%-81.7%)."
+ },
+ "run_id": "phase4_stage3_arm_e_efficientnet_b0",
+ "disclaimer": [
+  "Research prototype. NOT a medical device, and not for clinical use.",
+  "Below the screening reference in-domain: referable sensitivity 0.7360 at 95% specificity, against a 0.80 reference that is itself provisional.",
+  "Demonstrated dependence on image framing, stronger on external data than on the training distribution. Present in two of three training runs.",
+  "The decision thresholds are NOT transferable. They were fitted on EyePACS; any use on a new population requires local recalibration."
+ ],
+ "_note": "SHAPE ONLY. Produced with an UNTRAINED checkpoint so that key sets and types are exact; `score`, `grade`, `grade_name` and `referable` are NOT real predictions. Build the UI against the shape, never quote these values."
+}

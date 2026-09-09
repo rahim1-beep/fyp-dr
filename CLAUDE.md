@@ -173,10 +173,158 @@ area: `data-engineer`, `leakage-auditor` (gatekeeper for anything touching parti
 
 ## 9. Current phase
 
-**Phase 4 — ablation, near the end.** Stages 1, 3 and 3.5 are done and stage 2 is next.
-Backbone is fixed at EfficientNet-B0 (DECISION-039); the best arm is E (ordinal
-regression head) at held-out QWK 0.7560, referable sensitivity 0.7464 at specificity
-0.95 — **below the 0.80 screening floor, which is the open problem.**
+**Phase 7 — the web application.** Phases 4, 5 and 6 are COMPLETE, including the
+surround-randomisation remedy. No Kaggle work is outstanding.
+
+Backbone fixed at EfficientNet-B0 (DECISION-039); arm E (ordinal-regression head) ships,
+seed 42 (DECISION-069). **Report the 3-seed means: validation QWK 0.7569, referable
+sensitivity 0.7360 at 95% specificity** — below the 0.80 screening reference, which is a
+stated limitation rather than an open problem now.
+
+Two findings the write-up turns on:
+
+* **The model does not generalise** beyond its training population (DECISION-060). G1–G3
+  passed; G4 fired — a demonstrated dependence on retinal framing, stronger out-of-domain.
+  This does NOT mean performance collapsed.
+* **The remedy outcome is AMBIGUOUS and stays that way** (DECISION-067). Do not upgrade
+  it to "worked".
+
+Built and live: the coverage guard (calibrated, DECISION-070), `src/inference/predictor.py`,
+and the FastAPI backend. Remaining: the Next.js frontend, then Phase 8.
+
+*(This section previously described Phase 4 as in progress and quoted seed 42's own
+0.7464. Both were five phases stale.)*
 
 See `PROGRESS.md` for the live checklist and NEXT ACTION, and
 `state/session_handoff.md` for the standing rules that are easiest to break.
+
+
+---
+
+# DR Grading Web App — frontend (Phase 7)
+
+Appended 2026-09-09. **Everything above still holds** — the backend rules, R1–R7, the
+balancing mechanism, the Kaggle-first environment. This section adds the frontend and
+contradicts none of it.
+
+## What this project is actually about
+
+The contribution of the thesis is **honest measurement**, not the score. The model is
+below the clinical reference bar and the write-up says so. An interface that oversells it
+destroys the thing being defended. Every design decision resolves toward "state the
+limitation plainly", never toward "make the number look good".
+
+## Stack (fixed — do not propose alternatives)
+
+Next.js (App Router) + TypeScript + Tailwind. **Not Streamlit** — DECISION-001.
+Backend: FastAPI at `http://localhost:8000`, CORS fully open, local demo only.
+
+## The contract lives in a file, not in memory
+
+**`docs/api-contract.md`** is authoritative and was read off the source. Recorded payloads
+for every state are in **`fixtures/expected/`**. Do not reconstruct response shapes from
+recollection; read those.
+
+## Hard rules
+
+1. **All displayed metrics come from `GET /meta`.** Never hardcode a number the API
+   returns. Call it once on load.
+2. **Never render `0.7615` or `0.7464`** — seed 42's own figures. The UI reports the
+   3-seed mean (`0.7569`, `0.7360`) only. Two backend tests enforce this server-side; do
+   not reintroduce the numbers client-side.
+3. **`disclaimer[]` renders verbatim, all four strings, in the page flow** — on the
+   Result view **and** the Upload view. Not a modal, tooltip, accordion, "learn more", or
+   truncation. See the note below on why both screens get the full four.
+4. **Show `preprocessed_png` as the graded image**, never the user's original. The
+   original is not what the model saw. You may show the original alongside, clearly
+   labelled as the input file.
+5. **Always render `guard.message`.** It is written for a human and explains itself. Do
+   not paraphrase it or substitute your own copy.
+6. **`grade` and `referable` are independent and may disagree.** Correct behaviour, not a
+   bug. See below.
+7. **The provenance line appears on the page** (footer is fine).
+8. **No storage, no accounts, no patient data entry.** Upload → result → done. Nothing
+   persists.
+
+### Why the full disclaimer on both screens
+
+The brief left this ambiguous, so it is decided here: **all four strings on Upload as well
+as Result.** The Upload screen is where someone decides whether to use the thing at all,
+and shortening the caveats at exactly that moment is the "make it look better" pressure
+this project exists to resist. Four short strings is not a usability burden for an
+audience of a thesis panel and clinicians. The alternative considered and rejected was a
+one-line summary on Upload with the full set on Result.
+
+## The disagreement (do not "fix" this)
+
+`grade` comes from four cut points tuned for agreement with human graders. `referable`
+comes from a separate threshold (**0.9488**) tuned for 95% specificity. That threshold
+sits **below** the grade-1→2 cut point (**1.6216**), so any score in that 0.673-wide band
+yields `grade: 1` "Mild" **and** `referable: true`.
+
+Present them as two distinct answers of equal weight:
+
+```
+Estimated grade      Mild
+Referral             Refer
+```
+
+Never derive one from the other. Never suppress or soften the disagreement. Never add a
+reconciliation that picks a winner. Making this read as two correct answers rather than a
+contradiction is the hardest UX problem in the app — solve it in the layout, not a
+footnote.
+
+## Language rules
+
+Banned: "diagnosis", "diagnose", "detected", "confirmed", "AI-powered", "accurate",
+"confident", "clear", "normal", "healthy", "all clear".
+
+- This **estimates a grade**. It does not diagnose.
+- **No confidence percentage, ever.** The model does not produce one; deriving one from
+  the score would be fabrication.
+- **No green tick or success state for grade 0.** Sensitivity is 0.736 — roughly one
+  referable case in four is missed. Grade 0 is a reading, not reassurance, and gets the
+  same visual weight as every other grade.
+- Errors state what happened and what to do. They do not apologise.
+
+## Colour rule
+
+Do not build a red-amber-green severity ramp. Traffic-light encoding says "green = fine",
+which is exactly the claim the model cannot support. Use a single-hue progression so
+severity reads as position on a scale rather than as verdict. Colour is never the only
+carrier of meaning — the grade is always stated in words.
+
+## The four guard states
+
+| `guard.status` | `graded` | UI |
+|---|---|---|
+| `ok` | true | show grade normally |
+| `framing_below_training_range` | true | grade **+ prominent warning** |
+| `framing_above_training_range` | true | grade **+ prominent warning** |
+| `no_retina_detected` | false | **no grade** — show `guard.message`, invite re-upload |
+
+The `/predict` response is a **discriminated union on `graded`**. The declined variant has
+no `grade` key at all. Type it so the compiler rejects any path reading `grade` without
+narrowing.
+
+Grade names by index: `["No DR", "Mild", "Moderate", "Severe", "Proliferative"]`.
+`grade_name` is already in the response — use it, do not re-derive it.
+
+## Test fixtures
+
+`fixtures/` — six verified images covering ok, both framing warnings, no-retina, 413 and
+400. **They are training images**; they exercise UI states and must never be screenshotted
+as a demo of performance. See `fixtures/README.md`.
+
+## Running it
+
+```
+set FYP_CHECKPOINT=<path to seed 42 best.pth>
+.venv\Scripts\python -m uvicorn backend.app:app --reload   # :8000
+cd frontend && npm run dev                                   # :3000
+```
+
+The backend refuses to start without checkpoint, deployment manifest, and coverage
+calibration. Deliberate — a misconfigured deploy fails loudly rather than grading with a
+silently absent safety check. **Do not add fallbacks or defaults that would let it start
+anyway.**

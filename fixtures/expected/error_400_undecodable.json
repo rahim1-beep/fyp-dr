@@ -1,0 +1,4 @@
+{
+ "status_code": 400,
+ "detail": "the uploaded bytes did not decode as an image"
+}

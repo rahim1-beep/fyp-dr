@@ -1,0 +1,38 @@
+[
+ {
+  "file": "in_range_fundus.jpeg",
+  "guard_status": "ok",
+  "coverage": 0.6986407844387755,
+  "note": "real EyePACS image 13345_right, unmodified"
+ },
+ {
+  "file": "framing_too_wide.jpeg",
+  "guard_status": "framing_below_training_range",
+  "coverage": 0.36672911352040816,
+  "note": "top half of the same image \u2014 the retina is cut off, so it fills less of its own bounding box"
+ },
+ {
+  "file": "framing_too_tight.jpeg",
+  "guard_status": "framing_above_training_range",
+  "coverage": 1.0,
+  "note": "centre crop inside the disc \u2014 no surround left at all"
+ },
+ {
+  "file": "not_a_fundus.png",
+  "guard_status": "no_retina_detected",
+  "coverage": null,
+  "note": "no retinal disc \u2014 the API returns graded:false with NO grade key"
+ },
+ {
+  "file": "oversized_over_20mb.png",
+  "guard_status": "n/a \u2014 HTTP 413",
+  "coverage": null,
+  "note": "27,050,872 bytes, limit is 20,971,520"
+ },
+ {
+  "file": "not_an_image.jpg",
+  "guard_status": "n/a \u2014 HTTP 400",
+  "coverage": null,
+  "note": "a .txt renamed; tests the decode-failure path"
+ }
+]

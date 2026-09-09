@@ -1,0 +1,18 @@
+{
+ "graded": false,
+ "guard": {
+  "status": "no_retina_detected",
+  "coverage": null,
+  "low": 0.6138193558673469,
+  "high": 0.8172433035714286,
+  "message": "No retina was detected in this image. Either it is not a fundus photograph, or it is too dark or too damaged to locate the retinal disc. No grade is produced."
+ },
+ "run_id": "phase4_stage3_arm_e_efficientnet_b0",
+ "disclaimer": [
+  "Research prototype. NOT a medical device, and not for clinical use.",
+  "Below the screening reference in-domain: referable sensitivity 0.7360 at 95% specificity, against a 0.80 reference that is itself provisional.",
+  "Demonstrated dependence on image framing, stronger on external data than on the training distribution. Present in two of three training runs.",
+  "The decision thresholds are NOT transferable. They were fitted on EyePACS; any use on a new population requires local recalibration."
+ ],
+ "_note": "SHAPE ONLY. Produced with an UNTRAINED checkpoint so that key sets and types are exact; `score`, `grade`, `grade_name` and `referable` are NOT real predictions. Build the UI against the shape, never quote these values."
+}

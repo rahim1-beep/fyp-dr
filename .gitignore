@@ -76,3 +76,13 @@ dist/
 # --- Scratch ---
 scratch/
 tmp/
+
+# Frontend test fixture IMAGES are generated, not authored: `python -m fixtures.build_fixtures`
+# rebuilds and re-verifies them. They are derived from data/raw/ (itself ignored, line 2),
+# so committing them would put EyePACS pixels in the repo by the back door — and one of
+# them is a deliberately oversized 20 MB+ file for the 413 path.
+# The script, README, fixtures.json and expected/*.json ARE committed: they are the
+# contract, and the frontend can be built against them with no images present.
+fixtures/*.jpeg
+fixtures/*.jpg
+fixtures/*.png
