@@ -1,19 +1,16 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **Run `notebooks/phase7_calibrate.py` on Kaggle** — one cell, ~2 min,
-> NO GPU. It is the only thing keeping the coverage guard from being live. Then fetch:
+> **NEXT ACTION:** **The Next.js frontend.** Everything behind it is done and live:
+> predictor (21 tests), backend (12 tests), and the coverage guard is now CALIBRATED
+> (DECISION-070) — bounds 0.6138-0.8172 from 24,586 training images.
 >
->     python -m src.data.fetch_run --kernel rah098/<slug> --artefacts coverage_guard --force
+> To run the app you need seed 42's `best.pth` locally (gitignored — download once from
+> the `fyp-dr-phase4-stage3` notebook output):
 >
-> After that the app runs end to end locally:
->
->     set FYP_CHECKPOINT=<path to seed 42 best.pth>
+>     set FYP_CHECKPOINT=<path to best.pth>
 >     .venv\Scripts\python -m uvicorn backend.app:app --reload
 >
-> Backend is done (12 tests). Remaining: the Next.js frontend, then Phase 8.
->
-> **Seed 42 ships** (DECISION-069). The app quotes the 3-SEED MEAN (QWK 0.7569, sens
-> 0.7360), never seed 42's own 0.7615/0.7464, and two tests enforce that.
+> **No Kaggle work is outstanding.** Remaining: frontend, then Phase 8 write-up.
 
 **Current phase:** Phase 4 — Ablation arms A–F. **Phases 1–3 complete.**
 **Last updated:** 2026-08-20

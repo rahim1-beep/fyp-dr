@@ -10,23 +10,33 @@ the last item in Phase 4.**
 
 ## FIRST ACTION NEXT SESSION
 
-**Run `notebooks/phase7_calibrate.py` on Kaggle.** One cell, ~2 min, NO GPU. Inputs:
-`fyp-dr-eyepacs-224` + `fyp-dr-code`. Commit by Save & Run All — an interactive run saves
-no output to fetch. Then:
+**The Next.js frontend.** Everything behind it is built, tested and live. Render `/meta`
+for the disclaimer and provenance rather than hardcoding numbers in the UI — that is where
+DECISION-069's promise is kept.
 
-    python -m src.data.fetch_run --kernel rah098/<slug> --artefacts coverage_guard --force
-    git add analysis/coverage_guard/calibration.json && git commit
+To run the app you need seed 42's `best.pth` locally (gitignored; download once from the
+`fyp-dr-phase4-stage3` notebook output):
 
-That is the last thing blocking the coverage guard. The cell SELF-CHECKS before writing
-anything worth committing: the guard must load what it produced, the bounds must be
-plausible, and at least 45 of 50 real training images must PASS the calibration measured
-from their own split. A guard that flags the median training image would be useless, and
-that would otherwise only surface once the app was running.
-
-**Then the app runs end to end locally:**
-
-    set FYP_CHECKPOINT=<path to seed 42 best.pth>
+    set FYP_CHECKPOINT=<path to best.pth>
     .venv\Scripts\python -m uvicorn backend.app:app --reload
+
+**NO KAGGLE WORK IS OUTSTANDING.** All experimental phases and the calibration are done.
+
+## THE COVERAGE GUARD IS CALIBRATED AND LIVE (DECISION-070)
+
+Bounds **0.6138 - 0.8172** (p1/p99) from 24,586 training images, median 0.7829, 3
+no-retina. Cross-checks against Phase 6's independently measured validation median of
+0.7822 to within 0.0007.
+
+**The p1/p99 choice was strongly vindicated:** the training MINIMUM is 0.1655 against a p1
+of 0.6138 — a gap more than twice the width of the whole band. With min/max bounds the low
+side would never have fired.
+
+**KNOW THE LIMIT BEFORE QUOTING THE GUARD.** It flags 4.8% of APTOS against 2% in-domain
+— 2.4x, all on the tight-crop side, so it is sensitive in the right direction. But
+**95.2% of APTOS passes**, even though APTOS is where G4 fired. APTOS's median coverage is
+0.051 below training's, a quarter of the band width, and a per-image check cannot see a
+median shift. Lead with that limitation in the write-up; it is future work, not a fix.
 
 ## THE BACKEND IS BUILT (12 tests, tests/test_api.py)
 

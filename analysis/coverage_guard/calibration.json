@@ -1,0 +1,11 @@
+{
+ "split": "train",
+ "n_images": 24586,
+ "n_no_retina": 3,
+ "low": 0.6138193558673469,
+ "high": 0.8172433035714286,
+ "low_pct": 1.0,
+ "high_pct": 99.0,
+ "median": 0.7829041772959183,
+ "cache_fingerprint": "5a2cbb30ead38b07"
+}

@@ -4335,6 +4335,77 @@ them, so the same class of error cannot recur in that notebook.
 
 ---
 
+## DECISION-070 — The coverage guard is calibrated and live. It is also narrower than it looks.
+
+- **Date:** 2026-09-09
+- **Status:** Accepted — measured, committed, and its limit quantified
+- **Deviates from proposal:** No.
+- **Artefact:** `analysis/coverage_guard/calibration.json`, from
+  `rah098/fyp-dr-phase7-calibrate` (378 s, CPU only)
+
+### The measurement
+
+| | |
+|---|---|
+| images | **24,586** (the training split) |
+| no retina | **3** — counted, excluded from percentiles (DECISION-052) |
+| median coverage | **0.7829** |
+| **p1 / p99 — the enforced bounds** | **0.6138 / 0.8172** |
+| min / max | 0.1655 / 0.8755 |
+
+The self-check passed at **47 of 50** training images inside their own bounds. The bounds
+exclude 2% of the training distribution by construction, so a small number of failures is
+the design working, not a fault.
+
+**Cross-check against Phase 6:** training median 0.7829 against the EyePACS *validation*
+median of 0.7822 measured independently in `phase6_aptos` cell 4. Two different splits,
+two different code paths, agreeing to 0.0007.
+
+### p1/p99 over min/max was the right call, and the data says so loudly
+
+DECISION-068 chose percentiles on principle — before seeing any numbers — because one
+freak image would stretch a min/max range far enough to wave everything through. The
+measurement is a stronger vindication than expected:
+
+> The training minimum is **0.1655**. The 1st percentile is **0.6138**. A gap of **0.448**,
+> more than twice the entire width of the enforced band.
+
+At least one training image has a retina filling a sixth of the frame. Under min/max
+bounds the low side of the guard would essentially never have fired.
+
+### What it does on external data — and the limit that comes with it
+
+Run against the 3,662 committed APTOS coverage values:
+
+| | flagged | rate |
+|---|---:|---|
+| training split (by construction) | — | 2.0% |
+| **APTOS** | **174** | **4.8%** |
+
+**2.4x the in-domain rate, and every flag on the tight-crop side** (0 low, 174 high).
+So the guard is sensitive in the right direction on the dataset where G4 fired.
+
+**But 95.2% of APTOS passes.** That number matters more than the 4.8%, and the write-up
+leads with it:
+
+> APTOS's median coverage is **0.7319** against the training median of **0.7829** — a
+> shift of **0.051, a quarter of the enforced band's width** — and yet almost the whole
+> distribution sits inside the bounds. **A per-image check cannot see a shift in the
+> median.** The guard catches an individual badly framed upload; it does not and cannot
+> detect that a whole population is framed differently, which is the condition Phase 6
+> actually found.
+
+That is a real limitation of the control, stated at the point it was measured rather than
+discovered by a reader. Detecting the population case needs the *distribution of uploads*
+monitored over time, which is out of scope here and belongs in future work.
+
+### Status
+
+The guard is live: `Calibration.load()` succeeds and the app's startup now blocks only on
+`FYP_CHECKPOINT`, which is gitignored by design.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and
