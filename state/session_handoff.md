@@ -10,45 +10,45 @@ the last item in Phase 4.**
 
 ## FIRST ACTION NEXT SESSION
 
-**Re-run the remedy for seed 44 only.** Upload the new `dist/fyp-dr-code.zip` as a New
-Version, **attach the `fyp-dr-phase6-remedy` output as an input** so cell 2 reuses the
-finished seeds 42/43, paste cell 1 by hand, then cells 2-4 by commit. ~50 min.
+**Phase 7 — the web app.** Everything experimental is finished. Start with the two pieces
+already decided: the **coverage guard** that flags an upload whose framing falls outside
+the training range (DECISION-060 — it reuses `region_masks` from Phases 5/6), and the
+**four-point disclaimer**. Then the upload -> predict -> Grad-CAM flow.
 
-## THE REMEDY RUN IS INCOMPLETE — NO OUTCOME IS CLAIMED (DECISION-066)
+## THE REMEDY IS COMPLETE AND THE OUTCOME IS AMBIGUOUS (DECISION-067)
 
-Seed 44 hit the 60-min timeout at epoch 23/30 (best 0.7603 at epoch 19, still improving).
-Two of three seeds.
+|  | APTOS | EyePACS | direction | G4 fires |
+|---|---|---|---|---|
+| baseline | 0.2360 | 0.1367 | 3/3 | 3 of 4 rules |
+| remedied | 0.1853 | 0.1598 | 1/3 | 0 of 4 rules |
 
-**Cell 4 printed `OUTCOME: AMBIGUOUS` on two seeds. That is a BUG and is retracted.** Cell
-2 says a partial result must not have the rule applied; cell 4 applied it anyway. Do not
-quote that label. A two-seed comparison against a three-seed baseline is not the
-registered test, "majority" is undefined on an even count (it fired while every other rule
-did not — an artefact of the tie), and "median" on two seeds is just the mean. The
-notebook now refuses to evaluate unless all three seeds completed.
+**DO NOT UPGRADE THIS TO "THE REMEDY WORKED."** Three reasons, all pre-registered:
 
-**My runtime estimate was wrong by ~2x.** Measured 148 s/epoch against the baseline's 76
-(1.95x, consistent across all three runs). DECISION-063 budgeted ~29 s/epoch from
-`retina_mask` alone and missed that the affine now warps FOUR channels and the fill costs
-a full-frame `where`, per-sample on CPU. Timeout raised to 95 min.
+1. The WORKS clause required APTOS <= EyePACS. It is 0.1853 vs 0.1598. Not met.
+2. **The gap narrowed partly from the WRONG END** — APTOS fell 0.0507 but EyePACS ROSE
+   0.0230, so about a third of the narrowing is the IN-DOMAIN dependence getting stronger.
+   A clean remedy would not do that. This is the most important qualifier.
+3. The 0.0507 drop is inside the baseline's own 0.194 across-seed range.
 
-**The one real reading: no detectable in-domain cost.** Remedied mean val QWK 0.7551 vs
-baseline 0.7570, delta -0.0019, inside the 0.0081 seed range. This one holds without seed
-44 because it is a seed-by-seed comparison, not an aggregate against a threshold.
+**What is true and worth saying:** every marker that does not rest on magnitude moved as
+predicted (direction 3/3 -> 1/3; 0 of 4 rules fire), at **no in-domain cost** — mean val
+QWK 0.7570 against 0.7570. That is WEAK CAUSAL SUPPORT for the shortcut reading, not none
+and not proof.
 
-**Everything else waits for seed 44.** A two-seed APTOS mean of 0.1796 sits inside the
-baseline's own 0.194 seed range; reading it as progress is exactly the error DECISION-063's
-power section was written to prevent.
+**A defect in my own pre-registration is recorded in DECISION-067.** The notebook glossed
+the WORKS clauses as "(i.e. G4 no longer fires)", which is wrong: G4 fires only if BOTH
+|r|>=0.2 AND APTOS>EyePACS, so it stops firing when EITHER fails, while WORKS demanded
+BOTH fail. Under the literal G4 definition the criterion does NOT fire. **Resolved as
+AMBIGUOUS — the stricter reading**, because an internally ambiguous pre-registration must
+be read against interest or it is worth nothing.
 
-## PHASE 6 IS COMPLETE — R4 SATISFIED (DECISION-065)
+**The secondary endpoint was never tested.** "Loses less on APTOS" needs the carried-over
+evaluation; what cell 4 prints is mean predicted score, a proxy that cannot distinguish
+better calibration from worse sensitivity. Optional ~18 min re-run of Phase 6 with the
+remedied checkpoints completes the registered plan. **It cannot change the primary.**
 
-`analysis/phase6_aptos/verdict.json` now reads **DOES NOT GENERALISE**, with
-`G4_shortcut_confirmed: true` and `G4_undecided: false`. The artefact that used to
-contradict DECISION-060 is gone.
-
-**Every G4 number in the decisions matches the artefact to four decimals** — EyePACS
-0.1367, APTOS 0.2360, per-seed 0.1418/0.1265/0.1419 vs 0.3285/0.1345/0.2451. Nothing
-written from console output needed correcting. Seed 43 still clears by only +0.008, so
-the narrow "2 of 3 seeds" framing stands exactly as written.
+**Phase 6's verdict is unchanged.** The thesis reports the BASELINE model; G4 fired on it
+and DECISION-060 stands. The remedy is a follow-up about why, not a new headline.
 
 ## THE SPLITS STILL VANISH MID-RUN (DECISION-064)
 

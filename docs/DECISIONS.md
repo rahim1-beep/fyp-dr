@@ -4076,6 +4076,122 @@ rather than trusted. So the re-run trains **seed 44 only**, ~50 min.
 
 ---
 
+## DECISION-067 — The remedy ran to completion. Outcome: AMBIGUOUS, and it stays AMBIGUOUS.
+
+- **Date:** 2026-09-09
+- **Status:** Accepted — the pre-registered outcome, reported as pre-registered
+- **Deviates from proposal:** No.
+- **Artefact:** `analysis/phase6_remedy/` — `complete: true`, seeds [42, 43, 44]
+
+### The result
+
+| | APTOS | EyePACS | direction | G4 fires |
+|---|---:|---:|---|---|
+| baseline | 0.2360 | 0.1367 | 3/3 | 3 of 4 rules |
+| **remedied** | **0.1853** | **0.1598** | **1/3** | **0 of 4 rules** |
+| change | **−0.0507** | **+0.0230** | | |
+
+**In-domain cost: none.** Remedied mean validation QWK **0.7570** against baseline
+**0.7570** — a delta of −0.0000. Per seed: 0.7554 / 0.7547 / 0.7608 against 0.7615 /
+0.7534 / 0.7560. Seed 44 improved, seed 42 declined, and the mean is unchanged to four
+decimals.
+
+### Applying the pre-registered rule, clause by clause
+
+| WORKS clause | value | met? |
+|---|---|---|
+| APTOS mean < 0.20 | 0.1853 | **yes** |
+| APTOS mean ≤ EyePACS mean | 0.1853 vs 0.1598 | **NO** |
+| direction ≤ 1/3 | 1/3 | **yes** |
+
+Two of three. FAILS requires APTOS ≥ 0.20 **and** > EyePACS; 0.1853 < 0.20, so that is not
+met either. **The rule returns AMBIGUOUS**, and that is the outcome of record.
+
+### A defect in my own pre-registration, and how it is resolved
+
+DECISION-063's notebook docstring glossed the first two clauses as "**(i.e. G4 no longer
+fires)**". **That gloss is wrong.** `src/eval/external.py:207` defines
+`g4 = (a >= 0.2 and a > e)` — G4 fires only if **both** hold, so it stops firing when
+**either** fails. The WORKS criterion demanded **both** fail, which is strictly stronger
+than G4 itself.
+
+So the same pre-registration supports two readings:
+
+- **rule as written and as coded** → AMBIGUOUS;
+- **its own parenthetical gloss**, and the literal G4 definition → the criterion does not
+  fire, which reads as WORKS.
+
+**Resolved as AMBIGUOUS**, the stricter reading. When a pre-registration turns out to be
+internally ambiguous, the reading that does **not** favour the hypothesis is the one that
+gets used — otherwise the ambiguity is worth exactly as much as no pre-registration at
+all. Recorded here so an examiner who spots the gloss sees that the discrepancy was found
+and resolved against interest, rather than not noticed.
+
+### What actually moved, stated without spin
+
+**Every reading that does not depend on magnitude moved as "works" predicts.**
+DECISION-063 named two such readings in advance, because the effect is too small for
+magnitude to carry a conclusion. Both moved: direction **3/3 → 1/3**, and the criterion
+fires under **0 of 4** aggregation rules against 3 of 4 for the baseline.
+
+**But the gap narrowed partly from the wrong end.** APTOS fell 0.0507 and EyePACS **rose
+0.0230** — roughly a third of the narrowing comes from the *in-domain* dependence getting
+**stronger**, not the external one getting weaker. A remedy that worked cleanly would not
+do that, and it is the single most important qualifier on this result.
+
+**And the magnitude proves nothing on its own,** exactly as pre-registered: the 0.0507
+drop sits well inside the baseline's own **0.194** across-seed range.
+
+### The secondary endpoint was NOT tested
+
+DECISION-051's secondary was "the remedied model **loses less on APTOS**". What cell 4
+prints is **mean predicted score** (baseline 1.7372/1.6173/1.5729 → remedied
+1.5168/1.5084/1.4140), which is a proxy and does not answer it. A lower mean score against
+*carried-over* thresholds means **fewer referrals**, and the baseline's APTOS sensitivity
+of 0.990 was already over-referral — so this could be better calibration or worse
+sensitivity, and the printed numbers cannot distinguish them.
+
+**Optional, ~18 min:** re-run Phase 6's carried-over evaluation with the remedied
+checkpoints. That completes the pre-registered plan rather than extending it. **It cannot
+change the primary outcome** — using an external metric to break an ambiguous primary
+after seeing it would be precisely the post-hoc move this project has avoided throughout.
+
+### For the thesis
+
+> **The remedy.** Arm E was retrained with one factor changed: on 75% of training draws
+> the masked-out surround was replaced by a per-image random constant colour, removing the
+> surround's appearance as a stable cue. Three seeds; everything else identical.
+>
+> Every marker of the dependence that does not rest on magnitude moved in the predicted
+> direction. The per-seed direction count fell from **3 of 3 to 1 of 3**, and the shortcut
+> criterion ceased to fire under **all four** aggregation rules against three of four for
+> the baseline. The mean within-grade correlation on APTOS fell from 0.2360 to 0.1853.
+> There was **no measurable in-domain cost**: mean validation QWK 0.7570 for both.
+>
+> Two things stop this being reported as a successful remedy. The pre-registered criterion
+> required the external correlation to fall to at or below the in-domain one, and it did
+> not (0.1853 against 0.1598). More informatively, the gap narrowed partly from the wrong
+> end: APTOS fell by 0.051 while **EyePACS rose by 0.023**, so about a third of the
+> narrowing came from the in-domain dependence increasing rather than the external one
+> decreasing. The APTOS drop also sits inside the baseline's own 0.194 across-seed range.
+>
+> The pre-registered outcome is therefore **ambiguous**, and is reported as such: three
+> seeds were not enough to settle an effect of this size, which was written down before
+> the run rather than concluded after it. The narrower claim that survives is still worth
+> making — an intervention aimed specifically at the surround's appearance moved every
+> non-magnitude marker of the dependence in the predicted direction at no cost to
+> in-domain performance, which is **weak causal support** for the shortcut reading rather
+> than none.
+
+### What this does NOT change
+
+The Phase 6 verdict stands unaltered. The model evaluated in Phase 6 — and the one the
+thesis reports — is the **baseline**, for which G4 fired and DECISION-060's conclusion
+holds. The remedy is a follow-up experiment about *why*, not a replacement headline. The
+deployed checkpoint does not change.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

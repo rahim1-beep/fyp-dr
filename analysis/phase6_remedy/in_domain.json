@@ -13,8 +13,15 @@
    "balanced_accuracy": 0.49742007941127986,
    "sensitivity": 0.6229348882410107,
    "specificity": 0.9834866713847605
+  },
+  {
+   "seed": 44,
+   "qwk": 0.7607934673291403,
+   "balanced_accuracy": 0.49915178907668745,
+   "sensitivity": 0.6919339164237124,
+   "specificity": 0.971927341354093
   }
  ],
- "mean_qwk": 0.755099825584348,
+ "mean_qwk": 0.7569977061659454,
  "baseline_mean_qwk": 0.757
 }

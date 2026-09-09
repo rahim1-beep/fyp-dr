@@ -1,15 +1,14 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **Re-run the remedy to get seed 44.** Upload the new
-> `dist/fyp-dr-code.zip`, attach THIS run's output as an input so seeds 42/43 are reused,
-> paste cell 1 by hand, cells 2-4 by commit. ~50 min (one seed), not 2.6 h.
+> **NEXT ACTION:** **Phase 7 — the web app**, starting with the coverage guard
+> (DECISION-060) and the four-point disclaimer. Phases 4, 5 and 6 including the remedy
+> are complete; nothing is blocked.
 >
-> **The remedy run is INCOMPLETE and no outcome is claimed** (DECISION-066). Seed 44
-> timed out at epoch 23/30; cell 4 printed `AMBIGUOUS` on two seeds, which was a bug and
-> is retracted. The notebook now refuses to evaluate the rule unless all three seeds ran.
->
-> **The one real reading so far: no detectable in-domain cost** — remedied mean val QWK
-> 0.7551 vs baseline 0.7570, inside the 0.0081 seed range.
+> **The remedy is DONE and the outcome is AMBIGUOUS** (DECISION-067) — and it stays
+> ambiguous. Direction fell 3/3 -> 1/3, G4 fires under 0 of 4 rules (was 3 of 4), no
+> in-domain cost (0.7570 both). But APTOS 0.1853 did not fall to <= EyePACS 0.1598, and
+> the gap narrowed partly from the WRONG END: EyePACS ROSE +0.0230 while APTOS fell
+> -0.0507. Do not upgrade this to "the remedy worked".
 
 **Current phase:** Phase 4 — Ablation arms A–F. **Phases 1–3 complete.**
 **Last updated:** 2026-08-20
