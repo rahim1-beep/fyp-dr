@@ -4406,6 +4406,78 @@ The guard is live: `Calibration.load()` succeeds and the app's startup now block
 
 ---
 
+## DECISION-071 — Frontend handoff: what was decided so the next session inherits it
+
+- **Date:** 2026-09-09
+- **Status:** Accepted
+- **Deviates from proposal:** No.
+
+### The disclaimer appears in full on BOTH screens
+
+The frontend brief required the four-point disclaimer on the Result view and separately
+mentioned the Upload view, without saying whether Upload gets the full set or a summary.
+**Decided: all four strings on both.**
+
+Upload is where someone decides whether to use the thing at all, and shortening the
+caveats at exactly that moment is the "make it look better" pressure this project exists
+to resist. Four short strings is not a usability burden for an audience of a thesis panel
+and clinicians. *Considered and rejected:* a one-line summary on Upload with the full set
+on Result — which is what a frontend tool would pick by default, which is why it is
+settled here rather than left to be inherited.
+
+### Fixtures are verified against the real pipeline, never merely named
+
+`fixtures/build_fixtures.py` pushes every image through the real `preprocess_image` and
+the real coverage guard and **asserts** the measured status before writing the file. A
+fixture called `framing_too_tight` that does not actually trigger that status would have
+the frontend built against a state that never fires.
+
+**A measurement that corrected an assumption:** padding an image does **not** lower
+coverage. `preprocess_image` square-crops to the retina bounding box, so padding is
+cropped straight back off. Coverage is the *filled fraction of that bounding square* —
+about 0.785 for a full disc, higher when the retina is truncated top and bottom, lower
+when part of it is out of frame. The transforms that move it are a partially out-of-frame
+retina (down: 0.3667) and a centre crop inside the disc (up: 1.0000).
+
+### The two score-selected fixtures were NOT built, and a synthetic stub is used instead
+
+A clean grade 0 and the grade/referral disagreement case both need `best.pth` (gitignored)
+and validation images (not on this machine — CLAUDE.md §3). The builder produces them
+automatically once `FYP_CHECKPOINT` is set.
+
+For the **disagreement** case, hunting for an image whose score lands inside the 0.673-wide
+band between the referral threshold (0.9488) and the grade-1→2 cut point (1.6216) is the
+wrong tool: **the frontend needs to render that state, not discover it.**
+`fixtures/expected/predict_disagreement_SYNTHETIC.json` carries it, marked synthetic in
+the filename and in a `_note` field. Every recorded `predict_*.json` was produced with an
+**untrained** checkpoint — key sets and types exact, scores and grades meaningless — and
+each says so in `_note`.
+
+### Fixture images are gitignored; the contract is committed
+
+The images are generated, derive from the already-ignored `data/raw/`, and one is a
+deliberate 26 MB file for the 413 path. The script, README, `fixtures.json` and
+`expected/*.json` **are** committed, so the frontend can be built with no images present.
+
+### Two stale things in this repo, found and fixed
+
+1. **`CLAUDE.md` §9** still described Phase 4 as in progress and quoted seed 42's own
+   **0.7464** — five phases stale, and 0.7464 is precisely the figure the interface is
+   forbidden to display. Rewritten to Phase 7 with the 3-seed means.
+2. **`tests/test_predictor.py`** carried `reported_val_qwk=0.7570` in its `DEPLOY` fixture
+   and asserted `"0.7570"` in the provenance line — the superseded rounded-average value
+   (DECISION-069). Corrected to `0.7569412` / `"0.7569"`.
+
+### What `docs/api-contract.md` documents that the brief did not
+
+Read off the source and confirmed by calling both routes: `/meta` does **not** carry
+`num_outputs`, `cuts` or `referral_threshold` (the last two come back per prediction);
+`guard.coverage` is `null` exactly when `status == "no_retina_detected"`; a declined
+upload is **HTTP 200** with `graded: false` and no `grade` key, making the response a
+discriminated union; and the 413 message quotes the exact byte limit.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

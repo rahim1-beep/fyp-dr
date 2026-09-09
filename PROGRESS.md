@@ -1,11 +1,14 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **The Next.js frontend.** Everything behind it is done and live:
-> predictor (21 tests), backend (12 tests), and the coverage guard is now CALIBRATED
-> (DECISION-070) — bounds 0.6138-0.8172 from 24,586 training images.
+> **NEXT ACTION:** **Start a FRESH session for the frontend** — this one is 59% full and
+> the design/verification work is screenshot-heavy. In the new session, paste the design
+> plan prompt and require a plan before any code.
 >
-> To run the app you need seed 42's `best.pth` locally (gitignored — download once from
-> the `fyp-dr-phase4-stage3` notebook output):
+> Everything it needs is committed and readable without this session's context:
+> `CLAUDE.md` (frontend section), `docs/api-contract.md`, `fixtures/expected/*.json`.
+>
+> To run the app you still need seed 42's `best.pth` locally (gitignored — download once
+> from the `fyp-dr-phase4-stage3` notebook output):
 >
 >     set FYP_CHECKPOINT=<path to best.pth>
 >     .venv\Scripts\python -m uvicorn backend.app:app --reload
@@ -506,9 +509,14 @@ point estimates (DECISION-006 — only 133 grade-3 and 98 grade-4 test images).
 
 ---
 
-## Phase 6 — External validation `[ ]`
+## Phase 6 — External validation `[x]`
 
-- [ ] Best model → all of APTOS, cold. Report the domain-shift drop honestly.
+- [x] Best model → all of APTOS, cold. Domain-shift drop reported honestly, and the
+      verdict is **DOES NOT GENERALISE** — G1-G3 passed, G4 (framing shortcut) fired
+      (DECISION-060/065). Performance did NOT collapse; the defect is a dependence that
+      does not transfer.
+- [x] Surround-randomisation remedy, 3 seeds. Outcome **AMBIGUOUS and it stays that
+      way** (DECISION-067). No in-domain cost (QWK 0.7569 either way).
 
 **Applies to arms A–E only.** Under Arm F, APTOS is training data and cannot also be the
 external validation set (DECISION-007). If Arm F becomes the headline model, the write-up
@@ -522,10 +530,17 @@ must state that it trades a generalisation claim for in-domain performance.
 **Acceptance:** clean `docker compose up` → prediction with Grad-CAM in browser;
 `tests/test_api.py` green.
 
-- [ ] `src/inference/predictor.py` (plain module, testable without HTTP)
-- [ ] FastAPI: `/api/v1/predict`, `/health`, `/model-info`; upload validation
-- [ ] Next.js UI: upload, results, Grad-CAM w/ opacity slider, error states,
-      "not a medical device" banner
+- [x] **Coverage guard** — measured bounds 0.6138-0.8172 from 24,586 training images
+      (DECISION-068/070). Turns Phase 6's finding into a control. Also rejects
+      non-fundus uploads. 16 tests.
+- [x] `src/inference/predictor.py` (plain module, testable without HTTP) — 21 tests
+- [x] FastAPI: `/health`, `/meta`, `/predict`; upload validation — 12 tests.
+      **Routes are `/health`, `/meta`, `/predict`** — not the `/api/v1/*` shape sketched
+      in the original plan; `docs/api-contract.md` is authoritative.
+- [x] Frontend handoff pack: `CLAUDE.md` frontend section, `docs/api-contract.md`,
+      6 verified fixtures + recorded responses for all 7 UI states
+- [ ] **← NEXT: Next.js UI** — upload, results, Grad-CAM, error states, the four-point
+      disclaimer on BOTH upload and result views
 - [ ] Docker Compose + documented two-terminal path
 - [ ] CPU inference benchmark on a 16 GB target
 - [ ] Viva demo script
