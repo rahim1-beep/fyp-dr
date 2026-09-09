@@ -1,17 +1,19 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **The FastAPI backend**, a thin transport over
-> `src/inference/predictor.py` (built and tested — 21 tests, no HTTP). Then the Next.js
-> frontend. The four-point disclaimer comes from `predictor.disclaimer()` so the
-> interface cannot drift from it.
+> **NEXT ACTION:** **Run `notebooks/phase7_calibrate.py` on Kaggle** — one cell, ~2 min,
+> NO GPU. It is the only thing keeping the coverage guard from being live. Then fetch:
 >
-> **Still needs one Kaggle command** (~30 s, bolt onto any session) before the guard is
-> live: `python -m src.inference.calibrate_coverage --cache-root $CACHE --split train`,
-> then commit `analysis/coverage_guard/calibration.json`.
+>     python -m src.data.fetch_run --kernel rah098/<slug> --artefacts coverage_guard --force
 >
-> **Seed 42 ships** (DECISION-069) — it is the model Phase 5 analysed. The app quotes
-> the 3-SEED MEAN (QWK 0.7569, sens 0.7360), never seed 42's own 0.7615/0.7464, and two
-> tests enforce that.
+> After that the app runs end to end locally:
+>
+>     set FYP_CHECKPOINT=<path to seed 42 best.pth>
+>     .venv\Scripts\python -m uvicorn backend.app:app --reload
+>
+> Backend is done (12 tests). Remaining: the Next.js frontend, then Phase 8.
+>
+> **Seed 42 ships** (DECISION-069). The app quotes the 3-SEED MEAN (QWK 0.7569, sens
+> 0.7360), never seed 42's own 0.7615/0.7464, and two tests enforce that.
 
 **Current phase:** Phase 4 — Ablation arms A–F. **Phases 1–3 complete.**
 **Last updated:** 2026-08-20

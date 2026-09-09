@@ -10,16 +10,39 @@ the last item in Phase 4.**
 
 ## FIRST ACTION NEXT SESSION
 
-**Build the FastAPI backend** over `src/inference/predictor.py`. The predictor is done and
-tested without HTTP (21 tests); the backend should stay a thin transport and add no
-inference logic of its own. Then the Next.js frontend.
+**Run `notebooks/phase7_calibrate.py` on Kaggle.** One cell, ~2 min, NO GPU. Inputs:
+`fyp-dr-eyepacs-224` + `fyp-dr-code`. Commit by Save & Run All — an interactive run saves
+no output to fetch. Then:
 
-**One Kaggle command is still outstanding** (~30 s, attach to any session with the cache):
+    python -m src.data.fetch_run --kernel rah098/<slug> --artefacts coverage_guard --force
+    git add analysis/coverage_guard/calibration.json && git commit
 
-    python -m src.inference.calibrate_coverage --cache-root $CACHE --split train
+That is the last thing blocking the coverage guard. The cell SELF-CHECKS before writing
+anything worth committing: the guard must load what it produced, the bounds must be
+plausible, and at least 45 of 50 real training images must PASS the calibration measured
+from their own split. A guard that flags the median training image would be useless, and
+that would otherwise only surface once the app was running.
 
-Commit `analysis/coverage_guard/calibration.json`. Until then the coverage guard raises by
-design.
+**Then the app runs end to end locally:**
+
+    set FYP_CHECKPOINT=<path to seed 42 best.pth>
+    .venv\Scripts\python -m uvicorn backend.app:app --reload
+
+## THE BACKEND IS BUILT (12 tests, tests/test_api.py)
+
+`backend/app.py` — transport only. `/health`, `/meta`, `/predict`. If a grading rule ever
+appears in that file it has escaped the layer that is tested; one test asserts the HTTP
+answer matches what the predictor returns directly.
+
+**It refuses to START without its artefacts** — no `FYP_CHECKPOINT`, no deployment
+manifest, or no calibration means no server. A server that boots and grades with a
+silently absent guard is the failure this phase exists to prevent. `FYP_CHECKPOINT` has
+no default because a fallback would eventually load some other run's weights under this
+run's provenance.
+
+`/meta` is where DECISION-069's promise is kept: it serves the 3-seed mean and the
+frontend renders it rather than holding its own copy of the numbers. A test asserts the
+payload contains 0.7360 and NOT 0.7464.
 
 ## THE PREDICTOR IS BUILT (DECISION-069)
 
