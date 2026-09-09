@@ -4267,6 +4267,74 @@ twice in Phase 6 (DECISION-064/066).
 
 ---
 
+## DECISION-069 — Seed 42 ships, and the cherry-pick risk is handled structurally
+
+- **Date:** 2026-09-09
+- **Status:** Accepted — **user decision**, offered with the trade-off stated
+- **Deviates from proposal:** No.
+
+### The choice
+
+The app deploys **`phase4_stage3_arm_e_efficientnet_b0`, seed 42**.
+
+| seed | val QWK | distance from 3-seed mean | Phase 5 analysis |
+|---|---:|---:|---|
+| **42** | **0.7615** | 0.0045 | **yes — Grad-CAM, border gate, panel figure** |
+| 43 | 0.7534 | 0.0036 | no |
+| 44 | 0.7560 | **0.0010** | no |
+
+**Why not seed 44, which is the most representative draw.** The entire explainability
+chapter is seed 42: `notebooks/phase5_gradcam.py` names it "the selected model", and its
+Grad-CAM is what passed the border-check gate and produced the qualitative panel.
+Deploying seed 44 would put heatmaps in front of users that **no chapter has examined**.
+An interface whose explanations were never validated is a worse failure than a shipped
+model that is 0.0045 above the mean.
+
+**The cost, stated:** seed 42 is also the **highest-scoring** of the three, so "you
+shipped your best run" is a fair question to expect.
+
+### Why that criticism does not land, and it is not a matter of trust
+
+DECISION-042 — *report the mean across seeds, never the best seed* — governs **what is
+claimed**, not which file is loaded. So the interface reports the **3-seed mean**
+regardless of which checkpoint runs:
+
+```
+reported_val_qwk              0.7569    <- quoted
+reported_val_sens_at_spec95   0.7360    <- quoted
+seed_val_qwk                  0.7615    <- recorded, not quoted
+seed_val_sens_at_spec95       0.7464    <- recorded, not quoted
+```
+
+Both pairs live in `analysis/deployment/deployment.json`, side by side, and
+`Deployment.provenance()` prints them together. **Two tests enforce it**: the disclaimer
+must contain `0.7360` and must **not** contain `0.7464`. The shipped seed being the best
+one is exactly why that is a test rather than an intention.
+
+### Every number traces to the committed run
+
+`cuts`, `referral_threshold` and `seed_val_sens_at_spec95` were **reproduced** from
+`runs/phase4_stage3_arm_e_efficientnet_b0/val_outputs.npz` via `optimise_qwk_cuts` and
+`choose_operating_point`, and the cuts and threshold match
+`analysis/phase6_aptos/carried_over_rules.json` exactly. Nothing in the manifest was
+typed from memory.
+
+### A correction: the 3-seed mean QWK is 0.7569, not 0.7570
+
+The true mean is **0.75694**. The 0.7570 used in DECISION-063 and in the remedy notebook
+came from averaging the per-seed values **already rounded to 4 dp**
+((0.7615+0.7534+0.7560)/3 = 0.75697).
+
+**Nothing concludes differently.** The remedy's in-domain delta becomes **+0.0001**
+instead of −0.0000, against a seed range of 0.0081 — "no detectable in-domain cost"
+stands, and the sign at that scale is noise.
+
+**Root cause removed rather than the instance patched:** `phase6_remedy` now carries the
+per-seed QWK at full precision and **computes** the mean and range instead of hardcoding
+them, so the same class of error cannot recur in that notebook.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

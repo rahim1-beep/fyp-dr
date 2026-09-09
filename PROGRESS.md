@@ -1,16 +1,17 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **Run the coverage calibration on Kaggle** — one command, ~30 s,
-> bolt it onto any next session:
+> **NEXT ACTION:** **The FastAPI backend**, a thin transport over
+> `src/inference/predictor.py` (built and tested — 21 tests, no HTTP). Then the Next.js
+> frontend. The four-point disclaimer comes from `predictor.disclaimer()` so the
+> interface cannot drift from it.
 >
->     python -m src.inference.calibrate_coverage --cache-root $CACHE --split train
+> **Still needs one Kaggle command** (~30 s, bolt onto any session) before the guard is
+> live: `python -m src.inference.calibrate_coverage --cache-root $CACHE --split train`,
+> then commit `analysis/coverage_guard/calibration.json`.
 >
-> Commit the resulting `analysis/coverage_guard/calibration.json`. The guard is built and
-> tested (DECISION-068) but **refuses to run without it** — no invented bounds. Then
-> `src/inference/predictor.py`, then the FastAPI + Next.js app.
->
-> All experimental work is finished. The remedy outcome is AMBIGUOUS and stays that way
-> (DECISION-067); do not upgrade it to "worked".
+> **Seed 42 ships** (DECISION-069) — it is the model Phase 5 analysed. The app quotes
+> the 3-SEED MEAN (QWK 0.7569, sens 0.7360), never seed 42's own 0.7615/0.7464, and two
+> tests enforce that.
 
 **Current phase:** Phase 4 — Ablation arms A–F. **Phases 1–3 complete.**
 **Last updated:** 2026-08-20

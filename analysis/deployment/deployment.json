@@ -1,0 +1,20 @@
+{
+ "run_id": "phase4_stage3_arm_e_efficientnet_b0",
+ "seed": 42,
+ "arch": "efficientnet_b0",
+ "head": "ordinal_regression",
+ "num_outputs": 1,
+ "image_size": 224,
+ "cuts": [
+  0.5,
+  1.62164,
+  2.17199,
+  3.272691
+ ],
+ "referral_threshold": 0.9487713575363159,
+ "seed_val_qwk": 0.7614671328146116,
+ "seed_val_sens_at_spec95": 0.7464,
+ "reported_val_qwk": 0.7569412145586636,
+ "reported_val_sens_at_spec95": 0.736,
+ "source": "runs/phase4_stage3_arm_e_efficientnet_b0/val_outputs.npz; cuts and threshold reproduced by optimise_qwk_cuts/choose_operating_point and identical to analysis/phase6_aptos/carried_over_rules.json"
+}

@@ -10,17 +10,43 @@ the last item in Phase 4.**
 
 ## FIRST ACTION NEXT SESSION
 
-**Run the coverage calibration on Kaggle.** One command, ~30 s, attach it to any session
-that already has the cache mounted:
+**Build the FastAPI backend** over `src/inference/predictor.py`. The predictor is done and
+tested without HTTP (21 tests); the backend should stay a thin transport and add no
+inference logic of its own. Then the Next.js frontend.
+
+**One Kaggle command is still outstanding** (~30 s, attach to any session with the cache):
 
     python -m src.inference.calibrate_coverage --cache-root $CACHE --split train
 
-Commit `analysis/coverage_guard/calibration.json`. Until then the guard **raises** by
-design — it has no default bounds and no fallback, because a guard with invented numbers
-presents as evidence (DECISION-068).
+Commit `analysis/coverage_guard/calibration.json`. Until then the coverage guard raises by
+design.
 
-Then: `src/inference/predictor.py` (grade + Grad-CAM, no HTTP), FastAPI backend, Next.js
-frontend, and the four-point disclaimer IN the interface.
+## THE PREDICTOR IS BUILT (DECISION-069)
+
+`src/inference/predictor.py` — decode -> the cache's OWN `preprocess_image` -> coverage
+guard -> score -> carried-over cuts -> grade -> Grad-CAM. Four tests target the ways a
+deployed DR model silently stops matching the evaluated one: preprocessing drift, channel
+swap, normalisation drift, thresholds re-derived at inference.
+
+**The guard runs on the PREPROCESSED image, not the raw upload.** The calibration is
+measured over the preprocessed cache; judging a 3000px original against bounds from 224px
+crops would give a plausible number that means nothing. There is a test for it.
+
+**SEED 42 SHIPS, and it is the best-scoring seed.** That is fine because the interface
+quotes the 3-SEED MEAN (QWK 0.7569, sens 0.7360) and never seed 42's own 0.7615/0.7464 —
+both pairs sit side by side in `analysis/deployment/deployment.json`, and two tests assert
+the disclaimer contains 0.7360 and NOT 0.7464. Do not "simplify" that by deleting one
+pair.
+
+Seed 42 was chosen because the whole Phase 5 explainability chapter is seed 42; shipping
+seed 44 would put unexamined heatmaps in the interface.
+
+## CORRECTION: THE 3-SEED MEAN QWK IS 0.7569, NOT 0.7570
+
+0.7570 came from averaging per-seed values already rounded to 4 dp. Nothing concludes
+differently — the remedy's in-domain delta becomes +0.0001 instead of -0.0000 against an
+0.0081 band. `phase6_remedy` now holds full precision and COMPUTES the mean rather than
+hardcoding it.
 
 ## PHASE 7 HAS STARTED — THE COVERAGE GUARD IS BUILT (DECISION-068)
 

@@ -74,8 +74,10 @@ than the baseline does, even if it is equal or slightly worse on EyePACS. Worse
 in-domain, better out-of-domain is the signature of removing a shortcut.
 
 IN-DOMAIN COST, and the noise scale it is read against: baseline arm E validation QWK is
-0.7615 / 0.7534 / 0.7560 across seeds 42/43/44 — mean 0.7570, range 0.0081. A remedied
-mean inside +/- 0.0081 of 0.7570 is NOT a detectable cost. Below 0.7489 it is a real one.
+0.7615 / 0.7534 / 0.7560 across seeds 42/43/44 — mean 0.7569, range 0.0081. A remedied
+mean inside +/- 0.0081 of 0.7569 is NOT a detectable cost. Below 0.7488 it is a real one.
+(The mean is computed from full precision in cell 1; an earlier 0.7570 came from averaging
+the rounded values and is 0.0001 out.)
 
 =============================================================================
  POWER. THE HONEST PART, AND IT IS NOT REASSURING.
@@ -132,8 +134,14 @@ EPOCHS = 30
 OVERLAY = "configs/remedy_surround.yaml"
 RUN_ID = {s: f"phase6_remedy_arm_e_{ARCH}_s{s}" for s in SEEDS}
 
-# MEASURED baselines, arm E, EfficientNet-B0, committed artefacts (R4).
-BASE_VAL_QWK = {42: 0.7615, 43: 0.7534, 44: 0.7560}      # mean 0.7570, range 0.0081
+# MEASURED baselines, arm E, EfficientNet-B0, straight from each run's metrics.json (R4).
+# FULL PRECISION, and the mean is COMPUTED below rather than written down: the earlier
+# constant 0.7570 came from averaging these values already rounded to 4 dp, which is
+# 0.0001 off the true 0.75694. Immaterial against an 0.0081 band, but a number that
+# reaches the thesis should not be the average of rounded numbers.
+BASE_VAL_QWK = {42: 0.7614671328146116,
+                43: 0.7533681113628576,
+                44: 0.7559883994985216}
 
 # CODE resolution goes through resolve_input, NOT a hand-rolled candidate list with an
 # rglob fallback over all of /kaggle/input. Attached NOTEBOOK OUTPUTS carry their own copy
@@ -470,7 +478,8 @@ for r in rows:
           f"{r['balanced_accuracy']:>10.4f}{r['sensitivity']:>9.4f}")
 
 mean_q = float(np.mean([r["qwk"] for r in rows]))
-BASE_MEAN_Q, BASE_RANGE_Q = 0.7570, 0.0081
+BASE_MEAN_Q = float(np.mean(list(BASE_VAL_QWK.values())))
+BASE_RANGE_Q = max(BASE_VAL_QWK.values()) - min(BASE_VAL_QWK.values())
 print(f"\n  remedied mean QWK {mean_q:.4f}   baseline mean {BASE_MEAN_Q:.4f}   "
       f"delta {mean_q - BASE_MEAN_Q:+.4f}")
 if abs(mean_q - BASE_MEAN_Q) <= BASE_RANGE_Q:
