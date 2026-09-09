@@ -4192,6 +4192,81 @@ deployed checkpoint does not change.
 
 ---
 
+## DECISION-068 — Phase 7 starts with the coverage guard, and its bounds are measured
+
+- **Date:** 2026-09-09
+- **Status:** Accepted — code and tests landed; **the calibration artefact does not exist yet**
+- **Deviates from proposal:** No. The proposal requires a web interface; this is an input
+  check inside it.
+
+### Why this is the first thing built
+
+DECISION-060 approved a guard over a disclaimer paragraph, on the grounds that a
+**measured** failure mode should be **controlled** rather than described. Phase 6 showed
+the model's score depends partly on retina coverage, and that the dependence is stronger
+out-of-domain. So the app measures coverage on the actual upload and says whether *this*
+image sits inside the framing the model was trained on.
+
+It is deliberately narrow. It is not a quality score, not a diagnosis, and not a claim
+that an in-range image is safe. It answers one question: is this framing inside the range
+the training images occupied?
+
+### The bounds are measured, and the guard refuses to run without them
+
+`src/inference/coverage_guard.py` has **no default range and no fallback**. Without
+`analysis/coverage_guard/calibration.json` it raises. A guard with invented bounds is
+worse than no guard, because it presents as evidence (R4).
+
+`python -m src.inference.calibrate_coverage --cache-root <cache> --split train` produces
+the artefact. ~30 s for 24,586 images at the measured 1.19 ms/image, so it is a small
+addition to any future Kaggle session rather than a session of its own.
+
+**p1/p99, not min/max.** The question is whether the training set contained images framed
+like this one; a single freak image would stretch a min/max range far enough to wave
+everything through. Both percentile choices are recorded in the artefact so a reader can
+see which rule produced the bounds.
+
+**The TRAINING split, not validation.** The reference is what the model was fitted on.
+Using validation would also quietly involve an evaluation split in a deployment decision.
+
+### It is conservative, and that is stated
+
+Training augmentation moves coverage over roughly 0.81x–1.15x of an image's own value
+(measured on a synthetic disc, DECISION-063), so the model tolerates somewhat more than
+the raw cache range. The guard flags against the **raw** training distribution and
+therefore flags slightly sooner than strictly necessary — the right direction to be wrong
+in for a screening prototype, and recorded rather than left implicit.
+
+### The second job it does for free
+
+`region_masks` raises `NoRetinaError` when no illuminated disc is found. In Phases 5 and 6
+that meant "exclude from a statistic". On an upload path it means **"this is probably not
+a fundus photograph"**, and the guard returns `no_retina_detected` with no grade. Somebody
+will upload a selfie; the app should decline rather than grade it.
+
+### Tested for the ways it could stop guarding
+
+16 tests, and they are aimed at silent failure rather than at coverage: that a missing or
+malformed calibration **raises** instead of defaulting; that the guard measures the
+**same quantity** Phase 6 correlated, asserted against `region_masks` directly, so the two
+cannot drift apart; that a non-fundus image is refused; that every verdict carries the
+bounds it was judged against, since a flag with no stated threshold is unauditable.
+
+The calibration CLI is exercised **end to end through the real `main()`** against a
+synthetic cache. It runs on Kaggle where the cache lives, so a mistake in it would
+otherwise surface only after a session had been spent — which is exactly what happened
+twice in Phase 6 (DECISION-064/066).
+
+### Still to do in Phase 7
+
+1. **Run the calibration on Kaggle** and commit `calibration.json`.
+2. `src/inference/predictor.py` — grade + Grad-CAM, framework-agnostic and testable
+   without HTTP.
+3. FastAPI backend, Next.js frontend.
+4. The **four-point disclaimer** of DECISION-060, in the interface rather than the README.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

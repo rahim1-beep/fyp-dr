@@ -1,14 +1,16 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **Phase 7 — the web app**, starting with the coverage guard
-> (DECISION-060) and the four-point disclaimer. Phases 4, 5 and 6 including the remedy
-> are complete; nothing is blocked.
+> **NEXT ACTION:** **Run the coverage calibration on Kaggle** — one command, ~30 s,
+> bolt it onto any next session:
 >
-> **The remedy is DONE and the outcome is AMBIGUOUS** (DECISION-067) — and it stays
-> ambiguous. Direction fell 3/3 -> 1/3, G4 fires under 0 of 4 rules (was 3 of 4), no
-> in-domain cost (0.7570 both). But APTOS 0.1853 did not fall to <= EyePACS 0.1598, and
-> the gap narrowed partly from the WRONG END: EyePACS ROSE +0.0230 while APTOS fell
-> -0.0507. Do not upgrade this to "the remedy worked".
+>     python -m src.inference.calibrate_coverage --cache-root $CACHE --split train
+>
+> Commit the resulting `analysis/coverage_guard/calibration.json`. The guard is built and
+> tested (DECISION-068) but **refuses to run without it** — no invented bounds. Then
+> `src/inference/predictor.py`, then the FastAPI + Next.js app.
+>
+> All experimental work is finished. The remedy outcome is AMBIGUOUS and stays that way
+> (DECISION-067); do not upgrade it to "worked".
 
 **Current phase:** Phase 4 — Ablation arms A–F. **Phases 1–3 complete.**
 **Last updated:** 2026-08-20

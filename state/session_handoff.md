@@ -10,10 +10,32 @@ the last item in Phase 4.**
 
 ## FIRST ACTION NEXT SESSION
 
-**Phase 7 — the web app.** Everything experimental is finished. Start with the two pieces
-already decided: the **coverage guard** that flags an upload whose framing falls outside
-the training range (DECISION-060 — it reuses `region_masks` from Phases 5/6), and the
-**four-point disclaimer**. Then the upload -> predict -> Grad-CAM flow.
+**Run the coverage calibration on Kaggle.** One command, ~30 s, attach it to any session
+that already has the cache mounted:
+
+    python -m src.inference.calibrate_coverage --cache-root $CACHE --split train
+
+Commit `analysis/coverage_guard/calibration.json`. Until then the guard **raises** by
+design — it has no default bounds and no fallback, because a guard with invented numbers
+presents as evidence (DECISION-068).
+
+Then: `src/inference/predictor.py` (grade + Grad-CAM, no HTTP), FastAPI backend, Next.js
+frontend, and the four-point disclaimer IN the interface.
+
+## PHASE 7 HAS STARTED — THE COVERAGE GUARD IS BUILT (DECISION-068)
+
+`src/inference/coverage_guard.py` + `src/inference/calibrate_coverage.py`, 16 tests.
+
+It measures retina coverage on the upload and says whether that framing sits inside the
+range the TRAINING images occupied. It reuses `region_masks` rather than reimplementing
+the mask, and a test asserts the two agree — if they ever drift, the guard stops guarding
+the quantity Phase 6 actually measured.
+
+**It also rejects non-fundus uploads for free.** No retina detected -> `no_retina_detected`,
+no grade. Somebody will upload a selfie.
+
+**It is deliberately conservative**: augmentation gives the model tolerance beyond the raw
+cache range (0.81x-1.15x, DECISION-063), and the guard flags against the raw range anyway.
 
 ## THE REMEDY IS COMPLETE AND THE OUTCOME IS AMBIGUOUS (DECISION-067)
 

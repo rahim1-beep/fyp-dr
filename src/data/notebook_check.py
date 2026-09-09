@@ -395,6 +395,7 @@ CLI_MODULES = (
     "src.eval.thresholds",
     "src.eval.compare_arms",
     "src.xai.border_check",
+    "src.inference.calibrate_coverage",
 )
 
 
