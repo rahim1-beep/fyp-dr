@@ -89,3 +89,7 @@ fixtures/*.png
 
 # Browser-verification scratch written by the Playwright MCP server
 .playwright-mcp/
+
+# The ONE committed checkpoint: the deployed model, so a cloned repo can run the app
+# (DECISION-074, a user decision). Every other .pth stays ignored by the rules above.
+!runs/phase4_stage3_arm_e_efficientnet_b0/best.pth

@@ -157,6 +157,8 @@ notebooks/    Kaggle notebooks
   the top of every training script.
 - Commit at every meaningful checkpoint. Split CSVs, configs, and metrics JSON **are**
   committed; `data/raw/`, `data/processed/`, `*.pth`, `*.npy`, `kaggle.json` are not.
+  **One exception:** `runs/phase4_stage3_arm_e_efficientnet_b0/best.pth`, the deployed
+  model, is committed so a cloned repo can run the app (DECISION-074). No other `.pth`.
 - Long training goes in a script the user launches on Kaggle — never a foreground process
   in a session. Give the exact command.
 - When something fails, show the real error and diagnose. Never silently fall back to a

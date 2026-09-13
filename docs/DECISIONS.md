@@ -4650,6 +4650,45 @@ screenshots can now be taken for the write-up, labelled as training images.
 
 ---
 
+## DECISION-074 — Published as a private GitHub repo, with the deployed checkpoint committed
+
+- **Date:** 2026-09-13
+- **Status:** Accepted — **user decision** on both points, offered with the trade-offs
+- **Deviates from:** the project convention that `*.pth` is never committed (CLAUDE.md §7).
+  Not from the proposal.
+
+### Private
+
+The repo is shared by link with people the user invites. **Public was declined**, and should
+stay declined unless two things are dealt with first: the repo already tracks two images
+made from EyePACS photographs (`docs/phase2_contact_sheet.png` and
+`analysis/phase5_gradcam_arm_e_efficientnet_b0/panel.png`), and the split CSVs carry
+EyePACS labels. Republishing those publicly is not permitted by the dataset's terms, and
+removing the images would mean rewriting history, not just deleting the files.
+
+### The checkpoint is committed
+
+`runs/phase4_stage3_arm_e_efficientnet_b0/best.pth` (15.6 MB, SHA-256 prefix
+`e0e1eb4e73d2897d`, verified against the committed run in DECISION-073) is tracked so that a
+cloned repo runs the app with no further download. The alternative offered, a GitHub
+Release asset, would have kept the binary out of history; the user chose simplicity for
+recipients.
+
+Scoped to exactly that file: a `.gitignore` negation re-includes it, and a probe `.pth`
+elsewhere under `runs/` was confirmed still ignored. CLAUDE.md §7 records the exception.
+
+### Checked before the first push
+
+Pushing publishes every past commit, not only the latest, so the whole history was scanned:
+no `kaggle.json`, `.env`, key or credential file has ever been committed, and no
+token-shaped string (GitHub, Kaggle, AWS or OpenAI formats) appears in any diff.
+
+A root `README.md` was added for recipients: what the project is and is not, the headline
+figures (3-seed means, below the screening reference, does not generalise), and setup for
+Windows and macOS/Linux.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and
