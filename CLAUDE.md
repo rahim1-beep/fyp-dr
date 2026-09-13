@@ -190,7 +190,7 @@ Two findings the write-up turns on:
   it to "worked".
 
 Built and live: the coverage guard (calibrated, DECISION-070), `src/inference/predictor.py`,
-and the FastAPI backend. Remaining: the Next.js frontend, then Phase 8.
+the FastAPI backend, and the Next.js frontend (DECISION-072). Remaining: Docker Compose and a CPU benchmark if wanted, then Phase 8.
 
 *(This section previously described Phase 4 as in progress and quoted seed 42's own
 0.7464. Both were five phases stale.)*

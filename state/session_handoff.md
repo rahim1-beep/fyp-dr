@@ -1,35 +1,37 @@
 # Session handoff
 
-Last updated 2026-09-09. Overwritten each session — this is the state of play, not a log.
+Last updated 2026-09-13. Overwritten each session — this is the state of play, not a log.
 
 ---
 
 ## FIRST ACTION NEXT SESSION
 
-**Start a FRESH session for the frontend.** Do not continue in the session that produced
-this file: it is 59% full, and the design and verification work is screenshot-heavy.
-
-Everything the new session needs is committed and readable without any prior context:
-
-| file | what it is |
-|---|---|
-| `CLAUDE.md` (frontend section) | the binding rules — read every session |
-| `docs/api-contract.md` | the API, read off the source, authoritative |
-| `fixtures/expected/*.json` | recorded responses for all 7 UI states |
-| `fixtures/README.md` | what each fixture triggers, measured |
-
-In the new session, ask for a **design plan and stop for approval before any code**. That
-is where generic output gets caught, and it is cheap to redirect there.
-
-To actually run the app you need seed 42's `best.pth` locally — gitignored, download once
-from the `fyp-dr-phase4-stage3` notebook output:
+**Run the finished app with the real model.** Download seed 42's `best.pth` from the
+`fyp-dr-phase4-stage3` notebook output (gitignored), then:
 
     set FYP_CHECKPOINT=<path to best.pth>
-    .venv\Scripts\python -m uvicorn backend.app:app --reload   # :8000
+    .venv\Scripts\python -m uvicorn backend.app:app --port 8000
+    cd frontend && npm install && npm run dev        # http://localhost:3000
 
-**No Kaggle work is outstanding.** Every experimental phase and the calibration are done.
+Upload the fixtures in `fixtures/`. With a real checkpoint, `python -m fixtures.build_fixtures`
+also builds the clean grade-0 fixture.
 
----
+## THE FRONTEND IS BUILT (DECISION-072)
+
+`frontend/` — Next.js 16, TypeScript, Tailwind v4. Upload, grading, declined, both framing
+warnings, graded, 400/413/network/malformed, About. Typechecked, linted, production-built, and
+verified in a real browser against the real backend.
+
+**EVERY SCREENSHOT AND HEATMAP SO FAR CAME FROM AN UNTRAINED CHECKPOINT.** The UI states are
+real; the grades and heatmaps are meaningless. None of it may go in the thesis.
+
+**The footer does NOT render `meta.provenance`.** That string ends with seed 42's own 0.7615
+(DECISION-069's audit line), which frontend rule 2 forbids. The footer is built from `/meta`
+fields instead. Do not "simplify" it back to the string — the build is currently verified
+free of 0.7615 and 0.7464.
+
+**The decision ruler is proportional to the real cut points on purpose.** Equal-width segments
+would look tidier and put the referral threshold in the wrong place.
 
 ## What happened this session
 
@@ -113,6 +115,7 @@ if they disappear. It did not fire in the last two runs. If it fires, report it.
 - **Two fixtures cannot be built here** — a clean grade 0 and the real disagreement case
   need `best.pth` plus validation images. `build_fixtures.py` makes them once
   `FYP_CHECKPOINT` is set. A synthetic stub covers the disagreement state meanwhile.
-- **`frontend/` is empty.** Next.js is not scaffolded.
+- **No automated frontend tests.** Verification was a scripted browser pass against the
+  real backend with an untrained checkpoint (DECISION-072).
 - **No Docker.** Nothing containerised yet.
 - `context7` MCP server failed to connect this session (timeout) — unrelated to the repo.

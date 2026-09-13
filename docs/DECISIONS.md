@@ -4478,6 +4478,111 @@ discriminated union; and the 413 message quotes the exact byte limit.
 
 ---
 
+## DECISION-072 — The frontend is built; one rule conflict resolved; the design choices recorded
+
+- **Date:** 2026-09-13
+- **Status:** Accepted — built, typechecked, linted, production-built, and verified in a browser
+- **Deviates from proposal:** No. Next.js + TypeScript + Tailwind, per DECISION-001.
+
+### A conflict inside the frontend rules, resolved toward the stricter one
+
+Frontend rule 7 says the provenance line appears on the page. `/meta.provenance` — by
+DECISION-069's design — ends with **"This seed's own validation QWK is 0.7615."** Frontend
+rule 2 forbids 0.7615 in the interface. Rendering the string verbatim satisfies rule 7 and
+breaks rule 2.
+
+**Resolved:** the footer is composed from `/meta` *fields* (`run_id`, `arch`, `head`,
+`seed`, `reported_val_qwk`, `reported_val_sens_at_spec95`) and never renders
+`meta.provenance`. The side-by-side record of both figures still exists where DECISION-069
+put it for auditability — `analysis/deployment/deployment.json` — and the interface quotes
+only the 3-seed means. Verified: `0.7615` and `0.7464` appear nowhere in the source or the
+production build output, nor in the served HTML.
+
+*Considered and rejected:* changing the backend string. It is the audit line DECISION-069
+deliberately designed, and the backend tests pin it.
+
+### The design direction, and why it came from the subject
+
+- **A neutral grey surround for the image.** Medical image review uses a neutral surround
+  so the frame does not bias how the picture is read. The page is cool neutral paper; the
+  fundus sits in a mid-grey viewer.
+- **One indigo hue stepped in lightness for severity.** No red, amber or green anywhere.
+  Checked with a greyscale screenshot: the scale still reads as ordered, and every grade is
+  also named in words.
+- **Atkinson Hyperlegible Next**, one family — designed by the Braille Institute for
+  low-vision readers, the population diabetic retinopathy produces.
+- **Grade 0 gets identical treatment to every other grade.** No tick, no green, no
+  reassuring copy; "Not flagged" rather than "Do not refer".
+
+### The one bold element: the decision ruler
+
+The hardest UX problem in the brief was making "Mild, refer" read as two correct answers
+rather than a contradiction. It is solved in the layout: **one axis, drawn to scale**, with
+the four cut points dividing it into grade segments and the referral threshold as a separate
+dashed line. The grade is which segment the score lands in; the referral is which side of
+the line. For the disagreement case the reader sees the threshold sitting inside the Mild
+segment and the score just past it — the explanation is the geometry.
+
+It is deliberately not a gauge: no fill, no sense of progress toward certainty, and segment
+widths are **proportional** to the real cut points. *Considered and rejected:* equal-width
+segments, which look tidier and put the threshold in the wrong place.
+
+The one motion on the page is the score marker travelling to its position when a result
+arrives — the thing that changed. `prefers-reduced-motion` removes it.
+
+**A layout defect caught by screenshot and fixed:** the first version drew both vertical
+lines straight through the segment labels inside the bar. The bar now carries no text;
+labels sit on their own rows above and below.
+
+### Verified in a real browser, against the real backend
+
+Run with an **untrained** checkpoint — every UI state is real, every grade and heatmap is
+meaningless — using the committed fixtures:
+
+| state | how | result |
+|---|---|---|
+| upload | direct | full four-string disclaimer in flow; provenance from fields |
+| `no_retina_detected` | `not_a_fundus.png` | no grade; `guard.message` verbatim |
+| `framing_below_training_range` | `framing_too_wide.jpeg` | warning above the readout, grade still shown |
+| `framing_above_training_range` | `framing_too_tight.jpeg` | same |
+| `ok` | `in_range_fundus.jpeg` | framing check shown quietly after the limits |
+| grade/referral disagreement | real response, four fields overridden in-browser | Mild + Refer at equal weight, ruler explains it |
+| 400 | `not_an_image.jpg` | service detail shown verbatim |
+| 413 | `oversized_over_20mb.png` | service detail shown verbatim |
+| 400 "empty upload" | accidental, see below | rendered correctly |
+
+On every graded result the disclaimer heading is inside the first viewport at 1360×900.
+Keyboard: skip link → nav → "Choose a photograph", and Enter opens the file chooser. Mobile
+at 390 px: no horizontal overflow; readout stacks above the image; a colour key replaces the
+in-bar labels because the Moderate segment is too narrow to label.
+
+The disagreement state was produced by capturing a real `/predict` response and overriding
+`score`, `grade`, `grade_name` and `referable` in the browser. A first attempt used
+Playwright's `route.fetch()`, which does not re-send a multipart body; the backend therefore
+answered "empty upload" and the page rendered that 400 path correctly — a harness artefact,
+not an app bug.
+
+### Guarantees that are enforced rather than intended
+
+- **`/predict` is a discriminated union on `graded`.** A probe file reading `r.grade`
+  without narrowing fails `tsc` with *"Property 'grade' does not exist on type
+  'PredictDeclined'"*; the narrowed read compiles.
+- **Runtime validation of every response** in `lib/api.ts`: a graded response carrying
+  `no_retina_detected`, a declined response carrying a grade or a coverage value, or a
+  disclaimer that is not exactly four strings is treated as malformed and shown as an
+  error — never partially rendered.
+- The word "detected" appears only as the API's enum key; the single place a user sees it is
+  inside `guard.message`, which frontend rule 5 requires verbatim.
+
+### Not done
+
+- The heatmap screenshots from this session come from an **untrained** model and must not be
+  used in the thesis. Real ones need seed 42's `best.pth`.
+- No automated frontend test suite; verification this session was a scripted browser pass.
+- No Docker Compose yet.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and

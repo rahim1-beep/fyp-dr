@@ -1,19 +1,16 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **Start a FRESH session for the frontend** — this one is 59% full and
-> the design/verification work is screenshot-heavy. In the new session, paste the design
-> plan prompt and require a plan before any code.
->
-> Everything it needs is committed and readable without this session's context:
-> `CLAUDE.md` (frontend section), `docs/api-contract.md`, `fixtures/expected/*.json`.
->
-> To run the app you still need seed 42's `best.pth` locally (gitignored — download once
-> from the `fyp-dr-phase4-stage3` notebook output):
+> **NEXT ACTION:** **Run the finished app with the real model.** Download seed 42's
+> `best.pth` from the `fyp-dr-phase4-stage3` notebook output, then:
 >
 >     set FYP_CHECKPOINT=<path to best.pth>
->     .venv\Scripts\python -m uvicorn backend.app:app --reload
+>     .venv\Scripts\python -m uvicorn backend.app:app --port 8000
+>     cd frontend && npm install && npm run dev        # http://localhost:3000
 >
-> **No Kaggle work is outstanding.** Remaining: frontend, then Phase 8 write-up.
+> The frontend is BUILT (DECISION-072). Everything shown so far used an UNTRAINED checkpoint,
+> so no screenshot or heatmap from this session may be used in the thesis.
+>
+> Remaining: Docker Compose (if wanted), CPU benchmark (if wanted), Phase 8 write-up.
 
 **Current phase:** Phase 4 — Ablation arms A–F. **Phases 1–3 complete.**
 **Last updated:** 2026-08-20
@@ -539,8 +536,12 @@ must state that it trades a generalisation claim for in-domain performance.
       in the original plan; `docs/api-contract.md` is authoritative.
 - [x] Frontend handoff pack: `CLAUDE.md` frontend section, `docs/api-contract.md`,
       6 verified fixtures + recorded responses for all 7 UI states
-- [ ] **← NEXT: Next.js UI** — upload, results, Grad-CAM, error states, the four-point
-      disclaimer on BOTH upload and result views
+- [x] **Next.js UI** — upload, results, Grad-CAM with strength slider, all four guard
+      states, 400/413/network/malformed, About page (DECISION-072). Typechecked, linted,
+      production-built, and verified in a browser against the real backend.
+- [ ] **← NEXT: see it with the REAL checkpoint** — download seed 42's `best.pth`, run both
+      servers, grade the fixtures. Every heatmap so far came from an untrained model.
+- [ ] Automated frontend tests (currently a scripted browser pass only)
 - [ ] Docker Compose + documented two-terminal path
 - [ ] CPU inference benchmark on a 16 GB target
 - [ ] Viva demo script

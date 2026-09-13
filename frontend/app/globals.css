@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+/*
+  Ophthalmic reading surface.
+  Paper is a cool neutral so it does not tint the fundus image; the image itself sits in a
+  neutral mid-grey viewer, the surround medical image review uses so the frame does not
+  bias how the picture is read. Severity is ONE indigo hue stepped in lightness, so the
+  scale reads as position, not verdict — no red, amber or green anywhere.
+*/
+@theme {
+  --color-paper: #eef0f1;
+  --color-sheet: #f8f9f9;
+  --color-viewer: #5b5f63;
+  --color-ink: #1c2127;
+  --color-ink-2: #57606a;
+  --color-rule: #c4cad0;
+
+  --color-sev-0: #dce1ee;
+  --color-sev-1: #b3bdd8;
+  --color-sev-2: #8391bd;
+  --color-sev-3: #56639a;
+  --color-sev-4: #2e376e;
+
+  --font-sans: var(--font-atkinson), ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-feature-settings: "tnum" 1;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    font-size: 1.0625rem;
+    line-height: 1.55;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-sev-4);
+    outline-offset: 3px;
+  }
+
+  ::selection {
+    background: var(--color-sev-1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

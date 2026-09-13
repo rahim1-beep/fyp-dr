@@ -86,3 +86,6 @@ tmp/
 fixtures/*.jpeg
 fixtures/*.jpg
 fixtures/*.png
+
+# Browser-verification scratch written by the Playwright MCP server
+.playwright-mcp/
