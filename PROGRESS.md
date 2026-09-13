@@ -1,16 +1,15 @@
 # PROGRESS.md
 
-> **NEXT ACTION:** **Run the finished app with the real model.** Download seed 42's
-> `best.pth` from the `fyp-dr-phase4-stage3` notebook output, then:
+> **NEXT ACTION:** **Decide the remaining Phase 7 scope, then start Phase 8.** The app is
+> complete and has run on the real model (DECISION-073). Open: Docker Compose for the viva?
+> CPU inference benchmark? Automated frontend tests?
 >
->     set FYP_CHECKPOINT=<path to best.pth>
+> To run it (checkpoint is already in place at `runs/phase4_stage3_arm_e_efficientnet_b0/best.pth`,
+> gitignored):
+>
+>     set FYP_CHECKPOINT=runs\phase4_stage3_arm_e_efficientnet_b0\best.pth
 >     .venv\Scripts\python -m uvicorn backend.app:app --port 8000
->     cd frontend && npm install && npm run dev        # http://localhost:3000
->
-> The frontend is BUILT (DECISION-072). Everything shown so far used an UNTRAINED checkpoint,
-> so no screenshot or heatmap from this session may be used in the thesis.
->
-> Remaining: Docker Compose (if wanted), CPU benchmark (if wanted), Phase 8 write-up.
+>     cd frontend && npm run dev        # http://localhost:3000
 
 **Current phase:** Phase 4 — Ablation arms A–F. **Phases 1–3 complete.**
 **Last updated:** 2026-08-20
@@ -539,8 +538,9 @@ must state that it trades a generalisation claim for in-domain performance.
 - [x] **Next.js UI** — upload, results, Grad-CAM with strength slider, all four guard
       states, 400/413/network/malformed, About page (DECISION-072). Typechecked, linted,
       production-built, and verified in a browser against the real backend.
-- [ ] **← NEXT: see it with the REAL checkpoint** — download seed 42's `best.pth`, run both
-      servers, grade the fixtures. Every heatmap so far came from an untrained model.
+- [x] **Run with the REAL checkpoint** — seed 42's `best.pth` pulled from Kaggle, verified
+      against the committed run, app exercised end to end (DECISION-073). Real Mild + Refer
+      case found and rendered.
 - [ ] Automated frontend tests (currently a scripted browser pass only)
 - [ ] Docker Compose + documented two-terminal path
 - [ ] CPU inference benchmark on a 16 GB target

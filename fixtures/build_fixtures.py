@@ -140,7 +140,13 @@ def main() -> int:
               f"({lo:.4f} < score < {hi:.4f}) ...")
         for f in sources:
             r = p.predict(cv2.imread(str(f)), explain=False)
-            if not r["graded"]:
+            # Only images that PASS the framing guard. The first real run picked 3829_left
+            # for the disagreement case: a 400x315, almost black, underexposed photograph
+            # whose preprocessing salvaged only a crescent artefact (coverage 0.2529). Its
+            # score fell in the disagreement band, but it was the model grading a broken
+            # image, and the guard rightly flagged it. A fixture for one state must not
+            # silently depend on a second.
+            if not r["graded"] or r["guard"]["status"] != "ok":
                 continue
             tag = None
             if lo < r["score"] < hi:

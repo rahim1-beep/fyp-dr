@@ -6,15 +6,26 @@ Last updated 2026-09-13. Overwritten each session — this is the state of play,
 
 ## FIRST ACTION NEXT SESSION
 
-**Run the finished app with the real model.** Download seed 42's `best.pth` from the
-`fyp-dr-phase4-stage3` notebook output (gitignored), then:
+**Decide the remaining Phase 7 scope with the user, then start Phase 8.** The application is
+complete and has been run end to end on the real model (DECISION-073). Open questions below.
 
-    set FYP_CHECKPOINT=<path to best.pth>
+The real checkpoint is already on this machine, gitignored:
+
+    set FYP_CHECKPOINT=runs\phase4_stage3_arm_e_efficientnet_b0\best.pth
     .venv\Scripts\python -m uvicorn backend.app:app --port 8000
-    cd frontend && npm install && npm run dev        # http://localhost:3000
+    cd frontend && npm run dev        # http://localhost:3000
 
-Upload the fixtures in `fixtures/`. With a real checkpoint, `python -m fixtures.build_fixtures`
-also builds the clean grade-0 fixture.
+## THE APP HAS RUN ON THE REAL MODEL (DECISION-073)
+
+Checkpoint verified against the committed run: epoch 12, val QWK 0.7619686857570801 in both.
+A real **Mild + Refer** result (`3895_left`, score 1.2306) renders as designed.
+
+**Real Grad-CAM on that image sits at the bottom-right EDGE of the frame.** Consistent with
+the Phase 5 border finding and the Phase 6 framing dependence — but ONE training image. An
+illustration, never evidence.
+
+**Fixtures are still TRAINING images.** Real-model screenshots are usable in the write-up
+only if labelled as such.
 
 ## THE FRONTEND IS BUILT (DECISION-072)
 
@@ -22,8 +33,8 @@ also builds the clean grade-0 fixture.
 warnings, graded, 400/413/network/malformed, About. Typechecked, linted, production-built, and
 verified in a real browser against the real backend.
 
-**EVERY SCREENSHOT AND HEATMAP SO FAR CAME FROM AN UNTRAINED CHECKPOINT.** The UI states are
-real; the grades and heatmaps are meaningless. None of it may go in the thesis.
+**Screenshots from DECISION-072 came from an UNTRAINED checkpoint** and are superseded by
+the real-model run of DECISION-073. Do not use the untrained ones.
 
 **The footer does NOT render `meta.provenance`.** That string ends with seed 42's own 0.7615
 (DECISION-069's audit line), which frontend rule 2 forbids. The footer is built from `/meta`

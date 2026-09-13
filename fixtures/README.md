@@ -27,22 +27,27 @@ Machine-readable copy in `fixtures.json`.
 
 Bounds these were judged against: **0.6138 – 0.8172** (`analysis/coverage_guard/calibration.json`).
 
-## Not built, and why
+## Score-selected fixtures — built with the real seed 42 checkpoint
 
-Two fixtures are selected by **model score** and could not be produced here:
+Produced on 2026-09-13 by scoring the 20 QA images with
+`runs/phase4_stage3_arm_e_efficientnet_b0/best.pth`, downloaded from Kaggle and verified
+against the committed run (epoch 12, stored val QWK 0.7619686857570801 — identical to
+`metrics.json`). Candidates must PASS the framing guard.
 
-- **a clean grade 0**
-- **the grade/referral disagreement case** — score inside `(0.9488, 1.6216)`, which
-  returns `grade: 1` "Mild" together with `referable: true`
+| file | source | label in train split | real result |
+|---|---|---|---|
+| `clean_grade0.jpeg` | `13613_left` | 0 | score 0.1845 → No DR, not flagged, framing ok |
+| `disagreement_mild_but_refer.jpeg` | `3895_left` | 2 | score 1.2306 → **Mild + Refer**, framing ok |
 
-Both need `best.pth`, which is gitignored and not on this machine, and ideally validation
-images, which are not here either (the dataset lives on Kaggle — CLAUDE.md §3).
+**Why candidates must pass the guard.** The first real run picked `3829_left` for the
+disagreement case. It is a 400×315, almost entirely black, underexposed photograph; the
+preprocessing salvaged only a crescent-shaped artefact, coverage 0.2529. Its score did land
+in the disagreement band — but that was the model grading a broken image, and the guard
+correctly flagged it. A fixture for one state must not silently depend on a second, so the
+builder now skips anything the guard does not pass.
 
-`build_fixtures.py` will produce them automatically if `FYP_CHECKPOINT` is set; it scores
-whatever real images it can find and picks by score.
-
-**But for the disagreement case, hunting for an image is the wrong tool.** The frontend
-needs to *render* that state, not discover it. So:
+These are still **training images**. `3895_left` being labelled Moderate and graded Mild is
+one image the model was trained on; it is not a performance result.
 
 ## `expected/` — recorded responses for every state
 

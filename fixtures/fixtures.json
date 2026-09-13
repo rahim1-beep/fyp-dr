@@ -34,5 +34,17 @@
   "guard_status": "n/a \u2014 HTTP 400",
   "coverage": null,
   "note": "a .txt renamed; tests the decode-failure path"
+ },
+ {
+  "file": "clean_grade0.jpeg",
+  "guard_status": "ok",
+  "coverage": 0.7244897959183674,
+  "note": "score 0.1845 -> grade 0 (No DR), referable=False"
+ },
+ {
+  "file": "disagreement_mild_but_refer.jpeg",
+  "guard_status": "ok",
+  "coverage": 0.8033322704081632,
+  "note": "score 1.2306 -> grade 1 (Mild), referable=True"
  }
 ]

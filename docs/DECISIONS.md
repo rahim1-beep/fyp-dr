@@ -4583,6 +4583,73 @@ not an app bug.
 
 ---
 
+## DECISION-073 — The app has been run end to end on the real seed 42 checkpoint
+
+- **Date:** 2026-09-13
+- **Status:** Accepted — observed, not measured
+- **Deviates from proposal:** No.
+
+### The checkpoint, and proof it is the right one
+
+`best.pth` was pulled from the `rah098/fyp-dr-phase4-stage3` kernel output with
+`kaggle kernels output --file-pattern` and placed at
+`runs/phase4_stage3_arm_e_efficientnet_b0/best.pth`, which `.gitignore` excludes
+(`runs/**/*.pth`). Before use it was checked against the committed run:
+
+| | checkpoint | `metrics.json` |
+|---|---|---|
+| epoch | 12 | `best_epoch` 12 |
+| val QWK | 0.7619686857570801 | `best_val_qwk_during_training` 0.7619686857570801 |
+
+Identical to 16 decimal places, and the state dict loads into the arm-E EfficientNet-B0
+architecture the deployment manifest names. SHA-256 prefix `e0e1eb4e73d2897d`.
+
+### What the real model produced, through the whole stack
+
+Uploaded through the frontend, graded by the backend, on the committed fixtures:
+
+| fixture | source · train label | real result |
+|---|---|---|
+| `disagreement_mild_but_refer.jpeg` | `3895_left` · 2 | **Mild + Refer**, score 1.2306, framing ok |
+| `clean_grade0.jpeg` | `13613_left` · 0 | No DR, not flagged, score 0.1845 |
+| `in_range_fundus.jpeg` | `13345_right` · 1 | Moderate + Refer, score 1.7597 |
+| `framing_too_wide.jpeg` | top half of `13345_right` | Moderate + Refer, score 1.8712, **framing warning** |
+
+The scores reached the browser identical to the ones the fixture builder computed
+directly, so nothing in the HTTP or frontend layers alters them. The disagreement state —
+the hardest UX problem in the brief — renders as designed on a **real** result, not only on
+the synthetic stub.
+
+### A fixture that would have been misleading, and why the builder changed
+
+The first real scoring run chose `3829_left` for the disagreement case: a 400×315, almost
+black, underexposed photograph whose preprocessing salvaged only a crescent artefact
+(coverage 0.2529). Its score fell in the band, but it was the model grading a broken
+image — and **the framing guard correctly flagged it**. The builder now accepts only
+candidates that pass the guard; `3895_left`, a normal full-resolution photograph, replaced
+it.
+
+### Two observations, recorded as observations
+
+Neither is evidence. Both come from single **training** images.
+
+1. **The real Grad-CAM for `3895_left` concentrates at the bottom-right edge of the frame**,
+   not over the optic disc, the macula or the vessels. That is the pattern Phase 5's failed
+   outside-border gate measured in aggregate and the kind of framing dependence Phase 6
+   found (DECISION-053/060). It is worth a sentence in the Grad-CAM chapter as an
+   illustration, and must not be presented as more than one image.
+2. **Cropping `13345_right` to its top half moved its score from 1.7597 to 1.8712.** One
+   image, one perturbation, and a label of 1 for both — so it is consistent with a framing
+   dependence and demonstrates nothing on its own.
+
+### Status
+
+Phase 7's application is complete and has been seen working with the model that ships.
+Screenshots from the **untrained** runs of DECISION-072 are superseded; real-model
+screenshots can now be taken for the write-up, labelled as training images.
+
+---
+
 ## Excluded data rows
 
 **None.** Four images finished preprocessing as `ok:no-retina` (DECISION-018) and
