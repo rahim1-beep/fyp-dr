@@ -1,6 +1,5 @@
 # Diabetic retinopathy grading — patient-level validated, imbalance-aware, explainable
 
-Final-year project, Department of Computer Science, Bahria University (2026–2027).
 A deep-learning system that estimates diabetic retinopathy severity (grade 0–4) from a
 retinal fundus photograph, served through a web interface.
 
